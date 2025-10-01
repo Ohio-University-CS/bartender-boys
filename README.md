@@ -78,13 +78,58 @@ brewbot/
 5. **Real-time Pouring**: Electric pumps dispense exact amounts of each ingredient
 6. **Drink Ready**: User receives their perfectly mixed cocktail!
 
+## 🚀 Quick Start
+
+### Prerequisites
+- Python 3.13+ with [uv](https://docs.astral.sh/uv/) package manager
+- Node.js 18+ with npm
+- OpenAI API key (see backend setup instructions)
+
+### Getting Started
+
+1. **Clone the repository**:
+   ```bash
+   git clone <repository-url>
+   cd bartender-boys
+   ```
+
+2. **Set up the backend**:
+   ```bash
+   cd apps/backend
+   cp .env.example .env
+   # Edit .env with your OpenAI API key (see apps/backend/README.md for detailed instructions)
+   uv sync
+   ```
+
+3. **Set up the frontend**:
+   ```bash
+   cd apps/frontend
+   npm install
+   ```
+
+4. **Run the applications**:
+   ```bash
+   # Terminal 1 - Backend
+   cd apps/backend
+   uv run uvicorn main:app --reload --host 0.0.0.0 --port 8000
+   
+   # Terminal 2 - Frontend
+   cd apps/frontend
+   npm start
+   ```
+
+For detailed setup instructions, see:
+- [Backend Setup Guide](apps/backend/README.md) - Includes OpenAI API key setup
+- [Frontend Setup Guide](apps/frontend/README.md)
+
 ## 🚧 Development Status
 
 This project is currently in active development. The following components are being built:
 
 - [x] Project structure and documentation
+- [x] Backend API with OpenAI integration
+- [x] Frontend mobile app structure
 - [ ] Mobile app UI/UX design
-- [ ] Backend AI integration
 - [ ] Hardware control system
 - [ ] Pump calibration and testing
 - [ ] End-to-end integration

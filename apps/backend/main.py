@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from id_scanning.routes import router as id_scanning_router
 
 app = FastAPI(
     title="Bartender Boys API",
@@ -15,6 +16,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include routers
+app.include_router(id_scanning_router)
 
 @app.get("/")
 async def root():
