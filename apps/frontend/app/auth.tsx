@@ -1,13 +1,31 @@
 import { useEffect, useRef, useState } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, Alert, ActivityIndicator, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import * as ImageManipulator from 'expo-image-manipulator';
+import axios from 'axios';
+import { API_BASE_URL } from '../environment';
+
+interface IDScanResult {
+  name?: string;
+  state?: string;
+  date_of_birth?: string;
+  sex?: string;
+  eye_color?: string;
+  is_valid?: boolean;
+  error?: string;
+  raw_response?: string;
+}
+
 
 export default function AuthScreen() {
   const router = useRouter();
   const [isCapturing, setIsCapturing] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
   const cameraRef = useRef<CameraView | null>(null);
+  const [scanResult, setScanResult] = useState<IDScanResult | null>(null);
+  const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   useEffect(() => {
     if (!permission?.granted) {
@@ -15,12 +33,64 @@ export default function AuthScreen() {
     }
   }, [permission, requestPermission]);
 
-  const onCapture = () => {
-    setIsCapturing(true);
-    setTimeout(() => {
+  const onCapture = async () => {
+    if (!cameraRef.current) return;
+    try {
+      setIsCapturing(true);
+      const photo = await cameraRef.current.takePictureAsync({ quality: 0.8, base64: false });
+      if (photo?.uri) {
+        // Freeze the camera view immediately by showing the captured image
+        setCapturedImage(photo.uri);
+        setIsProcessing(true);
+        
+        const manipulated = await ImageManipulator.manipulateAsync(
+          photo.uri,
+          [{ resize: { width: 900 } }],
+          { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG }
+        );
+        setCapturedImage(manipulated.uri);
+
+        // Convert to base64
+        const resp = await fetch(manipulated.uri);
+        const blob = await resp.blob();
+        const base64 = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const result = reader.result as string;
+            resolve(result.split(',')[1]);
+          };
+          reader.readAsDataURL(blob);
+        });
+
+        // Send to backend
+        const apiResponse = await axios.post(`${API_BASE_URL}/id-scanning/scan`, { image_data: base64 });
+        setScanResult(apiResponse.data);
+
+        // Check for errors in the response
+        if (apiResponse.data?.error) {
+          Alert.alert('ID Scan Error', apiResponse.data.error);
+          setCapturedImage(null);
+          setIsProcessing(false);
+          return;
+        }
+
+        // If it looks valid, continue to app
+        if (apiResponse.data?.is_valid) {
+          router.replace('/(tabs)');
+        } else {
+          Alert.alert('Invalid ID', 'The ID could not be verified. Please try again with a clear photo of a valid ID.');
+          setCapturedImage(null);
+          setIsProcessing(false);
+        }
+      }
+    } catch (error) {
+      console.error('Auth ID capture error:', error);
+      Alert.alert('Error', 'Failed to capture or verify ID');
+      setCapturedImage(null);
+      setIsProcessing(false);
+    } finally {
       setIsCapturing(false);
-      router.replace('/(tabs)');
-    }, 600);
+    }
   };
 
   return (
@@ -31,12 +101,16 @@ export default function AuthScreen() {
       <View style={styles.cameraContainer}>
         <View style={styles.viewfinder}>
           {permission?.granted ? (
-            <CameraView
-              ref={cameraRef}
-              style={StyleSheet.absoluteFill}
-              facing="back"
-              enableTorch={false}
-            />
+            capturedImage ? (
+              <Image source={{ uri: capturedImage }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+            ) : (
+              <CameraView
+                ref={cameraRef}
+                style={StyleSheet.absoluteFill}
+                facing="back"
+                enableTorch={false}
+              />
+            )
           ) : (
             <View style={styles.permissionFallback}>
               <Text style={styles.permissionText}>Camera permission required</Text>
@@ -49,12 +123,20 @@ export default function AuthScreen() {
       </View>
 
       <View style={styles.controls}>
-        <TouchableOpacity style={styles.secondaryButton} onPress={() => router.replace('/(tabs)')}>
-          <Text style={styles.secondaryButtonText}>Skip</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={[styles.captureButton, isCapturing && styles.captureButtonActive]} onPress={onCapture}>
-          <Text style={styles.captureText}>{isCapturing ? 'Capturing…' : 'Capture ID'}</Text>
-        </TouchableOpacity>
+        {isProcessing ? (
+          <View style={styles.processingContainer}>
+            <ActivityIndicator size="large" color="#fff" />
+            <Text style={styles.processingText}>Processing ID...</Text>
+          </View>
+        ) : (
+          <TouchableOpacity style={[styles.captureButton, isCapturing && styles.captureButtonActive]} onPress={onCapture} disabled={isCapturing}>
+            {isCapturing ? (
+              <ActivityIndicator color="#000" />
+            ) : (
+              <Text style={styles.captureText}>Capture ID</Text>
+            )}
+          </TouchableOpacity>
+        )}
       </View>
     </View>
   );
@@ -148,6 +230,15 @@ const styles = StyleSheet.create({
     color: '#000',
     fontWeight: '600',
     fontSize: 16,
+  },
+  processingContainer: {
+    alignItems: 'center',
+    gap: 12,
+  },
+  processingText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '500',
   },
 });
 

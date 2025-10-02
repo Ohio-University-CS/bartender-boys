@@ -15,18 +15,62 @@ This backend service provides:
 
 - Python 3.13+
 - [uv](https://docs.astral.sh/uv/) package manager
+- OpenAI API key (see setup instructions below)
 
-## Installation
+## Setup
+
+### 1. Environment Configuration
 
 1. Navigate to the backend directory:
    ```bash
    cd apps/backend
    ```
 
-2. Install dependencies using uv:
+2. Copy the example environment file:
    ```bash
-   uv sync
+   cp .env.example .env
    ```
+
+3. Edit the `.env` file with your configuration:
+   ```bash
+   # Open in your preferred editor
+   nano .env
+   # or
+   code .env
+   ```
+
+### 2. Getting an OpenAI API Key
+
+1. **Create an OpenAI Account**:
+   - Go to [OpenAI's website](https://platform.openai.com/)
+   - Sign up for an account or log in if you already have one
+
+2. **Navigate to API Keys**:
+   - Once logged in, go to the [API Keys page](https://platform.openai.com/api-keys)
+   - Click "Create new secret key"
+
+3. **Generate Your Key**:
+   - Give your key a descriptive name (e.g., "Bartender Boys Development")
+   - Copy the generated key immediately (you won't be able to see it again!)
+   - ⚠️ **Important**: Keep this key secure and never commit it to version control
+
+4. **Add Credits to Your Account**:
+   - Go to the [Billing page](https://platform.openai.com/account/billing/overview)
+   - Add payment method and credits (OpenAI charges per API call)
+   - For development, $5-10 should be plenty to get started
+
+5. **Update Your .env File**:
+   ```bash
+   # Replace 'your_openai_api_key_here' with your actual API key
+   OPENAI_API_KEY=sk-your-actual-api-key-here
+   ```
+
+### 3. Install Dependencies
+
+Install dependencies using uv:
+```bash
+uv sync
+```
 
 ## Running the Application
 
@@ -90,6 +134,29 @@ The application runs on:
 - **Host**: `0.0.0.0` (all interfaces)
 - **Port**: `8000`
 - **CORS**: Currently allows all origins (configure for production)
+
+### Environment Variables
+
+The application uses the following environment variables (configured in `.env`):
+
+| Variable | Description | Default | Required |
+|----------|-------------|---------|----------|
+| `OPENAI_API_KEY` | Your OpenAI API key | - | ✅ Yes |
+| `HOST` | Server host | `0.0.0.0` | No |
+| `PORT` | Server port | `8000` | No |
+| `DEBUG` | Enable debug mode | `false` | No |
+| `CORS_ORIGINS` | Allowed CORS origins | `*` | No |
+| `OPENAI_MODEL` | OpenAI model to use | `gpt-4o` | No |
+| `OPENAI_MAX_TOKENS` | Max tokens per request | `500` | No |
+| `OPENAI_TEMPERATURE` | Model temperature | `0.1` | No |
+| `MAX_IMAGE_SIZE_MB` | Max image size for ID scanning | `10` | No |
+
+### Security Notes
+
+- ⚠️ **Never commit your `.env` file to version control**
+- The `.env` file is already included in `.gitignore`
+- Keep your OpenAI API key secure and don't share it
+- Consider using different API keys for development and production
 
 ## Dependencies
 
