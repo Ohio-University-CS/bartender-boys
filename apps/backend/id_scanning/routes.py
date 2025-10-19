@@ -10,12 +10,18 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/id-scanning", tags=["ID Scanning"])
 
-# Initialize singleton OpenAI service
-try:
-    openai_service = OpenAIService()
-except ValueError as e:
-    logger.error(f"Failed to initialize OpenAI service: {str(e)}")
-    openai_service = None
+# Lazily initialize OpenAI service so missing API key doesn't affect startup
+openai_service: OpenAIService | None = None
+
+def get_openai_service() -> OpenAIService | None:
+    global openai_service
+    if openai_service is None:
+        try:
+            openai_service = OpenAIService()
+        except ValueError as e:
+            logger.error(f"Failed to initialize OpenAI service: {str(e)}")
+            openai_service = None
+    return openai_service
 
 
 @router.post("/scan", response_model=IDScanResponse)
@@ -55,7 +61,8 @@ async def scan_id(request: IDScanRequest):
             )
         
         # Check if OpenAI service is available
-        if openai_service is None:
+        service = get_openai_service()
+        if service is None:
             logger.error("OpenAI service not available")
             raise HTTPException(
                 status_code=500,
@@ -64,7 +71,7 @@ async def scan_id(request: IDScanRequest):
         
         # Call OpenAI service to analyze the image
         logger.info("Sending image to OpenAI for analysis")
-        result = await openai_service.analyze_id_image(image_data)
+        result = await service.analyze_id_image(image_data)
         
         # Print the result to console for debugging
         print("=" * 50)
