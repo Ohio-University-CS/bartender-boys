@@ -35,6 +35,8 @@ async def scan_id(request: IDScanRequest):
     Returns:
         IDScanResponse with extracted ID information
     """
+    logger.info("=" * 50)
+    logger.info("Received ID scan request")
     try:
         # Decode the base64 image data
         try:
@@ -70,8 +72,9 @@ async def scan_id(request: IDScanRequest):
             )
         
         # Call OpenAI service to analyze the image
-        logger.info("Sending image to OpenAI for analysis")
+        logger.info("Sending image to OpenAI for analysis...")
         result = await service.analyze_id_image(image_data)
+        logger.info(f"OpenAI analysis complete: {result}")
         
         # Print the result to console for debugging
         print("=" * 50)

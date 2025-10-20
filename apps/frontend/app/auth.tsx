@@ -62,8 +62,14 @@ export default function AuthScreen() {
           reader.readAsDataURL(blob);
         });
 
-        // Send to backend
-        const apiResponse = await axios.post(`${API_BASE_URL}/id-scanning/scan`, { image_data: base64 });
+        // Send to backend with longer timeout (OpenAI can be slow)
+        console.log(`Sending request to: ${API_BASE_URL}/id-scanning/scan`);
+        const apiResponse = await axios.post(
+          `${API_BASE_URL}/id-scanning/scan`, 
+          { image_data: base64 },
+          { timeout: 60000 } // 60 second timeout for OpenAI processing
+        );
+        console.log('Response received:', apiResponse.data);
         setScanResult(apiResponse.data);
 
         // Check for errors in the response
@@ -83,9 +89,21 @@ export default function AuthScreen() {
           setIsProcessing(false);
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Auth ID capture error:', error);
-      Alert.alert('Error', 'Failed to capture or verify ID');
+      let errorMessage = 'Failed to capture or verify ID';
+      
+      if (error.code === 'ECONNABORTED') {
+        errorMessage = 'Request timed out. Make sure the backend is running and reachable.';
+      } else if (error.response) {
+        errorMessage = `Server error: ${error.response.status} - ${error.response.data?.detail || error.response.statusText}`;
+      } else if (error.request) {
+        errorMessage = `Cannot reach backend at ${API_BASE_URL}. Check your network connection and backend server.`;
+      } else {
+        errorMessage = error.message || 'Unknown error occurred';
+      }
+      
+      Alert.alert('Error', errorMessage);
       setCapturedImage(null);
       setIsProcessing(false);
     } finally {
