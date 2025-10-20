@@ -5,7 +5,7 @@ const isProd = false; // Set to true for production builds
 const DEV_CONFIG = {
   // Use your machine's Wi‑Fi IPv4 so the phone can reach the backend over LAN
   // Update if your IP changes (ipconfig -> Wireless LAN adapter Wi‑Fi -> IPv4 Address)
-  API_BASE_URL: 'http://192.168.0.15:8000',
+  API_BASE_URL: 'http://10.233.236.17:8000',
 };
 
 // Production configuration
