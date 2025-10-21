@@ -108,7 +108,7 @@
         <button id="getTokenBtn" onclick="getToken()" disabled>Get Session Token</button>
         <button id="testConnectionBtn" onclick="testConnection()" disabled>Test OpenAI Connection</button>
         <button id="testFunctionBtn" onclick="testFunction()" disabled>Test Function Call</button>
-        <button id="testWebRTCBtn" onclick="testWebRTC()" disabled>Test WebRTC Signal</button>
+        <button id="testRealtimeBtn" onclick="testRealtimeMessage()" disabled>Test Realtime Message</button>
         <button id="testConversationBtn" onclick="testConversation()" disabled>Test Conversation</button>
         <button id="testAudioBtn" onclick="testAudio()" disabled>Test Audio Buffer</button>
     </div>
@@ -164,7 +164,7 @@
                 document.getElementById('getTokenBtn').disabled = false;
                 document.getElementById('testConnectionBtn').disabled = false;
                 document.getElementById('testFunctionBtn').disabled = false;
-                document.getElementById('testWebRTCBtn').disabled = false;
+                document.getElementById('testRealtimeBtn').disabled = false;
                 document.getElementById('testConversationBtn').disabled = false;
                 document.getElementById('testAudioBtn').disabled = false;
                 addMessage({ type: 'connection', message: 'Connected to OpenAI Realtime API' }, 'sent');
@@ -183,7 +183,7 @@
                 document.getElementById('getTokenBtn').disabled = true;
                 document.getElementById('testConnectionBtn').disabled = true;
                 document.getElementById('testFunctionBtn').disabled = true;
-                document.getElementById('testWebRTCBtn').disabled = true;
+                document.getElementById('testRealtimeBtn').disabled = true;
                 document.getElementById('testConversationBtn').disabled = true;
                 document.getElementById('testAudioBtn').disabled = true;
                 document.getElementById('tokenInfo').style.display = 'none';
@@ -274,13 +274,17 @@
             }
         }
         
-        function testWebRTC() {
+        function testRealtimeMessage() {
             if (websocket && websocket.readyState === WebSocket.OPEN) {
                 const message = {
-                    type: 'webrtc_signal',
-                    signal: {
-                        type: 'offer',
-                        sdp: 'test-sdp-offer'
+                    type: 'conversation.item.create',
+                    item: {
+                        type: 'message',
+                        role: 'user',
+                        content: [{
+                            type: 'input_text',
+                            text: 'Test message from client'
+                        }]
                     }
                 };
                 websocket.send(JSON.stringify(message));

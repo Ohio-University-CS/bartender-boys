@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from id_scanning.routes import router as id_scanning_router
-from webrtc.openai_integration import router as openai_router
+from realtime.routes import router as openai_router
 
 app = FastAPI(
     title="Bartender Boys API",

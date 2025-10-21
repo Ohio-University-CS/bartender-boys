@@ -153,7 +153,7 @@ The backend intercepts messages at these key points:
    - Function call processing
    - Error handling and reconnection
 
-2. **Pydantic Models** (`webrtc/models.py`):
+2. **Pydantic Models** (`realtime/models.py`):
    - Comprehensive typed models for all OpenAI Realtime API message types
    - Runtime validation and type safety
    - Helper functions for message creation

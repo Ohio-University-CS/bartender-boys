@@ -16,7 +16,7 @@ dependencies = [
 ]
 
 [tool.setuptools.packages.find]
-include = ["id_scanning*", "services*", "webrtc*"]
+include = ["id_scanning*", "services*", "realtime*"]
 
 [project.optional-dependencies]
 dev = [

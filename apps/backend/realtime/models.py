@@ -48,7 +48,7 @@ OutputContent = Union[OutputTextContent, OutputAudioContent]
 
 # Conversation items
 class ConversationItem(BaseModel):
-    """A conversation item (message)"""
+    """A conversation item (message) - used in responses"""
     id: Optional[str] = None
     object: Literal["realtime.item"] = "realtime.item"
     type: Literal["message"] = "message"
@@ -58,10 +58,17 @@ class ConversationItem(BaseModel):
     created_at: Optional[datetime] = None
 
 
+class ConversationItemCreateData(BaseModel):
+    """Data for creating a conversation item - no object field"""
+    type: Literal["message"] = "message"
+    role: Literal["user", "assistant"] = "user"
+    content: Union[InputContent, List[InputContent]] = Field(default_factory=list)
+
+
 class ConversationItemCreate(BaseMessage):
     """Create a new conversation item"""
     type: Literal["conversation.item.create"] = "conversation.item.create"
-    item: ConversationItem
+    item: ConversationItemCreateData
 
 
 class ConversationItemCreated(BaseMessage):
