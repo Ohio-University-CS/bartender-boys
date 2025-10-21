@@ -12,7 +12,7 @@ export default function MenuScreen() {
   const [selectedCategory, setSelectedCategory] = useState('All');
   const { isFavorite, toggleFavorite } = useFavorites();
 
-  const categories = ['All', 'Cocktail', 'Whiskey', 'Rum', 'Gin', 'Vodka'];
+  const categories = ['All', 'Cocktail', 'Whiskey', 'Rum', 'Gin', 'Vodka', 'Tequila', 'Brandy', 'Non-Alcoholic'];
 
   const filteredDrinks = DRINKS.filter(drink => {
     const matchesSearch = drink.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
