@@ -4,18 +4,30 @@ import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { SettingsProvider, useSettings } from '@/contexts/settings';
 
-export default function RootLayout() {
+function ThemedContainer({ children }: { children: React.ReactNode }) {
   const colorScheme = useColorScheme();
-
+  const { theme } = useSettings();
+  const scheme = theme === 'system' ? colorScheme : theme;
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack initialRouteName="auth">
-        <Stack.Screen name="auth" options={{ headerShown: false }} />
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-      </Stack>
+    <ThemeProvider value={scheme === 'dark' ? DarkTheme : DefaultTheme}>
+      {children}
       <StatusBar style="auto" />
     </ThemeProvider>
+  );
+}
+
+export default function RootLayout() {
+  return (
+    <SettingsProvider>
+      <ThemedContainer>
+        <Stack initialRouteName="auth">
+          <Stack.Screen name="auth" options={{ headerShown: false }} />
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+        </Stack>
+      </ThemedContainer>
+    </SettingsProvider>
   );
 }

@@ -1,3 +1,6 @@
+export const options = { href: null };
+export default function Hidden() { return null; }
+
 import { useState } from 'react';
 import { StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -54,7 +57,7 @@ const sampleDrinks: Drink[] = [
   }
 ];
 
-export default function HomeScreen() {
+function HomeScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
 

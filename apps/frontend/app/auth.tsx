@@ -5,6 +5,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImageManipulator from 'expo-image-manipulator';
 import axios from 'axios';
 import { API_BASE_URL } from '../environment';
+import { useSettings } from '@/contexts/settings';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface IDScanResult {
@@ -28,6 +29,7 @@ export default function AuthScreen() {
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [checkingBypass, setCheckingBypass] = useState(true);
+  const { apiBaseUrl } = useSettings();
 
   useEffect(() => {
     // On mount, if user previously skipped or verified, go straight to app
@@ -88,9 +90,10 @@ export default function AuthScreen() {
         });
 
         // Send to backend with longer timeout (OpenAI can be slow)
-        console.log(`Sending request to: ${API_BASE_URL}/id-scanning/scan`);
+        const baseUrl = apiBaseUrl || API_BASE_URL;
+        console.log(`Sending request to: ${baseUrl}/id-scanning/scan`);
         const apiResponse = await axios.post(
-          `${API_BASE_URL}/id-scanning/scan`, 
+          `${baseUrl}/id-scanning/scan`, 
           { image_data: base64 },
           { timeout: 60000 } // 60 second timeout for OpenAI processing
         );
@@ -123,7 +126,8 @@ export default function AuthScreen() {
       } else if (error.response) {
         errorMessage = `Server error: ${error.response.status} - ${error.response.data?.detail || error.response.statusText}`;
       } else if (error.request) {
-        errorMessage = `Cannot reach backend at ${API_BASE_URL}. Check your network connection and backend server.`;
+        const baseUrl = apiBaseUrl || API_BASE_URL;
+        errorMessage = `Cannot reach backend at ${baseUrl}. Check your network connection and backend server.`;
       } else {
         errorMessage = error.message || 'Unknown error occurred';
       }
