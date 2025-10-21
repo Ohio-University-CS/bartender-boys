@@ -2,7 +2,6 @@ import base64
 import json
 import asyncio
 from typing import Dict, Any, Optional
-import openai
 from openai import OpenAI
 from settings import settings
 

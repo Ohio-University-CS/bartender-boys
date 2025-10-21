@@ -9,11 +9,12 @@ import httpx
 import websockets
 import os
 from datetime import datetime, timedelta
+from pydantic import BaseModel
 
 # Import our models
 from .models import (
     OpenAIMessage, ConversationItemCreate, ResponseCreate, 
-    create_text_message, create_response_request, create_function_call,
+    create_function_call,
     TokenResponse, ConnectionEstablished, SessionCreatedNotification,
     ErrorMessage, ErrorDetail
 )
