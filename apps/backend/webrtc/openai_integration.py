@@ -50,7 +50,7 @@ class OpenAIRealtimeManager:
                     json={
                         "model": "gpt-4o-realtime-preview-2024-10-01",
                         "voice": "alloy",
-                        "instructions": "You are a helpful bartender assistant. Help customers with drink orders and ID verification."
+                        "instructions": "You are a helpful bartender assistant. Help customers with drink orders."
                     }
                 )
                 response.raise_for_status()
