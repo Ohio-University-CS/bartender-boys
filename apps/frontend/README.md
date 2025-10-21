@@ -1,100 +1,90 @@
-# Welcome to your Expo app 👋
+# BrewBot App Setup
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+[![Runs with Expo Go](https://img.shields.io/badge/Runs%20with%20Expo%20Go-000.svg?style=flat-square&logo=EXPO&labelColor=f3f3f3&logoColor=000)](https://expo.dev/client) [![TypeScript](https://img.shields.io/badge/typescript-%23007ACC.svg?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 
-## Prerequisites
+A mobile application for tracking and automating homebrewing recipes and schedules.
 
-Before you begin, make sure you have Node.js installed on your system:
+## ✨ Features
 
-### Installing Node.js
+* Real-time step-by-step guidance for brewing
+* Ingredient and equipment management
+* Integrated timer for boil, mash, and fermentation
+* Data visualization of past brew statistics
 
-1. **Visit the official Node.js website**: Go to [nodejs.org](https://nodejs.org/)
-2. **Download the LTS version**: Choose the "LTS" (Long Term Support) version for stability
-3. **Run the installer**: Follow the installation instructions for your operating system
-4. **Verify installation**: Open your terminal and run:
-   ```bash
-   node --version
-   npm --version
-   ```
+---
 
-You should see version numbers for both Node.js and npm.
+## ⚙️ Setup and Installation
 
-## Get started
+Follow these steps to get a development environment running on your local machine.
 
-1. Install dependencies
+### Prerequisites
 
-   ```bash
-   npm install
-   ```
+You must have the following installed on your system:
 
-2. Start the app
+* **Node.js** (LTS version recommended)
+* **npm** or **Yarn** (npm is included with Node.js)
+* The **Expo Go** mobile app on your Android or iOS device (or an emulator/simulator).
 
-   ```bash
-   npx expo start
-   ```
-
-## Testing on Native Devices
-
-To test the app on your physical device, you'll need to install the **Expo Go** app:
-
-### Installing Expo Go
-
-1. **For iOS devices**:
-   - Open the App Store
-   - Search for "Expo Go"
-   - Install the official Expo Go app by Expo
-
-2. **For Android devices**:
-   - Open Google Play Store
-   - Search for "Expo Go"
-   - Install the official Expo Go app by Expo
-
-### Running the App on Your Device
-
-1. **Start the development server** (if not already running):
-   ```bash
-   npx expo start
-   ```
-
-2. **Scan the QR code**:
-   - **iOS**: Use your device's camera app to scan the QR code displayed in the terminal
-   - **Android**: Use the Expo Go app to scan the QR code
-
-3. **Alternative connection methods**:
-   - **Same network**: Make sure your device and computer are on the same Wi-Fi network
-   - **Tunnel mode**: If you're having network issues, press `s` in the terminal to switch to tunnel mode
-
-### Development Options
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+### 1. Clone the repository
 
 ```bash
-npm run reset-project
+git clone https://github.com/your-username/BrewBot-App.git
+cd BrewBot-App
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+### 2. Install Dependencies
 
-## Learn more
+Install the necessary Node modules.
 
-To learn more about developing your project with Expo, look at the following resources:
+```bash
+npm install
+# OR
+yarn install
+```
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+### 3. Start the Development Server
 
-## Join the community
+Start the Metro bundler. This will also open the Expo DevTools in your web browser and display a QR code in your terminal.
 
-Join our community of developers creating universal apps.
+```bash
+npx expo start
+```
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+## 🚀 Running the App
+
+### On a Physical Device (Recommended)
+
+1. Ensure your computer and mobile device are on the same Wi-Fi network.
+2. Open the Expo Go app on your phone.
+3. Scan the QR code displayed in your terminal or the web browser. The app should automatically start bundling and open on your device.
+
+### On a Simulator or Emulator
+
+If you have an iOS Simulator (requires macOS/Xcode) or Android Emulator (requires Android Studio) set up, run:
+
+* For iOS: Press `i` in the terminal.
+* For Android: Press `a` in the terminal.
+
+## 🛠 Project Structure
+
+```
+.
+├── assets/           # Images, fonts, and other static assets
+├── components/       # Reusable React components
+├── screens/          # Main application screens (pages)
+├── App.js / App.tsx  # Main entry point of the application
+├── app.json          # Expo configuration file (name, icon, etc.)
+└── package.json      # Project dependencies and scripts
+```
+
+## 🤝 Contributing
+
+Guidelines on how others can contribute to your project (e.g., bug reports, feature requests).
+
+1. Fork the repository.
+2. Create a feature branch (`git checkout -b feature/AddBrewingSteps`).
+3. Commit your changes (`git commit -m 'feat: add detailed brewing steps'`).
+4. Push to the branch (`git push origin feature/AddBrewingSteps`).
+5. Open a Pull Request.
+
+

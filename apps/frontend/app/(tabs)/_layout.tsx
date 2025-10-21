@@ -5,50 +5,31 @@ import { HapticTab } from '@/components/haptic-tab';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { useSettings } from '@/contexts/settings';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
 
   return (
     <Tabs
-      initialRouteName="menu"
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'dark'].tint,
+        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
         headerShown: false,
         tabBarButton: HapticTab,
-        tabBarStyle: {
-          backgroundColor: Colors[colorScheme ?? 'dark'].background,
-          borderTopColor: '#222',
-        },
-        tabBarLabelStyle: { fontWeight: '600' },
       }}>
       <Tabs.Screen
-        name="menu"
+        name="index"
         options={{
-          title: 'Menu',
-          tabBarIcon: ({ color }) => <IconSymbol size={24} name="list.bullet.rectangle" color={color} />,
+          title: 'Home',
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
         }}
       />
-      {/* Hide legacy routes if files still exist */}
-      <Tabs.Screen name="index" options={{ href: null }} />
-      <Tabs.Screen name="explore" options={{ href: null }} />
       <Tabs.Screen
-        name="chat"
+        name="explore"
         options={{
-          title: 'Chat',
-          tabBarIcon: ({ color }) => <IconSymbol size={24} name="bubble.left.and.bubble.right" color={color} />,
+          title: 'Explore',
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="paperplane.fill" color={color} />,
         }}
       />
-      {/* Explore tab removed */}
-      <Tabs.Screen
-        name="settings"
-        options={{
-          title: 'Settings',
-          tabBarIcon: ({ color }) => <IconSymbol size={24} name="gear" color={color} />,
-        }}
-      />
-      
     </Tabs>
   );
 }

@@ -1,191 +1,112 @@
-export const options = { href: null };
-export default function Hidden() { return null; }
-// Legacy file hidden from tabs; kept to avoid routing issues.
-import { StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
+import { Platform, StyleSheet } from 'react-native';
 
+import { Collapsible } from '@/components/ui/collapsible';
+import { ExternalLink } from '@/components/external-link';
+import ParallaxScrollView from '@/components/parallax-scroll-view';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { IconSymbol } from '@/components/ui/icon-symbol';
+import { Fonts } from '@/constants/theme';
 
-interface Category {
-  id: string;
-  name: string;
-  icon: string;
-  description: string;
-  drinkCount: number;
-  color: string;
-}
-
-const categories: Category[] = [
-  {
-    id: '1',
-    name: 'Classic Cocktails',
-    icon: 'wine',
-    description: 'Timeless recipes that never go out of style',
-    drinkCount: 25,
-    color: '#e74c3c'
-  },
-  {
-    id: '2',
-    name: 'Whiskey Drinks',
-    icon: 'flask',
-    description: 'Rich and complex whiskey-based cocktails',
-    drinkCount: 18,
-    color: '#8b4513'
-  },
-  {
-    id: '3',
-    name: 'Tropical Drinks',
-    icon: 'sunny',
-    description: 'Refreshing drinks for warm weather',
-    drinkCount: 22,
-    color: '#f39c12'
-  },
-  {
-    id: '4',
-    name: 'Gin Cocktails',
-    icon: 'leaf',
-    description: 'Botanical and herbaceous gin creations',
-    drinkCount: 15,
-    color: '#27ae60'
-  },
-  {
-    id: '5',
-    name: 'Vodka Mixes',
-    icon: 'snow',
-    description: 'Clean and crisp vodka combinations',
-    drinkCount: 20,
-    color: '#3498db'
-  },
-  {
-    id: '6',
-    name: 'Rum Drinks',
-    icon: 'boat',
-    description: 'Caribbean-inspired rum cocktails',
-    drinkCount: 16,
-    color: '#9b59b6'
-  }
-];
-
-const features = [
-  {
-    title: 'AI-Powered Recommendations',
-    description: 'Get personalized drink suggestions based on your preferences',
-    icon: 'sparkles'
-  },
-  {
-    title: 'Ingredient Substitutions',
-    description: 'Find alternatives for ingredients you don\'t have',
-    icon: 'swap-horizontal'
-  },
-  {
-    title: 'Difficulty Levels',
-    description: 'Choose drinks that match your skill level',
-    icon: 'trending-up'
-  },
-  {
-    title: 'Prep Time Tracking',
-    description: 'Know exactly how long each drink takes to make',
-    icon: 'time'
-  }
-];
-
-function ExploreScreen() {
+export default function TabTwoScreen() {
   return (
-    <ScrollView style={styles.container}>
-      <ThemedView style={styles.header}>
-        <ThemedText type="title" style={styles.title}>Explore</ThemedText>
+    <ParallaxScrollView
+      headerBackgroundColor={{ light: '#D0D0D0', dark: '#353636' }}
+      headerImage={
+        <IconSymbol
+          size={310}
+          color="#808080"
+          name="chevron.left.forwardslash.chevron.right"
+          style={styles.headerImage}
+        />
+      }>
+      <ThemedView style={styles.titleContainer}>
+        <ThemedText
+          type="title"
+          style={{
+            fontFamily: Fonts.rounded,
+          }}>
+          Explore
+        </ThemedText>
       </ThemedView>
-
-      <ThemedView style={styles.section}>
-        <ThemedText type="subtitle" style={styles.sectionTitle}>Categories</ThemedText>
-        {categories.map((category) => (
-          <TouchableOpacity key={category.id} style={styles.categoryCard}>
-            <ThemedView style={styles.categoryContent}>
-              <ThemedText type="defaultSemiBold" style={styles.categoryName}>
-                {category.name}
-              </ThemedText>
-              <ThemedText style={styles.drinkCount}>
-                {category.drinkCount} drinks
-              </ThemedText>
-            </ThemedView>
-          </TouchableOpacity>
-        ))}
-      </ThemedView>
-
-      <ThemedView style={styles.section}>
-        <ThemedText type="subtitle" style={styles.sectionTitle}>Features</ThemedText>
-        {features.map((feature, index) => (
-          <ThemedView key={index} style={styles.featureCard}>
-            <ThemedText type="defaultSemiBold" style={styles.featureTitle}>
-              {feature.title}
+      <ThemedText>This app includes example code to help you get started.</ThemedText>
+      <Collapsible title="File-based routing">
+        <ThemedText>
+          This app has two screens:{' '}
+          <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> and{' '}
+          <ThemedText type="defaultSemiBold">app/(tabs)/explore.tsx</ThemedText>
+        </ThemedText>
+        <ThemedText>
+          The layout file in <ThemedText type="defaultSemiBold">app/(tabs)/_layout.tsx</ThemedText>{' '}
+          sets up the tab navigator.
+        </ThemedText>
+        <ExternalLink href="https://docs.expo.dev/router/introduction">
+          <ThemedText type="link">Learn more</ThemedText>
+        </ExternalLink>
+      </Collapsible>
+      <Collapsible title="Android, iOS, and web support">
+        <ThemedText>
+          You can open this project on Android, iOS, and the web. To open the web version, press{' '}
+          <ThemedText type="defaultSemiBold">w</ThemedText> in the terminal running this project.
+        </ThemedText>
+      </Collapsible>
+      <Collapsible title="Images">
+        <ThemedText>
+          For static images, you can use the <ThemedText type="defaultSemiBold">@2x</ThemedText> and{' '}
+          <ThemedText type="defaultSemiBold">@3x</ThemedText> suffixes to provide files for
+          different screen densities
+        </ThemedText>
+        <Image
+          source={require('@/assets/images/react-logo.png')}
+          style={{ width: 100, height: 100, alignSelf: 'center' }}
+        />
+        <ExternalLink href="https://reactnative.dev/docs/images">
+          <ThemedText type="link">Learn more</ThemedText>
+        </ExternalLink>
+      </Collapsible>
+      <Collapsible title="Light and dark mode components">
+        <ThemedText>
+          This template has light and dark mode support. The{' '}
+          <ThemedText type="defaultSemiBold">useColorScheme()</ThemedText> hook lets you inspect
+          what the user&apos;s current color scheme is, and so you can adjust UI colors accordingly.
+        </ThemedText>
+        <ExternalLink href="https://docs.expo.dev/develop/user-interface/color-themes/">
+          <ThemedText type="link">Learn more</ThemedText>
+        </ExternalLink>
+      </Collapsible>
+      <Collapsible title="Animations">
+        <ThemedText>
+          This template includes an example of an animated component. The{' '}
+          <ThemedText type="defaultSemiBold">components/HelloWave.tsx</ThemedText> component uses
+          the powerful{' '}
+          <ThemedText type="defaultSemiBold" style={{ fontFamily: Fonts.mono }}>
+            react-native-reanimated
+          </ThemedText>{' '}
+          library to create a waving hand animation.
+        </ThemedText>
+        {Platform.select({
+          ios: (
+            <ThemedText>
+              The <ThemedText type="defaultSemiBold">components/ParallaxScrollView.tsx</ThemedText>{' '}
+              component provides a parallax effect for the header image.
             </ThemedText>
-            <ThemedText style={styles.featureDescription}>
-              {feature.description}
-            </ThemedText>
-          </ThemedView>
-        ))}
-      </ThemedView>
-    </ScrollView>
+          ),
+        })}
+      </Collapsible>
+    </ParallaxScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
+  headerImage: {
+    color: '#808080',
+    bottom: -90,
+    left: -35,
+    position: 'absolute',
   },
-  header: {
-    padding: 20,
-    paddingTop: 60,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '600',
-    color: '#000',
-  },
-  section: {
-    padding: 20,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '500',
-    marginBottom: 16,
-    color: '#000',
-  },
-  categoryCard: {
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
-  categoryContent: {
-    flex: 1,
-  },
-  categoryName: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#000',
-    marginBottom: 2,
-  },
-  drinkCount: {
-    fontSize: 12,
-    color: '#999',
-  },
-  featureCard: {
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
-  featureTitle: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#000',
-    marginBottom: 4,
-  },
-  featureDescription: {
-    fontSize: 14,
-    color: '#666',
+  titleContainer: {
+    flexDirection: 'row',
+    gap: 8,
   },
 });
