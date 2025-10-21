@@ -82,7 +82,7 @@
 <body>
     <h1>OpenAI Realtime API Client</h1>
     <div style="background-color: #d4edda; border: 1px solid #c3e6cb; padding: 10px; margin: 10px 0; border-radius: 5px;">
-        <strong>Real Implementation:</strong> This client connects to the actual OpenAI Realtime API using ephemeral session tokens.
+        <strong>Real Implementation:</strong> This client connects to the actual OpenAI Realtime API using WebSocket connections and ephemeral session tokens.
     </div>
     
     <div class="container">
@@ -109,6 +109,8 @@
         <button id="testConnectionBtn" onclick="testConnection()" disabled>Test OpenAI Connection</button>
         <button id="testFunctionBtn" onclick="testFunction()" disabled>Test Function Call</button>
         <button id="testWebRTCBtn" onclick="testWebRTC()" disabled>Test WebRTC Signal</button>
+        <button id="testConversationBtn" onclick="testConversation()" disabled>Test Conversation</button>
+        <button id="testAudioBtn" onclick="testAudio()" disabled>Test Audio Buffer</button>
     </div>
 
     <div class="container">
@@ -163,6 +165,8 @@
                 document.getElementById('testConnectionBtn').disabled = false;
                 document.getElementById('testFunctionBtn').disabled = false;
                 document.getElementById('testWebRTCBtn').disabled = false;
+                document.getElementById('testConversationBtn').disabled = false;
+                document.getElementById('testAudioBtn').disabled = false;
                 addMessage({ type: 'connection', message: 'Connected to OpenAI Realtime API' }, 'sent');
             };
             
@@ -180,6 +184,8 @@
                 document.getElementById('testConnectionBtn').disabled = true;
                 document.getElementById('testFunctionBtn').disabled = true;
                 document.getElementById('testWebRTCBtn').disabled = true;
+                document.getElementById('testConversationBtn').disabled = true;
+                document.getElementById('testAudioBtn').disabled = true;
                 document.getElementById('tokenInfo').style.display = 'none';
             };
             
@@ -202,6 +208,32 @@
                     document.getElementById('tokenValue').textContent = message.session_id || message.token;
                     document.getElementById('tokenExpiry').textContent = `${message.expires_in} seconds`;
                     document.getElementById('tokenInfo').style.display = 'block';
+                    break;
+                case 'session_created':
+                    updateStatus(`Session created: ${message.session_id}`, true);
+                    addMessage({ type: 'session_created', message: `OpenAI session created with ID: ${message.session_id}` }, 'received');
+                    break;
+                case 'session.created':
+                    updateStatus(`OpenAI session ready: ${message.session.id}`, true);
+                    addMessage({ type: 'session_ready', message: `OpenAI session ready! Model: ${message.session.model}, Voice: ${message.session.voice}` }, 'received');
+                    break;
+                case 'conversation.item.created':
+                    addMessage({ type: 'item_created', message: `Conversation item created: ${message.item.type}` }, 'received');
+                    break;
+                case 'response.audio.delta':
+                    addMessage({ type: 'audio_response', message: `Audio response received (${message.delta.length} bytes)` }, 'received');
+                    break;
+                case 'response.audio_transcript.delta':
+                    addMessage({ type: 'ai_response', message: `AI: ${message.delta}` }, 'received');
+                    break;
+                case 'response.text.delta':
+                    addMessage({ type: 'text_response', message: `Text response: ${message.delta}` }, 'received');
+                    break;
+                case 'response.created':
+                    addMessage({ type: 'response_started', message: `AI response started: ${message.response.id}` }, 'received');
+                    break;
+                case 'response.output_item.added':
+                    addMessage({ type: 'response_item', message: `AI response item added` }, 'received');
                     break;
                 case 'error':
                     addMessage(message, 'error');
@@ -253,6 +285,70 @@
                 };
                 websocket.send(JSON.stringify(message));
                 addMessage(message, 'sent');
+            }
+        }
+        
+        function testConversation() {
+            if (websocket && websocket.readyState === WebSocket.OPEN) {
+                const message = {
+                    type: 'conversation.item.create',
+                    item: {
+                        type: 'message',
+                        role: 'user',
+                        content: [
+                            {
+                                type: 'input_text',
+                                text: 'Hello! I would like to order a drink.'
+                            }
+                        ]
+                    }
+                };
+                websocket.send(JSON.stringify(message));
+                addMessage(message, 'sent');
+                
+                // Request AI response after sending message
+                setTimeout(() => {
+                    const responseRequest = {
+                        type: 'response.create'
+                    };
+                    websocket.send(JSON.stringify(responseRequest));
+                    addMessage(responseRequest, 'sent');
+                }, 1000);
+            }
+        }
+        
+        function testAudio() {
+            if (websocket && websocket.readyState === WebSocket.OPEN) {
+                // Create a conversation item first
+                const createMessage = {
+                    type: 'conversation.item.create',
+                    item: {
+                        type: 'input_audio_buffer',
+                        audio_buffer: {
+                            format: 'pcm16',
+                            sample_rate: 24000,
+                            channels: 1
+                        }
+                    }
+                };
+                websocket.send(JSON.stringify(createMessage));
+                addMessage(createMessage, 'sent');
+                
+                // Then append some test audio data
+                setTimeout(() => {
+                    const appendMessage = {
+                        type: 'conversation.item.input_audio_buffer.append',
+                        item_id: 'test-audio-item',
+                        audio_buffer: {
+                            format: 'pcm16',
+                            sample_rate: 24000,
+                            channels: 1,
+                            data: 'base64-encoded-audio-data-here'
+                        }
+                    };
+                    websocket.send(JSON.stringify(appendMessage));
+                    addMessage(appendMessage, 'sent');
+                }, 100);
             }
         }
         
