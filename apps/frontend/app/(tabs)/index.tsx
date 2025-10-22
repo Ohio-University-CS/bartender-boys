@@ -1,5 +1,8 @@
+export const options = { href: null };
+export default function Hidden() { return null; }
+
 import { useState } from 'react';
-import { StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert } from 'react-native';
+import { StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { ThemedText } from '@/components/themed-text';
@@ -54,7 +57,7 @@ const sampleDrinks: Drink[] = [
   }
 ];
 
-export default function HomeScreen() {
+function HomeScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
 
@@ -87,7 +90,7 @@ export default function HomeScreen() {
   return (
     <ScrollView style={styles.container}>
       <ThemedView style={styles.header}>
-        <ThemedText type="title" style={styles.title}>Bartender</ThemedText>
+        <ThemedText type="title" style={styles.title}>Full Menu</ThemedText>
       </ThemedView>
 
       <ThemedView style={styles.searchContainer}>
@@ -129,17 +132,29 @@ export default function HomeScreen() {
             style={styles.drinkCard}
             onPress={() => showDrinkDetails(drink)}
           >
-            <ThemedView style={styles.drinkHeader}>
+            <View style={styles.drinkTopRow}>
               <ThemedText type="defaultSemiBold" style={styles.drinkName}>
                 {drink.name}
               </ThemedText>
-              <ThemedText style={styles.prepTime}>{drink.prepTime}</ThemedText>
-            </ThemedView>
-            
-            <ThemedText style={styles.ingredients}>
-              {drink.ingredients.slice(0, 3).join(' • ')}
-              {drink.ingredients.length > 3 && '...'}
-            </ThemedText>
+              <TouchableOpacity>
+                <Ionicons name="heart-outline" size={20} color="#aaa" />
+              </TouchableOpacity>
+            </View>
+            <ThemedText style={styles.category}>{drink.category}</ThemedText>
+
+            <View style={styles.badgeRow}>
+              {drink.ingredients.slice(0, 3).map((ing, idx) => (
+                <View key={idx} style={styles.badge}><ThemedText style={styles.badgeText}>{ing}</ThemedText></View>
+              ))}
+              {drink.ingredients.length > 3 && (
+                <ThemedText style={styles.moreText}>+{drink.ingredients.length - 3} more</ThemedText>
+              )}
+            </View>
+
+            <View style={styles.metaRow}>
+              <ThemedText style={styles.metaText}>{drink.prepTime}</ThemedText>
+              <ThemedText style={[styles.metaText, { color: '#FFA500' }]}>{drink.difficulty}</ThemedText>
+            </View>
           </TouchableOpacity>
         ))}
         
@@ -156,61 +171,73 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#0C0C0C',
   },
   header: {
-    padding: 20,
-    paddingTop: 60,
+    padding: 16,
+    paddingTop: 56,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: '#222',
+    backgroundColor: '#0C0C0C',
   },
   title: {
-    fontSize: 24,
-    fontWeight: '600',
-    color: '#000',
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#FFA500',
   },
   searchContainer: {
-    margin: 20,
+    margin: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    borderBottomColor: '#222',
   },
   searchInput: {
     fontSize: 16,
-    color: '#000',
+    color: '#fff',
     paddingVertical: 12,
   },
   categoriesContainer: {
-    marginBottom: 20,
+    marginBottom: 12,
   },
   categoriesScroll: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 12,
   },
   categoryButton: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
     paddingVertical: 8,
     marginRight: 8,
-    borderBottomWidth: 2,
-    borderBottomColor: 'transparent',
+    backgroundColor: '#121212',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#1f1f1f',
   },
   categoryButtonActive: {
-    borderBottomColor: '#000',
+    backgroundColor: '#1a1a1a',
+    borderColor: '#FFA500',
   },
   categoryText: {
     fontSize: 14,
-    color: '#666',
+    color: '#aaa',
   },
   categoryTextActive: {
-    color: '#000',
-    fontWeight: '500',
+    color: '#FFA500',
+    fontWeight: '600',
   },
   drinksContainer: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 12,
     paddingBottom: 20,
   },
   drinkCard: {
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    backgroundColor: '#121212',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#1f1f1f',
+  },
+  drinkTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   drinkHeader: {
     flexDirection: 'row',
@@ -220,16 +247,45 @@ const styles = StyleSheet.create({
   },
   drinkName: {
     fontSize: 16,
-    fontWeight: '500',
-    color: '#000',
+    fontWeight: '600',
+    color: '#fff',
   },
-  prepTime: {
+  category: {
+    fontSize: 13,
+    color: '#FFA500',
+    marginTop: 2,
+  },
+  badgeRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 8,
+    flexWrap: 'wrap',
+  },
+  badge: {
+    backgroundColor: '#1a1a1a',
+    borderColor: '#2a2a2a',
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  badgeText: {
+    color: '#ddd',
     fontSize: 12,
-    color: '#999',
   },
-  ingredients: {
-    fontSize: 14,
-    color: '#666',
+  moreText: {
+    color: '#aaa',
+    fontSize: 12,
+    alignSelf: 'center',
+  },
+  metaRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 10,
+  },
+  metaText: {
+    color: '#bbb',
+    fontSize: 12,
   },
   emptyState: {
     alignItems: 'center',

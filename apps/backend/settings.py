@@ -2,8 +2,9 @@ import os
 from typing import Optional
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
-load_dotenv()
+# Load environment variables from the backend folder's .env regardless of CWD
+_ENV_PATH = os.path.join(os.path.dirname(__file__), ".env")
+load_dotenv(dotenv_path=_ENV_PATH, override=False)
 
 
 class Settings:
