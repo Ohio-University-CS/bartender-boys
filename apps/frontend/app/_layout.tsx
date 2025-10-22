@@ -5,6 +5,7 @@ import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { SettingsProvider, useSettings } from '@/contexts/settings';
+import { FavoritesProvider } from '@/contexts/favorites';
 
 function ThemedContainer({ children }: { children: React.ReactNode }) {
   const colorScheme = useColorScheme();
@@ -21,13 +22,15 @@ function ThemedContainer({ children }: { children: React.ReactNode }) {
 export default function RootLayout() {
   return (
     <SettingsProvider>
-      <ThemedContainer>
-        <Stack initialRouteName="auth">
-          <Stack.Screen name="auth" options={{ headerShown: false }} />
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-        </Stack>
-      </ThemedContainer>
+      <FavoritesProvider>
+        <ThemedContainer>
+          <Stack initialRouteName="auth">
+            <Stack.Screen name="auth" options={{ headerShown: false }} />
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+          </Stack>
+        </ThemedContainer>
+      </FavoritesProvider>
     </SettingsProvider>
   );
 }

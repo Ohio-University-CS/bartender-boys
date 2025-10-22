@@ -29,7 +29,7 @@ export default function AuthScreen() {
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [checkingBypass, setCheckingBypass] = useState(true);
-  const { apiBaseUrl } = useSettings();
+  const { apiBaseUrl, idPhotoWidth, scanTimeoutMs } = useSettings();
 
   useEffect(() => {
     // On mount, if user previously skipped or verified, go straight to app
@@ -72,7 +72,7 @@ export default function AuthScreen() {
         
         const manipulated = await ImageManipulator.manipulateAsync(
           photo.uri,
-          [{ resize: { width: 900 } }],
+          [{ resize: { width: idPhotoWidth || 900 } }],
           { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG }
         );
         setCapturedImage(manipulated.uri);
@@ -95,7 +95,7 @@ export default function AuthScreen() {
         const apiResponse = await axios.post(
           `${baseUrl}/id-scanning/scan`, 
           { image_data: base64 },
-          { timeout: 60000 } // 60 second timeout for OpenAI processing
+          { timeout: scanTimeoutMs || 60000 } // timeout for OpenAI processing
         );
         console.log('Response received:', apiResponse.data);
         setScanResult(apiResponse.data);
