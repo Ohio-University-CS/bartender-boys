@@ -7,6 +7,7 @@ import { ThemedView } from '@/components/themed-view';
 import { DRINKS, type Drink } from '@/constants/drinks';
 import { useFavorites } from '../../contexts/favorites';
 import { useSettings } from '@/contexts/settings';
+import { CATEGORY_COLORS, DIFFICULTY_COLORS } from '@/constants/ui-palette';
 
 export default function MenuScreen() {
   const { defaultMenuCategory, defaultShowFavorites } = useSettings();
@@ -71,15 +72,18 @@ export default function MenuScreen() {
           {categories.map((category) => (
             <TouchableOpacity
               key={category}
-              style={[
+              style={([
                 styles.categoryButton,
-                selectedCategory === category && styles.categoryButtonActive
-              ]}
+                selectedCategory === category && [
+                  styles.categoryButtonActive,
+                  category !== 'All' && { borderColor: CATEGORY_COLORS[category], backgroundColor: CATEGORY_COLORS[category] },
+                ],
+              ]) as any}
               onPress={() => setSelectedCategory(category)}
             >
               <ThemedText style={[
                 styles.categoryText,
-                selectedCategory === category && styles.categoryTextActive
+                selectedCategory === category && [styles.categoryTextActive, category !== 'All' && { color: '#0A0A0A' }]
               ]}>
                 {category}
               </ThemedText>
@@ -99,6 +103,7 @@ export default function MenuScreen() {
             style={styles.drinkCard}
             onPress={() => showDrinkDetails(drink)}
           >
+            <View style={[styles.accentBar, { backgroundColor: CATEGORY_COLORS[drink.category] || '#FFA500' }]} />
             <View style={styles.drinkTopRow}>
               <ThemedText type="defaultSemiBold" style={styles.drinkName}>
                 {drink.name}
@@ -131,7 +136,9 @@ export default function MenuScreen() {
 
             <View style={styles.metaRow}>
               <ThemedText style={styles.metaText}>{drink.prepTime}</ThemedText>
-              <ThemedText style={[styles.metaText, { color: '#FFA500' }]}>{drink.difficulty}</ThemedText>
+              <ThemedText style={[styles.metaText, { color: DIFFICULTY_COLORS[drink.difficulty] || '#FFA500', fontWeight: '700' }]}>
+                {drink.difficulty}
+              </ThemedText>
             </View>
           </TouchableOpacity>
         );})}
@@ -230,6 +237,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#1f1f1f',
     width: '100%',
+  },
+  accentBar: {
+    height: 4,
+    borderRadius: 999,
+    marginBottom: 10,
   },
   drinkTopRow: {
     flexDirection: 'row',
