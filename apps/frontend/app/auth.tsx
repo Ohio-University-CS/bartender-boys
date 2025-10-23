@@ -47,6 +47,17 @@ export default function AuthScreen() {
     })();
   }, [router]);
 
+  // On web, automatically skip ID verification to avoid blank/permission issues
+  useEffect(() => {
+    if (!checkingBypass && typeof window !== 'undefined' && Platform.OS === 'web') {
+      // Small delay to let the screen mount smoothly
+      const t = setTimeout(() => {
+        onSkip();
+      }, 300);
+      return () => clearTimeout(t);
+    }
+  }, [checkingBypass]);
+
   useEffect(() => {
     if (!permission?.granted) {
       requestPermission();
