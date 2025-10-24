@@ -9,6 +9,7 @@ import { DRINKS, type Drink } from '@/constants/drinks';
 import { useFavorites } from '../../contexts/favorites';
 import { useSettings } from '@/contexts/settings';
 import { CATEGORY_COLORS, DIFFICULTY_COLORS } from '@/constants/ui-palette';
+import { useThemeColor } from '@/hooks/use-theme-color';
 
 export default function MenuScreen() {
   const router = useRouter();
@@ -18,6 +19,17 @@ export default function MenuScreen() {
   const [showFavoritesOnly, setShowFavoritesOnly] = useState<boolean>(!!defaultShowFavorites);
   const { isFavorite, toggleFavorite } = useFavorites();
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+
+  // Theme colors
+  const backgroundColor = useThemeColor({}, 'background');
+  const textColor = useThemeColor({}, 'text');
+  const cardBg = useThemeColor({ light: '#f5f5f5', dark: '#121212' }, 'background');
+  const borderColor = useThemeColor({ light: '#e0e0e0', dark: '#222' }, 'background');
+  const inputBg = useThemeColor({ light: '#ffffff', dark: '#1a1a1a' }, 'background');
+  const placeholderColor = useThemeColor({ light: '#999', dark: '#666' }, 'text');
+  const badgeBg = useThemeColor({ light: '#e8e8e8', dark: '#1a1a1a' }, 'background');
+  const badgeText = useThemeColor({ light: '#333', dark: '#ddd' }, 'text');
+  const metaText = useThemeColor({ light: '#666', dark: '#bbb' }, 'text');
 
   // Reflect settings changes if updated while on this screen
   useEffect(() => {
@@ -45,18 +57,18 @@ export default function MenuScreen() {
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.containerContent}>
-      <ThemedView style={styles.header}>
+    <ScrollView style={[styles.container, { backgroundColor }]} contentContainerStyle={styles.containerContent}>
+      <ThemedView style={[styles.header, { borderBottomColor: borderColor }]}>
         <ThemedText type="title" style={styles.title}>Full Menu</ThemedText>
       </ThemedView>
 
-      <ThemedView style={styles.searchContainer}>
+      <ThemedView style={[styles.searchContainer, { borderBottomColor: borderColor, backgroundColor: inputBg }]}>
         <TextInput
-          style={styles.searchInput}
+          style={[styles.searchInput, { color: textColor }]}
           placeholder="Search drinks..."
           value={searchQuery}
           onChangeText={setSearchQuery}
-          placeholderTextColor="#999"
+          placeholderTextColor={placeholderColor}
         />
       </ThemedView>
 
@@ -72,6 +84,7 @@ export default function MenuScreen() {
               key={category}
               style={([
                 styles.categoryButton,
+                { backgroundColor: cardBg, borderColor: borderColor },
                 selectedCategory === category && [
                   styles.categoryButtonActive,
                   category !== 'All' && { borderColor: CATEGORY_COLORS[category], backgroundColor: CATEGORY_COLORS[category] },
@@ -98,7 +111,7 @@ export default function MenuScreen() {
           return (
           <TouchableOpacity
             key={drink.id}
-            style={styles.drinkCard}
+            style={[styles.drinkCard, { backgroundColor: cardBg, borderColor: borderColor }]}
             onPress={() => showDrinkDetails(drink)}
           >
             <View style={[styles.accentBar, { backgroundColor: CATEGORY_COLORS[drink.category] || '#FFA500' }]} />
@@ -118,7 +131,9 @@ export default function MenuScreen() {
 
             <View style={styles.badgeRow}>
               {shownIngredients.map((ing, idx) => (
-                <View key={idx} style={styles.badge}><ThemedText style={styles.badgeText}>{ing}</ThemedText></View>
+                <View key={idx} style={[styles.badge, { backgroundColor: badgeBg }]}>
+                  <ThemedText style={[styles.badgeText, { color: badgeText }]}>{ing}</ThemedText>
+                </View>
               ))}
               {remaining > 0 && !isExpanded && (
                 <TouchableOpacity onPress={() => toggleExpanded(drink.id)}>
@@ -133,7 +148,7 @@ export default function MenuScreen() {
             </View>
 
             <View style={styles.metaRow}>
-              <ThemedText style={styles.metaText}>{drink.prepTime}</ThemedText>
+              <ThemedText style={[styles.metaText, { color: metaText }]}>{drink.prepTime}</ThemedText>
               <ThemedText style={[styles.metaText, { color: DIFFICULTY_COLORS[drink.difficulty] || '#FFA500', fontWeight: '700' }]}>
                 {drink.difficulty}
               </ThemedText>
@@ -154,7 +169,6 @@ export default function MenuScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0C0C0C',
   },
   containerContent: {
     alignItems: 'center',
@@ -163,8 +177,6 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingTop: 56,
     borderBottomWidth: 1,
-    borderBottomColor: '#222',
-    backgroundColor: '#0C0C0C',
     alignItems: 'center',
   },
   title: {
@@ -176,14 +188,14 @@ const styles = StyleSheet.create({
   searchContainer: {
     margin: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#222',
     width: '95%',
     maxWidth: 680,
     alignSelf: 'center',
+    borderRadius: 8,
+    paddingHorizontal: 8,
   },
   searchInput: {
     fontSize: 16,
-    color: '#fff',
     paddingVertical: 12,
     textAlign: 'center',
   },
@@ -203,18 +215,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     marginRight: 8,
-    backgroundColor: '#121212',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#1f1f1f',
   },
   categoryButtonActive: {
-    backgroundColor: '#1a1a1a',
     borderColor: '#FFA500',
   },
   categoryText: {
     fontSize: 14,
-    color: '#aaa',
   },
   categoryTextActive: {
     color: '#FFA500',
@@ -228,12 +236,10 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   drinkCard: {
-    backgroundColor: '#121212',
     borderRadius: 16,
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#1f1f1f',
     width: '100%',
   },
   accentBar: {
@@ -255,7 +261,6 @@ const styles = StyleSheet.create({
   drinkName: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#fff',
   },
   category: {
     fontSize: 13,
@@ -269,19 +274,16 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   badge: {
-    backgroundColor: '#1a1a1a',
-    borderColor: '#2a2a2a',
     borderWidth: 1,
+    borderColor: 'transparent',
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 4,
   },
   badgeText: {
-    color: '#ddd',
     fontSize: 12,
   },
   moreText: {
-    color: '#aaa',
     fontSize: 12,
     alignSelf: 'center',
   },
@@ -291,7 +293,6 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   metaText: {
-    color: '#bbb',
     fontSize: 12,
   },
   emptyState: {
