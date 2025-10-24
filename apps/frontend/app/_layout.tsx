@@ -28,7 +28,8 @@ export default function RootLayout() {
             <Stack.Screen name="auth" options={{ headerShown: false }} />
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
             <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-            <Stack.Screen name="bartender" options={{ presentation: 'modal', title: 'Talk to Bartender' }} />
+            <Stack.Screen name="bartender" options={{ headerShown: false }} />
+            <Stack.Screen name="drink/[id]" options={{ headerShown: false }} />
           </Stack>
         </ThemedContainer>
       </FavoritesProvider>

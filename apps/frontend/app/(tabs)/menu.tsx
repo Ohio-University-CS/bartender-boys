@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, View } from 'react-native';
+import { StyleSheet, ScrollView, TouchableOpacity, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -10,6 +11,7 @@ import { useSettings } from '@/contexts/settings';
 import { CATEGORY_COLORS, DIFFICULTY_COLORS } from '@/constants/ui-palette';
 
 export default function MenuScreen() {
+  const router = useRouter();
   const { defaultMenuCategory, defaultShowFavorites } = useSettings();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState(defaultMenuCategory || 'All');
@@ -39,11 +41,7 @@ export default function MenuScreen() {
   });
 
   const showDrinkDetails = (drink: Drink) => {
-    Alert.alert(
-      drink.name,
-      `Category: ${drink.category}\nDifficulty: ${drink.difficulty}\nPrep Time: ${drink.prepTime}\n\nIngredients:\n${drink.ingredients.join('\n')}\n\nInstructions:\n${drink.instructions}`,
-      [{ text: 'OK' }]
-    );
+    router.push(`/drink/${drink.id}` as any);
   };
 
   return (
