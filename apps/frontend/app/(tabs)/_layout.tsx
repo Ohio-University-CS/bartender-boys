@@ -40,6 +40,7 @@ export default function TabLayout() {
       {/* Hide legacy routes if files still exist */}
       <Tabs.Screen name="index" options={{ href: null }} />
       <Tabs.Screen name="explore" options={{ href: null }} />
+      <Tabs.Screen name="bartender" options={{ href: null }} />
       <Tabs.Screen
         name="chat"
         options={{
