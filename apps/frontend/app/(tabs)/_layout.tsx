@@ -47,13 +47,6 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => <IconSymbol size={24} name="bubble.left.and.bubble.right" color={color} />,
         }}
       />
-      <Tabs.Screen
-        name="bartender"
-        options={{
-          title: 'Bartender',
-          tabBarIcon: ({ color }) => <IconSymbol size={24} name="mic.fill" color={color} />,
-        }}
-      />
       {/* Explore tab removed */}
       <Tabs.Screen
         name="settings"
