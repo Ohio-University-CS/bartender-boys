@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { StyleSheet, ScrollView, View, Text, Switch, TextInput, TouchableOpacity, Alert, Platform } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import SegmentedControl from '@react-native-segmented-control/segmented-control';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -45,7 +46,8 @@ export default function SettingsScreen() {
   };
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor }]} contentContainerStyle={styles.containerContent}>
+    <SafeAreaView style={[styles.container, { backgroundColor }]} edges={['top', 'left', 'right']}>
+      <ScrollView contentContainerStyle={styles.containerContent}>
       <ThemedView style={[styles.section, { backgroundColor: cardBg, borderColor: borderColor }]}>
         <ThemedText type="title" style={styles.sectionTitle}>Profile</ThemedText>
         <ThemedText style={[styles.help, { color: helpText }]}>Set a display name (shown in the app where relevant)</ThemedText>
@@ -206,7 +208,8 @@ export default function SettingsScreen() {
         </View>
         <ThemedText style={[styles.meta, { color: metaText }]}>Platform: {Platform.OS}</ThemedText>
       </ThemedView>
-    </ScrollView>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 

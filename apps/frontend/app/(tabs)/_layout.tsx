@@ -5,7 +5,6 @@ import { HapticTab } from '@/components/haptic-tab';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { useSettings } from '@/contexts/settings';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
@@ -41,7 +40,6 @@ export default function TabLayout() {
       {/* Hide legacy routes if files still exist */}
       <Tabs.Screen name="index" options={{ href: null }} />
       <Tabs.Screen name="explore" options={{ href: null }} />
-      <Tabs.Screen name="bartender" options={{ href: null }} />
       <Tabs.Screen
         name="chat"
         options={{

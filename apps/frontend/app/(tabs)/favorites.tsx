@@ -1,11 +1,12 @@
 import React from 'react';
 import { StyleSheet, ScrollView, View, TouchableOpacity } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useFavorites } from '@/contexts/favorites';
-import { DRINKS, getDrinkById } from '@/constants/drinks';
+import { getDrinkById } from '@/constants/drinks';
 import { useThemeColor } from '@/hooks/use-theme-color';
 
 export default function FavoritesScreen() {
@@ -21,7 +22,8 @@ export default function FavoritesScreen() {
   const emptyHelp = useThemeColor({ light: '#777', dark: '#777' }, 'text');
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor }]}>
+    <SafeAreaView style={[styles.container, { backgroundColor }]} edges={['top', 'left', 'right']}>
+      <ScrollView>
       <ThemedView style={[styles.header, { borderBottomColor: borderColor }]}>
         <ThemedText type="title" style={styles.title}>Favorites</ThemedText>
       </ThemedView>
@@ -51,7 +53,8 @@ export default function FavoritesScreen() {
           </ThemedView>
         ))}
       </ThemedView>
-    </ScrollView>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
@@ -59,7 +62,6 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   header: {
     padding: 16,
-    paddingTop: 56,
     borderBottomWidth: 1,
   },
   title: { fontSize: 20, fontWeight: '700', color: '#FFA500' },

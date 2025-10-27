@@ -2,7 +2,7 @@
 const isProd = false; // Set to true for production builds
 
 // Network IP configuration
-const NETWORK_IP = '10.233.120.209'; // Update this when your IP changes
+const NETWORK_IP = '10.233.120.253'; // Update this when your IP changes
 
 // Development configuration
 const DEV_CONFIG = {

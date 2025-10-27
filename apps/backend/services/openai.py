@@ -120,3 +120,25 @@ class OpenAIService:
         return {
             "error": "Unexpected error in retry logic"
         }
+    
+    async def generate_image(self, prompt: str, size: str = "1024x1024", quality: str = "standard") -> str:
+        """
+        Generate an image using DALL-E.
+        
+        Args:
+            prompt: Text description of the image to generate
+            size: Image size (default: "1024x1024")
+            quality: Image quality - "standard" or "hd" (default: "standard")
+            
+        Returns:
+            URL of the generated image
+        """
+        response = self._client.images.generate(
+            model="dall-e-3",
+            prompt=prompt,
+            size=size,
+            quality=quality,
+            n=1,
+        )
+        
+        return response.data[0].url
