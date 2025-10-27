@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { StyleSheet, ScrollView, TouchableOpacity, TextInput, View } from 'react-native';
+import { StyleSheet, ScrollView, TouchableOpacity, TextInput, View, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -79,7 +79,10 @@ export default function MenuScreen() {
           horizontal
           showsHorizontalScrollIndicator={false}
           style={styles.categoriesScroll}
-          contentContainerStyle={styles.categoriesContent}
+          contentContainerStyle={[
+            styles.categoriesContent,
+            Platform.OS === 'web' && styles.categoriesContentWeb
+          ]}
         >
           {categories.map((category) => (
             <TouchableOpacity
@@ -209,6 +212,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   categoriesContent: {
+    paddingHorizontal: 4,
+  },
+  categoriesContentWeb: {
     alignItems: 'center',
     justifyContent: 'center',
     width: '100%',
