@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { StyleSheet, ScrollView, TouchableOpacity, TextInput, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
@@ -57,10 +58,11 @@ export default function MenuScreen() {
   };
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor }]} contentContainerStyle={styles.containerContent}>
-      <ThemedView style={[styles.header, { borderBottomColor: borderColor }]}>
-        <ThemedText type="title" style={styles.title}>Full Menu</ThemedText>
-      </ThemedView>
+    <SafeAreaView style={[styles.container, { backgroundColor }]} edges={['top', 'left', 'right']}>
+      <ScrollView contentContainerStyle={styles.containerContent}>
+        <ThemedView style={[styles.header, { borderBottomColor: borderColor }]}>
+          <ThemedText type="title" style={styles.title}>Full Menu</ThemedText>
+        </ThemedView>
 
       <ThemedView style={[styles.searchContainer, { borderBottomColor: borderColor, backgroundColor: inputBg }]}>
         <TextInput
@@ -162,7 +164,8 @@ export default function MenuScreen() {
           </ThemedView>
         )}
       </ThemedView>
-    </ScrollView>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
@@ -175,7 +178,6 @@ const styles = StyleSheet.create({
   },
   header: {
     padding: 16,
-    paddingTop: 56,
     borderBottomWidth: 1,
     alignItems: 'center',
   },

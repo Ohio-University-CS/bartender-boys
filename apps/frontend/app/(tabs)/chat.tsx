@@ -1,5 +1,6 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { StyleSheet, View, TextInput, TouchableOpacity, FlatList, Text, KeyboardAvoidingView, Platform } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import { API_BASE_URL } from '@/environment';
@@ -67,36 +68,38 @@ export default function ChatScreen() {
   );
 
   return (
-    <KeyboardAvoidingView style={[styles.container, { backgroundColor }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <FlatList
-        data={messages}
-        keyExtractor={(it) => it.id}
-        renderItem={renderItem}
-        contentContainerStyle={styles.list}
-      />
-      <TouchableOpacity
-        style={styles.talkBtn}
-        onPress={() => router.push('/bartender')}
-        accessibilityLabel="Talk to bartender"
-      >
-        <Ionicons name="mic" size={16} color="#000" />
-        <Text style={styles.talkText}>Talk to bartender</Text>
-      </TouchableOpacity>
-      <View style={[styles.inputRow, { borderTopColor: borderColor }]}>
-        <TextInput
-          style={[styles.input, { backgroundColor: inputBg, borderColor: inputBorder, color: textColor }]}
-          placeholder="Ask the bartender..."
-          placeholderTextColor={placeholderColor}
-          value={input}
-          onChangeText={setInput}
-          onSubmitEditing={onSend}
-          editable={!busy}
+    <SafeAreaView style={[styles.container, { backgroundColor }]} edges={['top', 'left', 'right']}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <FlatList
+          data={messages}
+          keyExtractor={(it) => it.id}
+          renderItem={renderItem}
+          contentContainerStyle={styles.list}
         />
-        <TouchableOpacity style={styles.sendBtn} onPress={onSend} disabled={busy}>
-          <Ionicons name="paper-plane" size={18} color="#000" />
+        <TouchableOpacity
+          style={styles.talkBtn}
+          onPress={() => router.push('/bartender')}
+          accessibilityLabel="Talk to bartender"
+        >
+          <Ionicons name="mic" size={16} color="#000" />
+          <Text style={styles.talkText}>Talk to bartender</Text>
         </TouchableOpacity>
-      </View>
-    </KeyboardAvoidingView>
+        <View style={[styles.inputRow, { borderTopColor: borderColor }]}>
+          <TextInput
+            style={[styles.input, { backgroundColor: inputBg, borderColor: inputBorder, color: textColor }]}
+            placeholder="Ask the bartender..."
+            placeholderTextColor={placeholderColor}
+            value={input}
+            onChangeText={setInput}
+            onSubmitEditing={onSend}
+            editable={!busy}
+          />
+          <TouchableOpacity style={styles.sendBtn} onPress={onSend} disabled={busy}>
+            <Ionicons name="paper-plane" size={18} color="#000" />
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
