@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { StyleSheet, View, TextInput, TouchableOpacity, FlatList, Text, KeyboardAvoidingView, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -7,6 +7,7 @@ import { useSettings } from '@/contexts/settings';
 import { useRouter } from 'expo-router';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import Markdown from 'react-native-markdown-display';
+import { BartenderAvatar } from '@/components/BartenderAvatar';
 // EventSource usage:
 // - Web: use native window.EventSource
 // - Native: dynamically require('react-native-sse') at runtime to avoid build-time dependency when not installed
@@ -23,6 +24,29 @@ export default function ChatScreen() {
     { id: 'welcome', role: 'assistant', content: "Hey! I'm your Bartender AI. Ask me for recipes, swaps, or pairing ideas." },
   ]);
   const [busy, setBusy] = useState(false);
+  const [isTalking, setIsTalking] = useState(false);
+  const talkingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const stopTalkingImmediately = useCallback(() => {
+    if (talkingTimeoutRef.current) {
+      clearTimeout(talkingTimeoutRef.current);
+      talkingTimeoutRef.current = null;
+    }
+    setIsTalking(false);
+  }, []);
+
+  const finalizeTalking = useCallback((text: string) => {
+    if (talkingTimeoutRef.current) {
+      clearTimeout(talkingTimeoutRef.current);
+      talkingTimeoutRef.current = null;
+    }
+    const wordCount = text.trim() ? text.trim().split(/\s+/).length : 0;
+    const talkingDuration = Math.max(2000, (wordCount / 150) * 60 * 1000);
+    talkingTimeoutRef.current = setTimeout(() => {
+      setIsTalking(false);
+      talkingTimeoutRef.current = null;
+    }, talkingDuration);
+  }, []);
 
   // Theme colors
   const backgroundColor = useThemeColor({}, 'background');
@@ -34,6 +58,16 @@ export default function ChatScreen() {
   const aiBubbleBorder = useThemeColor({ light: '#d0d0d0', dark: '#2a2a2a' }, 'background');
   const bubbleText = useThemeColor({ light: '#000', dark: '#fff' }, 'text');
   const placeholderColor = useThemeColor({ light: '#888', dark: '#666' }, 'text');
+  const avatarBorder = useThemeColor({ light: '#e0e0e0', dark: '#222' }, 'background');
+  const avatarBackground = useThemeColor({ light: '#ffffff', dark: '#000000' }, 'background');
+
+  useEffect(() => {
+    return () => {
+      if (talkingTimeoutRef.current) {
+        clearTimeout(talkingTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const onSend = useCallback(async () => {
     const text = input.trim();
@@ -42,6 +76,7 @@ export default function ChatScreen() {
     setMessages((m) => [...m, userMsg]);
     setInput('');
     setBusy(true);
+    stopTalkingImmediately();
     try {
       const payload = {
         messages: [
@@ -53,13 +88,20 @@ export default function ChatScreen() {
       // Prefer EventSource (web native or react-native-sse on native)
       if (Platform.OS === 'web') {
         const aiId = `${Date.now()}-ai`;
-        // Create placeholder AI message
         setMessages((m) => [...m, { id: aiId, role: 'assistant', content: '' }]);
-        // Build URL using browser URL API
+        setIsTalking(true);
+
         const url = new URL(`${baseUrl}/chat/respond_stream`);
         url.searchParams.set('q', JSON.stringify(payload));
 
         let aiText = '';
+        let completed = false;
+        const markComplete = () => {
+          if (completed) return;
+          completed = true;
+          finalizeTalking(aiText);
+        };
+
         const es = new window.EventSource(url.toString());
 
         es.addEventListener('open', () => {
@@ -71,10 +113,13 @@ export default function ChatScreen() {
             const data = JSON.parse(event.data);
             if (data.delta) {
               aiText += String(data.delta);
-              setMessages((m) => m.map((msg) => msg.id === aiId ? { ...msg, content: aiText } : msg));
+              setMessages((m) =>
+                m.map((msg) => (msg.id === aiId ? { ...msg, content: aiText } : msg))
+              );
             }
             if (data.done) {
               console.log('[chat] SSE done');
+              markComplete();
               es.close();
             }
             if (data.error) {
@@ -85,35 +130,48 @@ export default function ChatScreen() {
           }
         });
 
-        es.addEventListener('error', (event: any) => {
-          if (event.type === 'error') {
-            console.log('[chat] SSE connection error', event.message);
-          } else if (event.type === 'exception') {
-            console.log('[chat] SSE exception', event.message, event.error);
-          }
-        });
-
         // Wait for completion before resolving onSend
         await new Promise<void>((resolve) => {
-          const doneListener = (event: any) => {
+          function cleanup() {
+            es.removeEventListener('message', doneListener);
+            es.removeEventListener('error', errorListener);
+          }
+          function doneListener(event: any) {
             try {
               const data = JSON.parse(event.data);
               if (data.done) {
-                es.removeEventListener('message', doneListener);
+                markComplete();
+                cleanup();
                 es.close();
                 resolve();
               }
             } catch {}
-          };
+          }
+          function errorListener(event: any) {
+            console.log('[chat] SSE connection error', event?.message);
+            stopTalkingImmediately();
+            cleanup();
+            es.close();
+            resolve();
+          }
           es.addEventListener('message', doneListener);
+          es.addEventListener('error', errorListener);
         });
       } else {
         // Native: use react-native-sse dynamically
         const aiId = `${Date.now()}-ai`;
         setMessages((m) => [...m, { id: aiId, role: 'assistant', content: '' }]);
+        setIsTalking(true);
         const url = `${baseUrl}/chat/respond_stream?q=${encodeURIComponent(JSON.stringify(payload))}`;
         const { default: EventSourceRN } = await import('react-native-sse');
         let aiText = '';
+        let completed = false;
+        const markComplete = () => {
+          if (completed) return;
+          completed = true;
+          finalizeTalking(aiText);
+        };
+
         const es = new EventSourceRN(url);
         es.addEventListener('open', () => {
           // no-op
@@ -123,9 +181,12 @@ export default function ChatScreen() {
             const data = JSON.parse(event.data);
             if (data.delta) {
               aiText += String(data.delta);
-              setMessages((m) => m.map((msg) => msg.id === aiId ? { ...msg, content: aiText } : msg));
+              setMessages((m) =>
+                m.map((msg) => (msg.id === aiId ? { ...msg, content: aiText } : msg))
+              );
             }
             if (data.done) {
+              markComplete();
               es.close();
             }
             if (data.error) {
@@ -133,30 +194,40 @@ export default function ChatScreen() {
             }
           } catch {}
         });
-        es.addEventListener('error', (_event: any) => {
-          // no-op; message handler will produce error bubble
-        });
         await new Promise<void>((resolve) => {
-          const doneListener = (event: any) => {
+          function cleanup() {
+            es.removeEventListener('message', doneListener);
+            es.removeEventListener('error', errorListener);
+          }
+          function doneListener(event: any) {
             try {
               const data = JSON.parse(event.data);
               if (data.done) {
-                es.removeEventListener('message', doneListener);
+                markComplete();
+                cleanup();
                 es.close();
                 resolve();
               }
             } catch {}
-          };
+          }
+          function errorListener(event: any) {
+            stopTalkingImmediately();
+            cleanup();
+            es.close();
+            resolve();
+          }
           es.addEventListener('message', doneListener);
+          es.addEventListener('error', errorListener);
         });
       }
     } catch (e: any) {
       const msg = e?.response?.data?.detail || e?.message || 'Network error.';
       setMessages((m) => [...m, { id: `${Date.now()}-err`, role: 'assistant', content: `Error: ${msg}` }]);
+      stopTalkingImmediately();
     } finally {
       setBusy(false);
     }
-  }, [input, busy, baseUrl, messages]);
+  }, [input, busy, baseUrl, messages, finalizeTalking, stopTalkingImmediately]);
 
   const renderItem = ({ item }: { item: ChatMsg }) => (
     <View style={[
@@ -186,6 +257,9 @@ export default function ChatScreen() {
   return (
     <View style={[styles.container, { backgroundColor, paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+  <View style={[styles.avatarContainer, { borderBottomColor: avatarBorder, backgroundColor: avatarBackground }]}> 
+          <BartenderAvatar isTalking={isTalking} backgroundColor={avatarBackground} />
+        </View>
         <FlatList
           data={messages}
           keyExtractor={(it) => it.id}
@@ -194,7 +268,7 @@ export default function ChatScreen() {
         />
         <TouchableOpacity
           style={styles.talkBtn}
-          onPress={() => router.push('/bartender')}
+          onPress={() => router.push('/bartender' as never)}
           accessibilityLabel="Talk to bartender"
         >
           <Ionicons name="mic" size={16} color="#000" />
@@ -221,7 +295,15 @@ export default function ChatScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  list: { padding: 12 },
+  avatarContainer: {
+    width: '100%',
+    paddingVertical: Platform.OS === 'web' ? 24 : 12,
+    paddingHorizontal: Platform.OS === 'web' ? 40 : 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderBottomWidth: 1,
+  },
+  list: { padding: 12, paddingBottom: 120 },
   bubble: { maxWidth: '80%', padding: 10, borderRadius: 12, marginBottom: 8 },
   userBubble: { alignSelf: 'flex-end', backgroundColor: '#FFA500' },
   aiBubble: { alignSelf: 'flex-start', borderWidth: 1 },
