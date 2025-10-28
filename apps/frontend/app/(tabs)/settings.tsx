@@ -1,6 +1,6 @@
 import React from 'react';
 import { StyleSheet, ScrollView, View, Text, Switch, TouchableOpacity, Alert, Platform } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import SegmentedControl from '@react-native-segmented-control/segmented-control';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -11,6 +11,7 @@ import { useRouter } from 'expo-router';
 
 export default function SettingsScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const {
     theme, setTheme,
     defaultMenuCategory, setDefaultMenuCategory,
@@ -50,7 +51,7 @@ export default function SettingsScreen() {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor }]} edges={['top', 'left', 'right']}>
+    <View style={[styles.container, { backgroundColor, paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
       <ScrollView contentContainerStyle={styles.containerContent}>
       <ThemedView style={[styles.section, { backgroundColor: cardBg, borderColor: borderColor }]}>
         <ThemedText type="title" style={styles.sectionTitle}>Appearance</ThemedText>
@@ -153,13 +154,13 @@ export default function SettingsScreen() {
         </View>
       </ThemedView>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  containerContent: { alignItems: 'center', paddingBottom: 24 },
+  containerContent: { alignItems: 'center', paddingTop: 16, paddingBottom: 24 },
   section: {
     borderWidth: 1,
     margin: 12,
