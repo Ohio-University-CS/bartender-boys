@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { StyleSheet, ScrollView, View, Text, Switch, TextInput, TouchableOpacity, Alert, Platform } from 'react-native';
+import React from 'react';
+import { StyleSheet, ScrollView, View, Text, Switch, TouchableOpacity, Alert, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import SegmentedControl from '@react-native-segmented-control/segmented-control';
 import { ThemedText } from '@/components/themed-text';
@@ -7,76 +7,51 @@ import { ThemedView } from '@/components/themed-view';
 import { useSettings } from '@/contexts/settings';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useThemeColor } from '@/hooks/use-theme-color';
+import { useRouter } from 'expo-router';
 
 export default function SettingsScreen() {
+  const router = useRouter();
   const {
     theme, setTheme,
-    hapticsEnabled, setHapticsEnabled,
-    hapticStrength, setHapticStrength,
-    debugLogs, setDebugLogs,
-    displayName, setDisplayName,
     defaultMenuCategory, setDefaultMenuCategory,
     defaultShowFavorites, setDefaultShowFavorites,
-    reset,
   } = useSettings();
-  const [nameInput, setNameInput] = useState(displayName);
 
   // Theme colors
   const backgroundColor = useThemeColor({}, 'background');
-  const textColor = useThemeColor({}, 'text');
   const cardBg = useThemeColor({ light: '#f5f5f5', dark: '#121212' }, 'background');
   const borderColor = useThemeColor({ light: '#e0e0e0', dark: '#1f1f1f' }, 'background');
-  const inputBg = useThemeColor({ light: '#ffffff', dark: '#1a1a1a' }, 'background');
-  const inputBorder = useThemeColor({ light: '#d0d0d0', dark: '#2a2a2a' }, 'background');
-  const placeholderColor = useThemeColor({ light: '#888', dark: '#666' }, 'text');
   const helpText = useThemeColor({ light: '#666', dark: '#aaa' }, 'text');
-  const metaText = useThemeColor({ light: '#999', dark: '#777' }, 'text');
-  const secondaryBg = useThemeColor({ light: '#e0e0e0', dark: '#1a1a1a' }, 'background');
   const chipBg = useThemeColor({ light: '#e8e8e8', dark: '#1a1a1a' }, 'background');
   const chipBorder = useThemeColor({ light: '#d0d0d0', dark: '#2a2a2a' }, 'background');
   const segmentBg = useThemeColor({ light: '#f0f0f0', dark: '#1a1a1a' }, 'background');
 
-  useEffect(() => {
-    setNameInput(displayName);
-  }, [displayName]);
-
-  const clearBypass = async () => {
-    await AsyncStorage.removeItem('isVerified');
-    Alert.alert('Cleared', 'ID verification/skip has been cleared.');
+  const handleLogout = async () => {
+    Alert.alert(
+      'Log Out',
+      'Are you sure you want to log out?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Log Out',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await AsyncStorage.removeItem('isVerified');
+              router.replace('/auth');
+            } catch (error) {
+              console.error('Logout error:', error);
+              Alert.alert('Error', 'Failed to log out. Please try again.');
+            }
+          },
+        },
+      ]
+    );
   };
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor }]} edges={['top', 'left', 'right']}>
       <ScrollView contentContainerStyle={styles.containerContent}>
-      <ThemedView style={[styles.section, { backgroundColor: cardBg, borderColor: borderColor }]}>
-        <ThemedText type="title" style={styles.sectionTitle}>Profile</ThemedText>
-        <ThemedText style={[styles.help, { color: helpText }]}>Set a display name (shown in the app where relevant)</ThemedText>
-        <TextInput
-          placeholder="Your name (e.g., Alex)"
-          placeholderTextColor={placeholderColor}
-          value={nameInput}
-          onChangeText={setNameInput}
-          style={[styles.input, { backgroundColor: inputBg, borderColor: inputBorder, color: textColor }]}
-        />
-        <View style={styles.rowGap}>
-          <TouchableOpacity
-            style={styles.button}
-            onPress={() => {
-              setDisplayName(nameInput.trim());
-              Alert.alert('Saved', 'Display name updated');
-            }}
-          >
-            <Text style={styles.buttonText}>Save Name</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.button, styles.secondary, { backgroundColor: secondaryBg, borderColor: inputBorder }]}
-            onPress={() => setNameInput('')}
-          >
-            <Text style={styles.secondaryText}>Clear</Text>
-          </TouchableOpacity>
-        </View>
-      </ThemedView>
-
       <ThemedView style={[styles.section, { backgroundColor: cardBg, borderColor: borderColor }]}>
         <ThemedText type="title" style={styles.sectionTitle}>Appearance</ThemedText>
         <ThemedText style={[styles.help, { color: helpText }]}>Select a theme mode</ThemedText>
@@ -117,32 +92,6 @@ export default function SettingsScreen() {
             ))}
           </View>
         )}
-        <View style={styles.row}>
-          <ThemedText>Haptic Feedback</ThemedText>
-          <Switch value={hapticsEnabled} onValueChange={setHapticsEnabled} />
-        </View>
-        <ThemedText style={[styles.help, { marginTop: 4, color: helpText }]}>Haptic strength</ThemedText>
-        <View style={[styles.row, { justifyContent: 'space-around' }]}>
-          {([
-            { key: 'light', label: 'Light' },
-            { key: 'medium', label: 'Medium' },
-            { key: 'heavy', label: 'Heavy' },
-          ] as const).map((opt) => (
-            <TouchableOpacity
-              key={opt.key}
-              style={[
-                styles.chip,
-                { backgroundColor: chipBg, borderColor: chipBorder },
-                hapticStrength === opt.key && styles.chipActive
-              ]}
-              onPress={() => setHapticStrength(opt.key)}
-            >
-              <Text style={[styles.chipText, hapticStrength === opt.key && styles.chipTextActive]}>
-                {opt.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
       </ThemedView>
 
       <ThemedView style={[styles.section, { backgroundColor: cardBg, borderColor: borderColor }]}>
@@ -193,20 +142,15 @@ export default function SettingsScreen() {
       </ThemedView>
 
       <ThemedView style={[styles.section, { backgroundColor: cardBg, borderColor: borderColor }]}>
-        <ThemedText type="title" style={styles.sectionTitle}>Advanced</ThemedText>
-        <View style={styles.row}>
-          <ThemedText>Debug Logging</ThemedText>
-          <Switch value={debugLogs} onValueChange={setDebugLogs} />
-        </View>
+        <ThemedText type="title" style={styles.sectionTitle}>Account</ThemedText>
         <View style={styles.rowGap}>
           <TouchableOpacity
-            style={[styles.button, styles.secondary, { backgroundColor: secondaryBg, borderColor: inputBorder }]}
-            onPress={reset}
+            style={[styles.button, { backgroundColor: '#FF4444' }]}
+            onPress={handleLogout}
           >
-            <Text style={styles.secondaryText}>Reset All Settings</Text>
+            <Text style={styles.buttonText}>Log Out</Text>
           </TouchableOpacity>
         </View>
-        <ThemedText style={[styles.meta, { color: metaText }]}>Platform: {Platform.OS}</ThemedText>
       </ThemedView>
       </ScrollView>
     </SafeAreaView>
