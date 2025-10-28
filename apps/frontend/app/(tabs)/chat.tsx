@@ -1,17 +1,21 @@
 import React, { useCallback, useState } from 'react';
 import { StyleSheet, View, TextInput, TouchableOpacity, FlatList, Text, KeyboardAvoidingView, Platform } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import axios from 'axios';
 import { API_BASE_URL } from '@/environment';
 import { useSettings } from '@/contexts/settings';
 import { useRouter } from 'expo-router';
 import { useThemeColor } from '@/hooks/use-theme-color';
+import Markdown from 'react-native-markdown-display';
+// EventSource usage:
+// - Web: use native window.EventSource
+// - Native: dynamically require('react-native-sse') at runtime to avoid build-time dependency when not installed
 
 type ChatMsg = { id: string; role: 'user' | 'assistant'; content: string };
 
 export default function ChatScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { apiBaseUrl } = useSettings();
   const baseUrl = apiBaseUrl || API_BASE_URL;
   const [input, setInput] = useState('');
@@ -46,10 +50,106 @@ export default function ChatScreen() {
           { role: 'user', content: text },
         ],
       };
-      const resp = await axios.post(`${baseUrl}/chat/respond`, payload, { timeout: 45000 });
-      const reply = String(resp.data?.reply || '');
-      const aiMsg: ChatMsg = { id: `${Date.now()}-ai`, role: 'assistant', content: reply || 'Sorry, I could not think of anything right now.' };
-      setMessages((m) => [...m, aiMsg]);
+      // Prefer EventSource (web native or react-native-sse on native)
+      if (Platform.OS === 'web') {
+        const aiId = `${Date.now()}-ai`;
+        // Create placeholder AI message
+        setMessages((m) => [...m, { id: aiId, role: 'assistant', content: '' }]);
+        // Build URL using browser URL API
+        const url = new URL(`${baseUrl}/chat/respond_stream`);
+        url.searchParams.set('q', JSON.stringify(payload));
+
+        let aiText = '';
+        const es = new window.EventSource(url.toString());
+
+        es.addEventListener('open', () => {
+          console.log('[chat] SSE open');
+        });
+
+        es.addEventListener('message', (event: any) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.delta) {
+              aiText += String(data.delta);
+              setMessages((m) => m.map((msg) => msg.id === aiId ? { ...msg, content: aiText } : msg));
+            }
+            if (data.done) {
+              console.log('[chat] SSE done');
+              es.close();
+            }
+            if (data.error) {
+              throw new Error(String(data.error));
+            }
+          } catch (err: any) {
+            console.log('[chat] SSE parse error', err?.message || String(err));
+          }
+        });
+
+        es.addEventListener('error', (event: any) => {
+          if (event.type === 'error') {
+            console.log('[chat] SSE connection error', event.message);
+          } else if (event.type === 'exception') {
+            console.log('[chat] SSE exception', event.message, event.error);
+          }
+        });
+
+        // Wait for completion before resolving onSend
+        await new Promise<void>((resolve) => {
+          const doneListener = (event: any) => {
+            try {
+              const data = JSON.parse(event.data);
+              if (data.done) {
+                es.removeEventListener('message', doneListener);
+                es.close();
+                resolve();
+              }
+            } catch {}
+          };
+          es.addEventListener('message', doneListener);
+        });
+      } else {
+        // Native: use react-native-sse dynamically
+        const aiId = `${Date.now()}-ai`;
+        setMessages((m) => [...m, { id: aiId, role: 'assistant', content: '' }]);
+        const url = `${baseUrl}/chat/respond_stream?q=${encodeURIComponent(JSON.stringify(payload))}`;
+        const { default: EventSourceRN } = await import('react-native-sse');
+        let aiText = '';
+        const es = new EventSourceRN(url);
+        es.addEventListener('open', () => {
+          // no-op
+        });
+        es.addEventListener('message', (event: any) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.delta) {
+              aiText += String(data.delta);
+              setMessages((m) => m.map((msg) => msg.id === aiId ? { ...msg, content: aiText } : msg));
+            }
+            if (data.done) {
+              es.close();
+            }
+            if (data.error) {
+              throw new Error(String(data.error));
+            }
+          } catch {}
+        });
+        es.addEventListener('error', (_event: any) => {
+          // no-op; message handler will produce error bubble
+        });
+        await new Promise<void>((resolve) => {
+          const doneListener = (event: any) => {
+            try {
+              const data = JSON.parse(event.data);
+              if (data.done) {
+                es.removeEventListener('message', doneListener);
+                es.close();
+                resolve();
+              }
+            } catch {}
+          };
+          es.addEventListener('message', doneListener);
+        });
+      }
     } catch (e: any) {
       const msg = e?.response?.data?.detail || e?.message || 'Network error.';
       setMessages((m) => [...m, { id: `${Date.now()}-err`, role: 'assistant', content: `Error: ${msg}` }]);
@@ -63,12 +163,28 @@ export default function ChatScreen() {
       styles.bubble,
       item.role === 'user' ? styles.userBubble : [styles.aiBubble, { backgroundColor: aiBubbleBg, borderColor: aiBubbleBorder }]
     ]}>
-      <Text style={[styles.bubbleText, { color: item.role === 'user' ? '#000' : bubbleText }]}>{item.content}</Text>
+      {item.role === 'assistant' ? (
+        <Markdown style={{
+          body: { color: bubbleText, fontSize: 15, lineHeight: 22 },
+          paragraph: { marginBottom: 8 },
+          code_inline: { backgroundColor: aiBubbleBg, paddingHorizontal: 4, paddingVertical: 2, borderRadius: 4, fontSize: 13, fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace' }) },
+          fence: { backgroundColor: aiBubbleBg, padding: 12, borderRadius: 4, marginVertical: 8 },
+          code_block: { backgroundColor: aiBubbleBg, padding: 12, borderRadius: 4, marginVertical: 8 },
+          list_item: { marginBottom: 4 },
+          strong: { fontWeight: '700' },
+          em: { fontStyle: 'italic' },
+          link: { color: '#FFA500' },
+        }}>
+          {item.content}
+        </Markdown>
+      ) : (
+        <Text style={[styles.bubbleText, { color: '#000' }]}>{item.content}</Text>
+      )}
     </View>
   );
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor }]} edges={['top', 'left', 'right']}>
+    <View style={[styles.container, { backgroundColor, paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <FlatList
           data={messages}
@@ -99,7 +215,7 @@ export default function ChatScreen() {
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </View>
   );
 }
 

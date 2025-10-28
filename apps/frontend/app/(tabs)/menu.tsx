@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { StyleSheet, ScrollView, TouchableOpacity, TextInput, View, Platform } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
@@ -14,6 +14,7 @@ import { useThemeColor } from '@/hooks/use-theme-color';
 
 export default function MenuScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { defaultMenuCategory, defaultShowFavorites } = useSettings();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState(defaultMenuCategory || 'All');
@@ -58,7 +59,7 @@ export default function MenuScreen() {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor }]} edges={['top', 'left', 'right']}>
+    <View style={[styles.container, { backgroundColor, paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
       <ScrollView contentContainerStyle={styles.containerContent}>
         <ThemedView style={[styles.header, { borderBottomColor: borderColor }]}>
           <ThemedText type="title" style={styles.title}>Full Menu</ThemedText>
@@ -168,7 +169,7 @@ export default function MenuScreen() {
         )}
       </ThemedView>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 

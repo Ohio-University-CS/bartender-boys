@@ -1,6 +1,6 @@
 import React from 'react';
 import { StyleSheet, ScrollView, View, TouchableOpacity } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
 import { ThemedText } from '@/components/themed-text';
@@ -10,6 +10,7 @@ import { getDrinkById } from '@/constants/drinks';
 import { useThemeColor } from '@/hooks/use-theme-color';
 
 export default function FavoritesScreen() {
+  const insets = useSafeAreaInsets();
   const { ids, toggleFavorite, isFavorite } = useFavorites();
   const items = ids.map((id) => getDrinkById(id)).filter(Boolean);
 
@@ -22,7 +23,7 @@ export default function FavoritesScreen() {
   const emptyHelp = useThemeColor({ light: '#777', dark: '#777' }, 'text');
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor }]} edges={['top', 'left', 'right']}>
+    <View style={[styles.container, { backgroundColor, paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
       <ScrollView>
       <ThemedView style={[styles.header, { borderBottomColor: borderColor }]}>
         <ThemedText type="title" style={styles.title}>Favorites</ThemedText>
@@ -54,7 +55,7 @@ export default function FavoritesScreen() {
         ))}
       </ThemedView>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
