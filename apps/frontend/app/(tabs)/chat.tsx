@@ -59,6 +59,7 @@ export default function ChatScreen() {
   const bubbleText = useThemeColor({ light: '#000', dark: '#fff' }, 'text');
   const placeholderColor = useThemeColor({ light: '#888', dark: '#666' }, 'text');
   const avatarBorder = useThemeColor({ light: '#e0e0e0', dark: '#222' }, 'background');
+  const avatarBackground = useThemeColor({ light: '#ffffff', dark: '#000000' }, 'background');
 
   useEffect(() => {
     return () => {
@@ -256,8 +257,8 @@ export default function ChatScreen() {
   return (
     <View style={[styles.container, { backgroundColor, paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <View style={[styles.avatarContainer, { borderBottomColor: avatarBorder, backgroundColor }]}> 
-          <BartenderAvatar isTalking={isTalking} />
+  <View style={[styles.avatarContainer, { borderBottomColor: avatarBorder, backgroundColor: avatarBackground }]}> 
+          <BartenderAvatar isTalking={isTalking} backgroundColor={avatarBackground} />
         </View>
         <FlatList
           data={messages}

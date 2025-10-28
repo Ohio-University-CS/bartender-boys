@@ -10,6 +10,8 @@ type BartenderAvatarProps = {
   isTalking?: boolean;
   /** Path to custom 3D model (GLB/GLTF) - place file in assets/models/ */
   modelPath?: any; // e.g., require('../assets/models/bartender.glb')
+  /** Background color for the GL canvas */
+  backgroundColor?: string;
 };
 
 /**
@@ -29,6 +31,7 @@ type BartenderAvatarProps = {
 export function BartenderAvatar({
   isTalking = false,
   modelPath,
+  backgroundColor = '#0a0a0a',
 }: BartenderAvatarProps) {
   const animationFrameRef = useRef<number | null>(null);
   const sceneRef = useRef<any>(null);
@@ -37,13 +40,14 @@ export function BartenderAvatar({
   const isWeb = Platform.OS === 'web';
 
   const onContextCreate = async (gl: any) => {
-    // Setup renderer
-    const renderer = new Renderer({ gl });
+  // Setup renderer
+  const renderer = new Renderer({ gl });
     renderer.setSize(gl.drawingBufferWidth, gl.drawingBufferHeight);
+  renderer.setClearColor(new THREE.Color(backgroundColor), 1);
 
     // Setup scene
-    const scene = new THREE.Scene();
-    scene.background = null; // Transparent
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(backgroundColor);
     sceneRef.current = scene;
 
     // Setup camera - closer for upper body shot
@@ -198,8 +202,14 @@ export function BartenderAvatar({
     };
   }, []);
 
+  useEffect(() => {
+    if (sceneRef.current) {
+      sceneRef.current.background = new THREE.Color(backgroundColor);
+    }
+  }, [backgroundColor]);
+
   return (
-    <View style={styles.outerContainer}>
+    <View style={[styles.outerContainer, { backgroundColor }]}>
       <View style={[styles.container, isWeb && styles.containerWeb]}>
         <GLView
           style={styles.glView}
@@ -215,7 +225,6 @@ const styles = StyleSheet.create({
     width: '100%',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#0a0a0a',
   },
   container: {
     width: Platform.OS === 'web' ? '100%' : '85%', // Smaller on mobile to prevent cutoff
