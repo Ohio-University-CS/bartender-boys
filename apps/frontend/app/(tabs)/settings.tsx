@@ -1,71 +1,61 @@
-import React, { useEffect, useState } from 'react';
-import { StyleSheet, ScrollView, View, Text, Switch, TextInput, TouchableOpacity, Alert, Platform } from 'react-native';
+import React from 'react';
+import { StyleSheet, ScrollView, View, Text, Switch, TouchableOpacity, Alert, Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import SegmentedControl from '@react-native-segmented-control/segmented-control';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useSettings } from '@/contexts/settings';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useThemeColor } from '@/hooks/use-theme-color';
+import { useRouter } from 'expo-router';
 
 export default function SettingsScreen() {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
   const {
     theme, setTheme,
-    apiBaseUrl, setApiBaseUrl,
-    hapticsEnabled, setHapticsEnabled,
-    debugLogs, setDebugLogs,
-    idPhotoWidth, setIdPhotoWidth,
-    scanTimeoutMs, setScanTimeoutMs,
-    reset,
+    defaultMenuCategory, setDefaultMenuCategory,
+    defaultShowFavorites, setDefaultShowFavorites,
   } = useSettings();
-  const [apiInput, setApiInput] = useState(apiBaseUrl);
-  const [timeoutInput, setTimeoutInput] = useState(String(scanTimeoutMs));
 
-  useEffect(() => {
-    setApiInput(apiBaseUrl);
-  }, [apiBaseUrl]);
-  useEffect(() => {
-    setTimeoutInput(String(scanTimeoutMs));
-  }, [scanTimeoutMs]);
+  // Theme colors
+  const backgroundColor = useThemeColor({}, 'background');
+  const cardBg = useThemeColor({ light: '#f5f5f5', dark: '#121212' }, 'background');
+  const borderColor = useThemeColor({ light: '#e0e0e0', dark: '#1f1f1f' }, 'background');
+  const helpText = useThemeColor({ light: '#666', dark: '#aaa' }, 'text');
+  const chipBg = useThemeColor({ light: '#e8e8e8', dark: '#1a1a1a' }, 'background');
+  const chipBorder = useThemeColor({ light: '#d0d0d0', dark: '#2a2a2a' }, 'background');
+  const segmentBg = useThemeColor({ light: '#f0f0f0', dark: '#1a1a1a' }, 'background');
 
-  const applyApi = () => {
-    setApiBaseUrl(apiInput.trim());
-    Alert.alert('Saved', 'API base URL updated');
-  };
-
-  const applyTimeout = () => {
-    const val = parseInt(timeoutInput, 10);
-    if (Number.isNaN(val) || val < 1000) {
-      Alert.alert('Invalid value', 'Enter a timeout in milliseconds (>= 1000)');
-      return;
-    }
-    setScanTimeoutMs(val);
-    Alert.alert('Saved', 'Scan timeout updated');
-  };
-
-  const clearBypass = async () => {
-    await AsyncStorage.removeItem('isVerified');
-    Alert.alert('Cleared', 'ID verification/skip has been cleared.');
-  };
-
-  const testBackend = async () => {
-    const base = (apiBaseUrl || require('@/environment').API_BASE_URL) as string;
-    try {
-      const controller = new AbortController();
-      const id = setTimeout(() => controller.abort(), 5000);
-      const res = await fetch(`${base}/health`, { signal: controller.signal });
-      clearTimeout(id);
-      if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-      const data = await res.json();
-      Alert.alert('Backend OK', `URL: ${base}\nStatus: ${data.status || 'unknown'}`);
-    } catch (e: any) {
-      Alert.alert('Backend Unreachable', `Tried: ${base}\n${e?.message || e}`);
-    }
+  const handleLogout = async () => {
+    Alert.alert(
+      'Log Out',
+      'Are you sure you want to log out?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Log Out',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await AsyncStorage.removeItem('isVerified');
+              router.replace('/auth');
+            } catch (error) {
+              console.error('Logout error:', error);
+              Alert.alert('Error', 'Failed to log out. Please try again.');
+            }
+          },
+        },
+      ]
+    );
   };
 
   return (
-    <ScrollView style={styles.container}>
-      <ThemedView style={styles.section}>
+    <View style={[styles.container, { backgroundColor, paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
+      <ScrollView contentContainerStyle={styles.containerContent}>
+      <ThemedView style={[styles.section, { backgroundColor: cardBg, borderColor: borderColor }]}>
         <ThemedText type="title" style={styles.sectionTitle}>Appearance</ThemedText>
-        <ThemedText style={styles.help}>Select a theme mode</ThemedText>
+        <ThemedText style={[styles.help, { color: helpText }]}>Select a theme mode</ThemedText>
         {Platform.OS === 'ios' ? (
           <SegmentedControl
             values={["System", "Light", "Dark"]}
@@ -76,7 +66,7 @@ export default function SettingsScreen() {
               setTheme(selected);
             }}
             tintColor="#FFA500"
-            backgroundColor="#1a1a1a"
+            backgroundColor={segmentBg}
             fontStyle={{ color: '#FFA500' }}
             activeFontStyle={{ color: '#000', fontWeight: '700' }}
           />
@@ -89,7 +79,11 @@ export default function SettingsScreen() {
             ] as const).map((opt) => (
               <TouchableOpacity
                 key={opt.key}
-                style={[styles.chip, theme === opt.key && styles.chipActive]}
+                style={[
+                  styles.chip,
+                  { backgroundColor: chipBg, borderColor: chipBorder },
+                  theme === opt.key && styles.chipActive
+                ]}
                 onPress={() => setTheme(opt.key)}
               >
                 <Text style={[styles.chipText, theme === opt.key && styles.chipTextActive]}>
@@ -99,118 +93,98 @@ export default function SettingsScreen() {
             ))}
           </View>
         )}
-        <View style={styles.row}>
-          <ThemedText>Haptic Feedback</ThemedText>
-          <Switch value={hapticsEnabled} onValueChange={setHapticsEnabled} />
-        </View>
       </ThemedView>
 
-      <ThemedView style={styles.section}>
-        <ThemedText type="title" style={styles.sectionTitle}>Backend</ThemedText>
-        <ThemedText style={styles.help}>Override API base URL used by the app (use your LAN IP for phone testing)</ThemedText>
-        <TextInput
-          placeholder="http://192.168.x.x:8000"
-          placeholderTextColor="#888"
-          value={apiInput}
-          onChangeText={setApiInput}
-          style={styles.input}
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
-        <View style={styles.rowGap}>
-          <TouchableOpacity style={styles.button} onPress={applyApi}>
-            <Text style={styles.buttonText}>Save API URL</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.button, styles.secondary]} onPress={() => setApiInput('')}>
-            <Text style={styles.secondaryText}>Clear Override</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.button, styles.secondary]} onPress={testBackend}>
-            <Text style={styles.secondaryText}>Test Backend Connection</Text>
-          </TouchableOpacity>
-        </View>
-      </ThemedView>
-
-      <ThemedView style={styles.section}>
-        <ThemedText type="title" style={styles.sectionTitle}>ID Verification</ThemedText>
-        <ThemedText style={styles.help}>Adjust image quality sent to server</ThemedText>
-        <View style={[styles.row, { justifyContent: 'space-around' }]}>
-          {[720, 900, 1200].map((w) => (
+      <ThemedView style={[styles.section, { backgroundColor: cardBg, borderColor: borderColor }]}>
+        <ThemedText type="title" style={styles.sectionTitle}>Menu Defaults</ThemedText>
+        <ThemedText style={[styles.help, { color: helpText }]}>Choose the default category when opening the menu</ThemedText>
+        <View style={[styles.row, { flexWrap: 'wrap', justifyContent: 'center', gap: 8 }]}>
+          {['All', 'Cocktail', 'Whiskey', 'Rum', 'Gin', 'Vodka', 'Tequila', 'Brandy', 'Non-Alcoholic'].map((cat) => (
             <TouchableOpacity
-              key={w}
-              style={[styles.chip, idPhotoWidth === w && styles.chipActive]}
-              onPress={() => setIdPhotoWidth(w)}
+              key={cat}
+              style={[
+                styles.chip,
+                { backgroundColor: chipBg, borderColor: chipBorder },
+                defaultMenuCategory === cat && styles.chipActive
+              ]}
+              onPress={() => setDefaultMenuCategory(cat)}
             >
-              <Text style={[styles.chipText, idPhotoWidth === w && styles.chipTextActive]}>
-                {w === 720 ? 'Low' : w === 900 ? 'Medium' : 'High'}
+              <Text style={[styles.chipText, defaultMenuCategory === cat && styles.chipTextActive]}>
+                {cat}
               </Text>
             </TouchableOpacity>
           ))}
         </View>
-        <ThemedText style={[styles.help, { marginTop: 8 }]}>Scan timeout (ms)</ThemedText>
         <View style={styles.row}>
-          <TextInput
-            placeholder="60000"
-            placeholderTextColor="#888"
-            value={timeoutInput}
-            onChangeText={setTimeoutInput}
-            style={[styles.input, { flex: 1, marginRight: 8 }]}
-            keyboardType="number-pad"
-          />
-          <TouchableOpacity style={styles.button} onPress={applyTimeout}>
-            <Text style={styles.buttonText}>Save</Text>
-          </TouchableOpacity>
-        </View>
-        <View style={styles.rowGap}>
-          <TouchableOpacity style={styles.button} onPress={clearBypass}>
-            <Text style={styles.buttonText}>Clear Skip/Verification</Text>
-          </TouchableOpacity>
+          <ThemedText>Show favorites only by default</ThemedText>
+          <Switch value={defaultShowFavorites} onValueChange={setDefaultShowFavorites} />
         </View>
       </ThemedView>
 
-      <ThemedView style={styles.section}>
-        <ThemedText type="title" style={styles.sectionTitle}>Advanced</ThemedText>
+      <ThemedView style={[styles.section, { backgroundColor: cardBg, borderColor: borderColor }]}>
+        <ThemedText type="title" style={styles.sectionTitle}>Personalization</ThemedText>
         <View style={styles.row}>
-          <ThemedText>Debug Logging</ThemedText>
-          <Switch value={debugLogs} onValueChange={setDebugLogs} />
+          <ThemedText>Animations</ThemedText>
+          <Switch value={true} onValueChange={() => {}} />
         </View>
+        <ThemedText style={[styles.help, { marginTop: 4, color: helpText }]}>Enable smooth animations throughout the app</ThemedText>
+        
+        <View style={styles.row}>
+          <ThemedText>Sound Effects</ThemedText>
+          <Switch value={false} onValueChange={() => {}} />
+        </View>
+        <ThemedText style={[styles.help, { marginTop: 4, color: helpText }]}>Play sounds for actions and notifications</ThemedText>
+        
+        <View style={styles.row}>
+          <ThemedText>Auto-save Favorites</ThemedText>
+          <Switch value={true} onValueChange={() => {}} />
+        </View>
+        <ThemedText style={[styles.help, { marginTop: 4, color: helpText }]}>Automatically sync favorites across sessions</ThemedText>
+      </ThemedView>
+
+      <ThemedView style={[styles.section, { backgroundColor: cardBg, borderColor: borderColor }]}>
+        <ThemedText type="title" style={styles.sectionTitle}>Account</ThemedText>
         <View style={styles.rowGap}>
-          <TouchableOpacity style={[styles.button, styles.secondary]} onPress={reset}>
-            <Text style={styles.secondaryText}>Reset All Settings</Text>
+          <TouchableOpacity
+            style={[styles.button, { backgroundColor: '#FF4444' }]}
+            onPress={handleLogout}
+          >
+            <Text style={styles.buttonText}>Log Out</Text>
           </TouchableOpacity>
         </View>
-        <ThemedText style={styles.meta}>Platform: {Platform.OS}</ThemedText>
       </ThemedView>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0C0C0C' },
+  container: { flex: 1 },
+  containerContent: { alignItems: 'center', paddingTop: 16, paddingBottom: 24 },
   section: {
-    backgroundColor: '#121212',
-    borderColor: '#1f1f1f',
     borderWidth: 1,
     margin: 12,
     padding: 16,
     borderRadius: 12,
+    width: '95%',
+    maxWidth: 680,
+    alignSelf: 'center',
   },
-  sectionTitle: { color: '#FFA500', fontSize: 18, marginBottom: 8 },
-  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8 },
+  sectionTitle: { color: '#FFA500', fontSize: 18, marginBottom: 8, textAlign: 'center' },
+  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8, width: '100%' },
   rowGap: { gap: 8, paddingTop: 4 },
-  input: { borderWidth: 1, borderColor: '#2a2a2a', borderRadius: 8, padding: 10, color: '#fff', marginTop: 8 },
+  input: { borderWidth: 1, borderRadius: 8, padding: 10, marginTop: 8, textAlign: 'center' },
   button: { backgroundColor: '#FFA500', paddingVertical: 10, borderRadius: 8, alignItems: 'center' },
   buttonText: { color: '#000', fontWeight: '700' },
-  secondary: { backgroundColor: '#1a1a1a', borderColor: '#2a2a2a', borderWidth: 1 },
+  secondary: { borderWidth: 1 },
   secondaryText: { color: '#FFA500', fontWeight: '600' },
-  help: { color: '#aaa', marginBottom: 8 },
-  meta: { color: '#777', fontSize: 12, marginTop: 12 },
+  help: { marginBottom: 8, textAlign: 'center' },
+  meta: { fontSize: 12, marginTop: 12, textAlign: 'center' },
   chip: {
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#2a2a2a',
-    backgroundColor: '#1a1a1a',
   },
   chipActive: {
     backgroundColor: '#FFA500',

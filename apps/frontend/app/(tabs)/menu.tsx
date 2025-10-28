@@ -1,16 +1,48 @@
-import { useState } from 'react';
-import { StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { StyleSheet, ScrollView, TouchableOpacity, TextInput, View, Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { DRINKS, type Drink } from '@/constants/drinks';
 import { useFavorites } from '../../contexts/favorites';
+import { useSettings } from '@/contexts/settings';
+import { CATEGORY_COLORS, DIFFICULTY_COLORS } from '@/constants/ui-palette';
+import { useThemeColor } from '@/hooks/use-theme-color';
 
 export default function MenuScreen() {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const { defaultMenuCategory, defaultShowFavorites } = useSettings();
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('All');
+  const [selectedCategory, setSelectedCategory] = useState(defaultMenuCategory || 'All');
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState<boolean>(!!defaultShowFavorites);
   const { isFavorite, toggleFavorite } = useFavorites();
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+
+  // Theme colors
+  const backgroundColor = useThemeColor({}, 'background');
+  const textColor = useThemeColor({}, 'text');
+  const cardBg = useThemeColor({ light: '#f5f5f5', dark: '#121212' }, 'background');
+  const borderColor = useThemeColor({ light: '#e0e0e0', dark: '#222' }, 'background');
+  const inputBg = useThemeColor({ light: '#ffffff', dark: '#1a1a1a' }, 'background');
+  const placeholderColor = useThemeColor({ light: '#999', dark: '#666' }, 'text');
+  const badgeBg = useThemeColor({ light: '#e8e8e8', dark: '#1a1a1a' }, 'background');
+  const badgeText = useThemeColor({ light: '#333', dark: '#ddd' }, 'text');
+  const metaText = useThemeColor({ light: '#666', dark: '#bbb' }, 'text');
+
+  // Reflect settings changes if updated while on this screen
+  useEffect(() => {
+    setSelectedCategory(defaultMenuCategory || 'All');
+  }, [defaultMenuCategory]);
+  useEffect(() => {
+    setShowFavoritesOnly(!!defaultShowFavorites);
+  }, [defaultShowFavorites]);
+
+  const toggleExpanded = (id: string) =>
+    setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
 
   const categories = ['All', 'Cocktail', 'Whiskey', 'Rum', 'Gin', 'Vodka', 'Tequila', 'Brandy', 'Non-Alcoholic'];
 
@@ -18,47 +50,57 @@ export default function MenuScreen() {
     const matchesSearch = drink.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          drink.ingredients.some(ing => ing.toLowerCase().includes(searchQuery.toLowerCase()));
     const matchesCategory = selectedCategory === 'All' || drink.category === selectedCategory;
-    return matchesSearch && matchesCategory;
+    const matchesFavorite = !showFavoritesOnly || isFavorite(drink.id);
+    return matchesSearch && matchesCategory && matchesFavorite;
   });
 
   const showDrinkDetails = (drink: Drink) => {
-    Alert.alert(
-      drink.name,
-      `Category: ${drink.category}\nDifficulty: ${drink.difficulty}\nPrep Time: ${drink.prepTime}\n\nIngredients:\n${drink.ingredients.join('\n')}\n\nInstructions:\n${drink.instructions}`,
-      [{ text: 'OK' }]
-    );
+    router.push(`/drink/${drink.id}` as any);
   };
 
   return (
-    <ScrollView style={styles.container}>
-      <ThemedView style={styles.header}>
-        <ThemedText type="title" style={styles.title}>Full Menu</ThemedText>
-      </ThemedView>
+    <View style={[styles.container, { backgroundColor, paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
+      <ScrollView contentContainerStyle={styles.containerContent}>
+        <ThemedView style={[styles.header, { borderBottomColor: borderColor }]}>
+          <ThemedText type="title" style={styles.title}>Full Menu</ThemedText>
+        </ThemedView>
 
-      <ThemedView style={styles.searchContainer}>
+      <ThemedView style={[styles.searchContainer, { borderBottomColor: borderColor, backgroundColor: inputBg }]}>
         <TextInput
-          style={styles.searchInput}
+          style={[styles.searchInput, { color: textColor }]}
           placeholder="Search drinks..."
           value={searchQuery}
           onChangeText={setSearchQuery}
-          placeholderTextColor="#999"
+          placeholderTextColor={placeholderColor}
         />
       </ThemedView>
 
       <ThemedView style={styles.categoriesContainer}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoriesScroll}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.categoriesScroll}
+          contentContainerStyle={[
+            styles.categoriesContent,
+            Platform.OS === 'web' && styles.categoriesContentWeb
+          ]}
+        >
           {categories.map((category) => (
             <TouchableOpacity
               key={category}
-              style={[
+              style={([
                 styles.categoryButton,
-                selectedCategory === category && styles.categoryButtonActive
-              ]}
+                { backgroundColor: cardBg, borderColor: borderColor },
+                selectedCategory === category && [
+                  styles.categoryButtonActive,
+                  category !== 'All' && { borderColor: CATEGORY_COLORS[category], backgroundColor: CATEGORY_COLORS[category] },
+                ],
+              ]) as any}
               onPress={() => setSelectedCategory(category)}
             >
               <ThemedText style={[
                 styles.categoryText,
-                selectedCategory === category && styles.categoryTextActive
+                selectedCategory === category && [styles.categoryTextActive, category !== 'All' && { color: '#0A0A0A' }]
               ]}>
                 {category}
               </ThemedText>
@@ -68,12 +110,17 @@ export default function MenuScreen() {
       </ThemedView>
 
       <ThemedView style={styles.drinksContainer}>
-        {filteredDrinks.map((drink) => (
+        {filteredDrinks.map((drink) => {
+          const isExpanded = !!expanded[drink.id];
+          const shownIngredients = isExpanded ? drink.ingredients : drink.ingredients.slice(0, 3);
+          const remaining = drink.ingredients.length - shownIngredients.length;
+          return (
           <TouchableOpacity
             key={drink.id}
-            style={styles.drinkCard}
+            style={[styles.drinkCard, { backgroundColor: cardBg, borderColor: borderColor }]}
             onPress={() => showDrinkDetails(drink)}
           >
+            <View style={[styles.accentBar, { backgroundColor: CATEGORY_COLORS[drink.category] || '#FFA500' }]} />
             <View style={styles.drinkTopRow}>
               <ThemedText type="defaultSemiBold" style={styles.drinkName}>
                 {drink.name}
@@ -89,20 +136,31 @@ export default function MenuScreen() {
             <ThemedText style={styles.category}>{drink.category}</ThemedText>
 
             <View style={styles.badgeRow}>
-              {drink.ingredients.slice(0, 3).map((ing, idx) => (
-                <View key={idx} style={styles.badge}><ThemedText style={styles.badgeText}>{ing}</ThemedText></View>
+              {shownIngredients.map((ing, idx) => (
+                <View key={idx} style={[styles.badge, { backgroundColor: badgeBg }]}>
+                  <ThemedText style={[styles.badgeText, { color: badgeText }]}>{ing}</ThemedText>
+                </View>
               ))}
-              {drink.ingredients.length > 3 && (
-                <ThemedText style={styles.moreText}>+{drink.ingredients.length - 3} more</ThemedText>
+              {remaining > 0 && !isExpanded && (
+                <TouchableOpacity onPress={() => toggleExpanded(drink.id)}>
+                  <ThemedText style={[styles.moreText, { color: '#FFA500' }]}>+{remaining} more</ThemedText>
+                </TouchableOpacity>
+              )}
+              {isExpanded && (
+                <TouchableOpacity onPress={() => toggleExpanded(drink.id)}>
+                  <ThemedText style={[styles.moreText, { color: '#FFA500' }]}>Show less</ThemedText>
+                </TouchableOpacity>
               )}
             </View>
 
             <View style={styles.metaRow}>
-              <ThemedText style={styles.metaText}>{drink.prepTime}</ThemedText>
-              <ThemedText style={[styles.metaText, { color: '#FFA500' }]}>{drink.difficulty}</ThemedText>
+              <ThemedText style={[styles.metaText, { color: metaText }]}>{drink.prepTime}</ThemedText>
+              <ThemedText style={[styles.metaText, { color: DIFFICULTY_COLORS[drink.difficulty] || '#FFA500', fontWeight: '700' }]}>
+                {drink.difficulty}
+              </ThemedText>
             </View>
           </TouchableOpacity>
-        ))}
+        );})}
         
         {filteredDrinks.length === 0 && (
           <ThemedView style={styles.emptyState}>
@@ -110,59 +168,70 @@ export default function MenuScreen() {
           </ThemedView>
         )}
       </ThemedView>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0C0C0C',
+  },
+  containerContent: {
+    alignItems: 'center',
   },
   header: {
     padding: 16,
-    paddingTop: 56,
     borderBottomWidth: 1,
-    borderBottomColor: '#222',
-    backgroundColor: '#0C0C0C',
+    alignItems: 'center',
   },
   title: {
     fontSize: 20,
     fontWeight: '700',
     color: '#FFA500',
+    textAlign: 'center',
   },
   searchContainer: {
     margin: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#222',
+    width: '95%',
+    maxWidth: 680,
+    alignSelf: 'center',
+    borderRadius: 8,
+    paddingHorizontal: 8,
   },
   searchInput: {
     fontSize: 16,
-    color: '#fff',
     paddingVertical: 12,
+    textAlign: 'center',
   },
   categoriesContainer: {
     marginBottom: 12,
+    width: '100%',
   },
   categoriesScroll: {
     paddingHorizontal: 12,
+  },
+  categoriesContent: {
+    paddingHorizontal: 4,
+  },
+  categoriesContentWeb: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
   },
   categoryButton: {
     paddingHorizontal: 12,
     paddingVertical: 8,
     marginRight: 8,
-    backgroundColor: '#121212',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#1f1f1f',
   },
   categoryButtonActive: {
-    backgroundColor: '#1a1a1a',
     borderColor: '#FFA500',
   },
   categoryText: {
     fontSize: 14,
-    color: '#aaa',
   },
   categoryTextActive: {
     color: '#FFA500',
@@ -171,14 +240,21 @@ const styles = StyleSheet.create({
   drinksContainer: {
     paddingHorizontal: 12,
     paddingBottom: 20,
+    width: '95%',
+    maxWidth: 680,
+    alignSelf: 'center',
   },
   drinkCard: {
-    backgroundColor: '#121212',
     borderRadius: 16,
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#1f1f1f',
+    width: '100%',
+  },
+  accentBar: {
+    height: 4,
+    borderRadius: 999,
+    marginBottom: 10,
   },
   drinkTopRow: {
     flexDirection: 'row',
@@ -194,7 +270,6 @@ const styles = StyleSheet.create({
   drinkName: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#fff',
   },
   category: {
     fontSize: 13,
@@ -208,19 +283,16 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   badge: {
-    backgroundColor: '#1a1a1a',
-    borderColor: '#2a2a2a',
     borderWidth: 1,
+    borderColor: 'transparent',
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 4,
   },
   badgeText: {
-    color: '#ddd',
     fontSize: 12,
   },
   moreText: {
-    color: '#aaa',
     fontSize: 12,
     alignSelf: 'center',
   },
@@ -230,7 +302,6 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   metaText: {
-    color: '#bbb',
     fontSize: 12,
   },
   emptyState: {

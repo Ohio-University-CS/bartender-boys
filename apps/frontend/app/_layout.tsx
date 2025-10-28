@@ -2,6 +2,7 @@ import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { SettingsProvider, useSettings } from '@/contexts/settings';
@@ -21,16 +22,20 @@ function ThemedContainer({ children }: { children: React.ReactNode }) {
 
 export default function RootLayout() {
   return (
-    <SettingsProvider>
-      <FavoritesProvider>
-        <ThemedContainer>
-          <Stack initialRouteName="auth">
-            <Stack.Screen name="auth" options={{ headerShown: false }} />
-            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-          </Stack>
-        </ThemedContainer>
-      </FavoritesProvider>
-    </SettingsProvider>
+    <SafeAreaProvider>
+      <SettingsProvider>
+        <FavoritesProvider>
+          <ThemedContainer>
+            <Stack initialRouteName="auth">
+              <Stack.Screen name="auth" options={{ headerShown: false }} />
+              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+              <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+              <Stack.Screen name="bartender" options={{ headerShown: false }} />
+              <Stack.Screen name="drink/[id]" options={{ headerShown: false }} />
+            </Stack>
+          </ThemedContainer>
+        </FavoritesProvider>
+      </SettingsProvider>
+    </SafeAreaProvider>
   );
 }

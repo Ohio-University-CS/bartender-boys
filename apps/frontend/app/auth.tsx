@@ -37,7 +37,7 @@ export default function AuthScreen() {
       try {
         const isVerified = await AsyncStorage.getItem('isVerified');
         if (isVerified === 'true') {
-          router.replace('/(tabs)');
+          router.replace('/(tabs)/menu');
           return;
         }
       } catch {}
@@ -46,6 +46,17 @@ export default function AuthScreen() {
       }
     })();
   }, [router]);
+
+  // On web, automatically skip ID verification to avoid blank/permission issues
+  useEffect(() => {
+    if (!checkingBypass && typeof window !== 'undefined' && Platform.OS === 'web') {
+      // Small delay to let the screen mount smoothly
+      const t = setTimeout(() => {
+        onSkip();
+      }, 300);
+      return () => clearTimeout(t);
+    }
+  }, [checkingBypass]);
 
   useEffect(() => {
     if (!permission?.granted) {
@@ -57,7 +68,7 @@ export default function AuthScreen() {
     try {
       await AsyncStorage.setItem('isVerified', 'true');
     } catch {}
-    router.replace('/(tabs)');
+    router.replace('/(tabs)/menu');
   };
 
   const onCapture = async () => {
@@ -110,7 +121,7 @@ export default function AuthScreen() {
 
         // If it looks valid, continue to app
         if (apiResponse.data?.is_valid) {
-          router.replace('/(tabs)');
+          router.replace('/(tabs)/menu');
         } else {
           Alert.alert('Invalid ID', 'The ID could not be verified. Please try again with a clear photo of a valid ID.');
           setCapturedImage(null);

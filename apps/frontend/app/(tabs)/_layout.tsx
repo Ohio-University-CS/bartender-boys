@@ -5,10 +5,10 @@ import { HapticTab } from '@/components/haptic-tab';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { useSettings } from '@/contexts/settings';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
+  const borderColor = colorScheme === 'light' ? '#e0e0e0' : '#222';
 
   return (
     <Tabs
@@ -19,7 +19,7 @@ export default function TabLayout() {
         tabBarButton: HapticTab,
         tabBarStyle: {
           backgroundColor: Colors[colorScheme ?? 'dark'].background,
-          borderTopColor: '#222',
+          borderTopColor: borderColor,
         },
         tabBarLabelStyle: { fontWeight: '600' },
       }}>
