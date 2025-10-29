@@ -1,7 +1,7 @@
 import base64
 import json
+import asyncio
 from typing import Dict, Any, Optional
-import openai
 from openai import OpenAI
 from settings import settings
 
@@ -29,6 +29,7 @@ class OpenAIService:
     async def analyze_id_image(self, image_data: bytes) -> Dict[str, Any]:
         """
         Analyze an ID image using GPT-4o and extract structured information.
+        Includes retry logic for transient failures.
         
         Args:
             image_data: Raw image bytes
@@ -52,52 +53,92 @@ class OpenAIService:
         Return only valid JSON with these exact field names. If any information is not visible or unclear, use null for that field.
         """
         
-        try:
-            response = self.client.chat.completions.create(
-                model=settings.OPENAI_MODEL,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "text", "text": prompt},
-                            {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:image/jpeg;base64,{base64_image}"
-                                }
-                            }
-                        ]
-                    }
-                ],
-                max_tokens=settings.OPENAI_MAX_TOKENS,
-                temperature=settings.OPENAI_TEMPERATURE
-            )
-            
-            # Extract the response content
-            content = response.choices[0].message.content
-            
-            # Clean the content by removing markdown code blocks if present
-            cleaned_content = content.strip()
-            if cleaned_content.startswith('```json'):
-                cleaned_content = cleaned_content[7:]  # Remove ```json
-            if cleaned_content.startswith('```'):
-                cleaned_content = cleaned_content[3:]   # Remove ```
-            if cleaned_content.endswith('```'):
-                cleaned_content = cleaned_content[:-3]  # Remove trailing ```
-            cleaned_content = cleaned_content.strip()
-            
-            # Parse the JSON response
+        retry_count = 0
+        max_retries = 1  # Retry once after failure
+        
+        while retry_count <= max_retries:
             try:
-                result = json.loads(cleaned_content)
-                return result
-            except json.JSONDecodeError:
-                # If JSON parsing fails, return error
-                return {
-                    "error": "Failed to parse OpenAI response as JSON",
-                    "raw_response": content
-                }
+                response = self.client.chat.completions.create(
+                    model=settings.OPENAI_MODEL,
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": prompt},
+                                {
+                                    "type": "image_url",
+                                    "image_url": {
+                                        "url": f"data:image/jpeg;base64,{base64_image}"
+                                    }
+                                }
+                            ]
+                        }
+                    ],
+                    max_tokens=settings.OPENAI_MAX_TOKENS,
+                    temperature=settings.OPENAI_TEMPERATURE
+                )
                 
-        except Exception as e:
-            return {
-                "error": f"OpenAI API error: {str(e)}"
-            }
+                # Extract the response content
+                content = response.choices[0].message.content
+                
+                # Clean the content by removing markdown code blocks if present
+                cleaned_content = content.strip()
+                if cleaned_content.startswith('```json'):
+                    cleaned_content = cleaned_content[7:]  # Remove ```json
+                if cleaned_content.startswith('```'):
+                    cleaned_content = cleaned_content[3:]   # Remove ```
+                if cleaned_content.endswith('```'):
+                    cleaned_content = cleaned_content[:-3]  # Remove trailing ```
+                cleaned_content = cleaned_content.strip()
+                
+                # Parse the JSON response
+                try:
+                    result = json.loads(cleaned_content)
+                    return result
+                except json.JSONDecodeError:
+                    # If JSON parsing fails, return error
+                    return {
+                        "error": "Failed to parse OpenAI response as JSON",
+                        "raw_response": content
+                    }
+                    
+            except Exception as e:
+                retry_count += 1
+                print(f"OpenAI API call attempt {retry_count} failed: {str(e)}")
+                
+                if retry_count > max_retries:
+                    # Final attempt failed, return error
+                    return {
+                        "error": f"OpenAI API error after {max_retries + 1} attempts: {str(e)}"
+                    }
+                
+                # Wait a moment before retry
+                await asyncio.sleep(1)
+                print(f"Retrying OpenAI API call (attempt {retry_count + 1}/{max_retries + 1})...")
+        
+        # This should never be reached, but just in case
+        return {
+            "error": "Unexpected error in retry logic"
+        }
+    
+    async def generate_image(self, prompt: str, size: str = "1024x1024", quality: str = "standard") -> str:
+        """
+        Generate an image using DALL-E.
+        
+        Args:
+            prompt: Text description of the image to generate
+            size: Image size (default: "1024x1024")
+            quality: Image quality - "standard" or "hd" (default: "standard")
+            
+        Returns:
+            URL of the generated image
+        """
+        response = self._client.images.generate(
+            model="dall-e-3",
+            prompt=prompt,
+            size=size,
+            quality=quality,
+            n=1,
+        )
+        
+        return response.data[0].url

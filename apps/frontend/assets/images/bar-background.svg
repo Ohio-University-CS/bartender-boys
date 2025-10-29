@@ -1,0 +1,102 @@
+<svg width="1920" height="1080" viewBox="0 0 1920 1080" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Night sky gradient -->
+  <defs>
+    <linearGradient id="nightSky" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#0a0a0a;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#1a1a1a;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0f0f0f;stop-opacity:1" />
+    </linearGradient>
+    <radialGradient id="warmLight" cx="50%" cy="40%">
+      <stop offset="0%" style="stop-color:#FFA500;stop-opacity:0.15" />
+      <stop offset="50%" style="stop-color:#FF8C00;stop-opacity:0.05" />
+      <stop offset="100%" style="stop-color:#000000;stop-opacity:0" />
+    </radialGradient>
+  </defs>
+  
+  <!-- Base dark background -->
+  <rect width="1920" height="1080" fill="url(#nightSky)"/>
+  
+  <!-- Warm ambient lighting -->
+  <rect width="1920" height="1080" fill="url(#warmLight)"/>
+  
+  <!-- Bar counter silhouette -->
+  <rect x="0" y="800" width="1920" height="280" fill="#0a0a0a" opacity="0.8"/>
+  <rect x="0" y="800" width="1920" height="8" fill="#2a2a2a"/>
+  
+  <!-- Bottles on shelf (left side) -->
+  <g opacity="0.6">
+    <rect x="100" y="700" width="30" height="100" rx="5" fill="#1a4d2e"/>
+    <rect x="100" y="690" width="30" height="15" rx="3" fill="#2d7a4f"/>
+    
+    <rect x="150" y="680" width="25" height="120" rx="5" fill="#4a2c2a"/>
+    <rect x="150" y="670" width="25" height="15" rx="3" fill="#6b3e3b"/>
+    
+    <rect x="190" y="710" width="35" height="90" rx="5" fill="#2a3d5a"/>
+    <rect x="190" y="700" width="35" height="15" rx="3" fill="#3d5a7a"/>
+    
+    <rect x="240" y="695" width="28" height="105" rx="5" fill="#5a3d2a"/>
+    <rect x="240" y="685" width="28" height="15" rx="3" fill="#7a5a3d"/>
+  </g>
+  
+  <!-- Bottles on shelf (right side) -->
+  <g opacity="0.6">
+    <rect x="1600" y="690" width="32" height="110" rx="5" fill="#2a3d5a"/>
+    <rect x="1600" y="680" width="32" height="15" rx="3" fill="#3d5a7a"/>
+    
+    <rect x="1650" y="705" width="28" height="95" rx="5" fill="#4a2c2a"/>
+    <rect x="1650" y="695" width="28" height="15" rx="3" fill="#6b3e3b"/>
+    
+    <rect x="1695" y="680" width="35" height="120" rx="5" fill="#1a4d2e"/>
+    <rect x="1695" y="670" width="35" height="15" rx="3" fill="#2d7a4f"/>
+    
+    <rect x="1750" y="700" width="30" height="100" rx="5" fill="#5a3d2a"/>
+    <rect x="1750" y="690" width="30" height="15" rx="3" fill="#7a5a3d"/>
+  </g>
+  
+  <!-- Hanging lights -->
+  <g opacity="0.4">
+    <!-- Light 1 -->
+    <line x1="400" y1="0" x2="400" y2="150" stroke="#2a2a2a" stroke-width="2"/>
+    <ellipse cx="400" cy="170" rx="40" ry="20" fill="#FFA500" opacity="0.3"/>
+    <circle cx="400" cy="170" r="30" fill="#FF8C00" opacity="0.2"/>
+    
+    <!-- Light 2 -->
+    <line x1="800" y1="0" x2="800" y2="180" stroke="#2a2a2a" stroke-width="2"/>
+    <ellipse cx="800" cy="200" rx="40" ry="20" fill="#FFA500" opacity="0.3"/>
+    <circle cx="800" cy="200" r="30" fill="#FF8C00" opacity="0.2"/>
+    
+    <!-- Light 3 -->
+    <line x1="1200" y1="0" x2="1200" y2="160" stroke="#2a2a2a" stroke-width="2"/>
+    <ellipse cx="1200" cy="180" rx="40" ry="20" fill="#FFA500" opacity="0.3"/>
+    <circle cx="1200" cy="180" r="30" fill="#FF8C00" opacity="0.2"/>
+    
+    <!-- Light 4 -->
+    <line x1="1520" y1="0" x2="1520" y2="190" stroke="#2a2a2a" stroke-width="2"/>
+    <ellipse cx="1520" cy="210" rx="40" ry="20" fill="#FFA500" opacity="0.3"/>
+    <circle cx="1520" cy="210" r="30" fill="#FF8C00" opacity="0.2"/>
+  </g>
+  
+  <!-- Glasses on counter -->
+  <g opacity="0.5">
+    <path d="M 300 850 L 320 920 L 340 920 L 360 850 Z" fill="#1a3a4a" opacity="0.6"/>
+    <rect x="318" y="920" width="24" height="8" fill="#0a1a2a"/>
+    
+    <path d="M 600 860 L 615 920 L 630 920 L 645 860 Z" fill="#4a3a2a" opacity="0.6"/>
+    <rect x="613" y="920" width="19" height="8" fill="#2a1a0a"/>
+  </g>
+  
+  <!-- Subtle sparkles/glints -->
+  <circle cx="180" cy="720" r="2" fill="#FFA500" opacity="0.8"/>
+  <circle cx="250" cy="710" r="1.5" fill="#FFA500" opacity="0.6"/>
+  <circle cx="1620" cy="700" r="2" fill="#FFA500" opacity="0.7"/>
+  <circle cx="1710" cy="690" r="1.5" fill="#FFA500" opacity="0.5"/>
+  
+  <!-- Vignette effect -->
+  <rect width="1920" height="1080" fill="url(#vignette)"/>
+  <defs>
+    <radialGradient id="vignette" cx="50%" cy="50%">
+      <stop offset="60%" style="stop-color:#000000;stop-opacity:0" />
+      <stop offset="100%" style="stop-color:#000000;stop-opacity:0.6" />
+    </radialGradient>
+  </defs>
+</svg>

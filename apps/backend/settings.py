@@ -2,8 +2,9 @@ import os
 from typing import Optional
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
-load_dotenv()
+# Load environment variables from the backend folder's .env regardless of CWD
+_ENV_PATH = os.path.join(os.path.dirname(__file__), ".env")
+load_dotenv(dotenv_path=_ENV_PATH, override=False)
 
 
 class Settings:
@@ -28,6 +29,9 @@ class Settings:
     OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", "gpt-4o")
     OPENAI_MAX_TOKENS: int = int(os.getenv("OPENAI_MAX_TOKENS", "500"))
     OPENAI_TEMPERATURE: float = float(os.getenv("OPENAI_TEMPERATURE", "0.1"))
+
+    # Hardware Controller (Pi) Configuration
+    PI_CONTROLLER_URL: str = os.getenv("PI_CONTROLLER_URL", "")
     
     def validate(self) -> None:
         """Validate required settings"""

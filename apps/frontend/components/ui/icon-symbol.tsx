@@ -18,6 +18,11 @@ const MAPPING = {
   'paperplane.fill': 'send',
   'chevron.left.forwardslash.chevron.right': 'code',
   'chevron.right': 'chevron-right',
+  // Added mappings used by tabs
+  'list.bullet.rectangle': 'list',
+  'bubble.left.and.bubble.right': 'chat',
+  'gear': 'settings',
+  'heart.fill': 'favorite',
 } as IconMapping;
 
 /**

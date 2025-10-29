@@ -1,3 +1,6 @@
+export const options = { href: null };
+export default function Hidden() { return null; }
+// Legacy file hidden from tabs; kept to avoid routing issues.
 import { StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -87,7 +90,7 @@ const features = [
   }
 ];
 
-export default function ExploreScreen() {
+function ExploreScreen() {
   return (
     <ScrollView style={styles.container}>
       <ThemedView style={styles.header}>

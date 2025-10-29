@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, Alert, ActivityIndicator, Image } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, Alert, ActivityIndicator, Image, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImageManipulator from 'expo-image-manipulator';
 import axios from 'axios';
 import { API_BASE_URL } from '../environment';
+import { useSettings } from '@/contexts/settings';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface IDScanResult {
   name?: string;
@@ -26,12 +28,48 @@ export default function AuthScreen() {
   const [scanResult, setScanResult] = useState<IDScanResult | null>(null);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [checkingBypass, setCheckingBypass] = useState(true);
+  const { apiBaseUrl, idPhotoWidth, scanTimeoutMs } = useSettings();
+
+  useEffect(() => {
+    // On mount, if user previously skipped or verified, go straight to app
+    (async () => {
+      try {
+        const isVerified = await AsyncStorage.getItem('isVerified');
+        if (isVerified === 'true') {
+          router.replace('/(tabs)/menu');
+          return;
+        }
+      } catch {}
+      finally {
+        setCheckingBypass(false);
+      }
+    })();
+  }, [router]);
+
+  // On web, automatically skip ID verification to avoid blank/permission issues
+  useEffect(() => {
+    if (!checkingBypass && typeof window !== 'undefined' && Platform.OS === 'web') {
+      // Small delay to let the screen mount smoothly
+      const t = setTimeout(() => {
+        onSkip();
+      }, 300);
+      return () => clearTimeout(t);
+    }
+  }, [checkingBypass]);
 
   useEffect(() => {
     if (!permission?.granted) {
       requestPermission();
     }
   }, [permission, requestPermission]);
+
+  const onSkip = async () => {
+    try {
+      await AsyncStorage.setItem('isVerified', 'true');
+    } catch {}
+    router.replace('/(tabs)/menu');
+  };
 
   const onCapture = async () => {
     if (!cameraRef.current) return;
@@ -45,7 +83,7 @@ export default function AuthScreen() {
         
         const manipulated = await ImageManipulator.manipulateAsync(
           photo.uri,
-          [{ resize: { width: 900 } }],
+          [{ resize: { width: idPhotoWidth || 900 } }],
           { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG }
         );
         setCapturedImage(manipulated.uri);
@@ -62,8 +100,15 @@ export default function AuthScreen() {
           reader.readAsDataURL(blob);
         });
 
-        // Send to backend
-        const apiResponse = await axios.post(`${API_BASE_URL}/id-scanning/scan`, { image_data: base64 });
+        // Send to backend with longer timeout (OpenAI can be slow)
+        const baseUrl = apiBaseUrl || API_BASE_URL;
+        console.log(`Sending request to: ${baseUrl}/id-scanning/scan`);
+        const apiResponse = await axios.post(
+          `${baseUrl}/id-scanning/scan`, 
+          { image_data: base64 },
+          { timeout: scanTimeoutMs || 60000 } // timeout for OpenAI processing
+        );
+        console.log('Response received:', apiResponse.data);
         setScanResult(apiResponse.data);
 
         // Check for errors in the response
@@ -76,22 +121,44 @@ export default function AuthScreen() {
 
         // If it looks valid, continue to app
         if (apiResponse.data?.is_valid) {
-          router.replace('/(tabs)');
+          router.replace('/(tabs)/menu');
         } else {
           Alert.alert('Invalid ID', 'The ID could not be verified. Please try again with a clear photo of a valid ID.');
           setCapturedImage(null);
           setIsProcessing(false);
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Auth ID capture error:', error);
-      Alert.alert('Error', 'Failed to capture or verify ID');
+      let errorMessage = 'Failed to capture or verify ID';
+      
+      if (error.code === 'ECONNABORTED') {
+        errorMessage = 'Request timed out. Make sure the backend is running and reachable.';
+      } else if (error.response) {
+        errorMessage = `Server error: ${error.response.status} - ${error.response.data?.detail || error.response.statusText}`;
+      } else if (error.request) {
+        const baseUrl = apiBaseUrl || API_BASE_URL;
+        errorMessage = `Cannot reach backend at ${baseUrl}. Check your network connection and backend server.`;
+      } else {
+        errorMessage = error.message || 'Unknown error occurred';
+      }
+      
+      Alert.alert('Error', errorMessage);
       setCapturedImage(null);
       setIsProcessing(false);
     } finally {
       setIsCapturing(false);
     }
   };
+
+  if (checkingBypass) {
+    return (
+      <View style={[styles.container, { alignItems: 'center', justifyContent: 'center' }]}>
+        <ActivityIndicator size="large" color="#FFA500" />
+        <Text style={{ color: '#bbb', marginTop: 12 }}>Loading...</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -129,13 +196,22 @@ export default function AuthScreen() {
             <Text style={styles.processingText}>Processing ID...</Text>
           </View>
         ) : (
-          <TouchableOpacity style={[styles.captureButton, isCapturing && styles.captureButtonActive]} onPress={onCapture} disabled={isCapturing}>
-            {isCapturing ? (
-              <ActivityIndicator color="#000" />
-            ) : (
-              <Text style={styles.captureText}>Capture ID</Text>
-            )}
-          </TouchableOpacity>
+          <>
+            <TouchableOpacity
+              style={[styles.captureButton, isCapturing && styles.captureButtonActive]}
+              onPress={onCapture}
+              disabled={isCapturing}
+            >
+              {isCapturing ? (
+                <ActivityIndicator color="#000" />
+              ) : (
+                <Text style={styles.captureText}>Capture ID</Text>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.secondaryButton} onPress={onSkip}>
+              <Text style={styles.secondaryButtonText}>Skip for now</Text>
+            </TouchableOpacity>
+          </>
         )}
       </View>
     </View>
@@ -145,12 +221,12 @@ export default function AuthScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: '#0C0C0C',
     paddingTop: 80,
     paddingHorizontal: 20,
   },
   title: {
-    color: '#fff',
+    color: '#F5F5F5',
     fontSize: 24,
     fontWeight: '700',
   },
@@ -166,9 +242,9 @@ const styles = StyleSheet.create({
   viewfinder: {
     width: '90%',
     aspectRatio: 1.6,
-    borderStyle: 'dotted',
-    borderWidth: 3,
-    borderColor: '#fff',
+    borderStyle: 'solid',
+    borderWidth: 2,
+    borderColor: '#FFA500',
     borderRadius: 12,
     overflow: 'hidden',
     alignItems: 'center',
@@ -214,11 +290,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   secondaryButtonText: {
-    color: '#aaa',
+    color: '#FFA500',
     fontSize: 16,
   },
   captureButton: {
-    backgroundColor: '#fff',
+    backgroundColor: '#FFA500',
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: 'center',

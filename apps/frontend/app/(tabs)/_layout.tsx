@@ -8,26 +8,53 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
+  const scheme = (colorScheme ?? 'light') as 'light' | 'dark';
+  const palette = Colors[scheme];
 
   return (
     <Tabs
+      initialRouteName="menu"
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
+        tabBarActiveTintColor: palette.tint,
+        tabBarInactiveTintColor: palette.muted,
         headerShown: false,
         tabBarButton: HapticTab,
+        tabBarStyle: {
+          backgroundColor: palette.surface,
+          borderTopColor: palette.border,
+        },
+        tabBarLabelStyle: { fontWeight: '600' },
       }}>
       <Tabs.Screen
-        name="index"
+        name="menu"
         options={{
-          title: 'Drinks',
-          tabBarIcon: ({ color }) => <IconSymbol size={24} name="wineglass" color={color} />,
+          title: 'Menu',
+          tabBarIcon: ({ color }) => <IconSymbol size={24} name="list.bullet.rectangle" color={color} />,
         }}
       />
       <Tabs.Screen
-        name="explore"
+        name="favorites"
         options={{
-          title: 'Explore',
-          tabBarIcon: ({ color }) => <IconSymbol size={24} name="list.bullet" color={color} />,
+          title: 'Favorites',
+          tabBarIcon: ({ color }) => <IconSymbol size={24} name="heart.fill" color={color} />,
+        }}
+      />
+      {/* Hide legacy routes if files still exist */}
+      <Tabs.Screen name="index" options={{ href: null }} />
+      <Tabs.Screen name="explore" options={{ href: null }} />
+      <Tabs.Screen
+        name="chat"
+        options={{
+          title: 'Chat',
+          tabBarIcon: ({ color }) => <IconSymbol size={24} name="bubble.left.and.bubble.right" color={color} />,
+        }}
+      />
+      {/* Explore tab removed */}
+      <Tabs.Screen
+        name="settings"
+        options={{
+          title: 'Settings',
+          tabBarIcon: ({ color }) => <IconSymbol size={24} name="gear" color={color} />,
         }}
       />
       
