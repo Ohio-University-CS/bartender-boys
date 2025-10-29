@@ -25,13 +25,18 @@ export default function MenuScreen() {
   // Theme colors
   const backgroundColor = useThemeColor({}, 'background');
   const textColor = useThemeColor({}, 'text');
-  const cardBg = useThemeColor({ light: '#f5f5f5', dark: '#121212' }, 'background');
-  const borderColor = useThemeColor({ light: '#e0e0e0', dark: '#222' }, 'background');
-  const inputBg = useThemeColor({ light: '#ffffff', dark: '#1a1a1a' }, 'background');
-  const placeholderColor = useThemeColor({ light: '#999', dark: '#666' }, 'text');
-  const badgeBg = useThemeColor({ light: '#e8e8e8', dark: '#1a1a1a' }, 'background');
-  const badgeText = useThemeColor({ light: '#333', dark: '#ddd' }, 'text');
-  const metaText = useThemeColor({ light: '#666', dark: '#bbb' }, 'text');
+  const cardBg = useThemeColor({}, 'surfaceElevated');
+  const borderColor = useThemeColor({}, 'border');
+  const inputBg = useThemeColor({}, 'inputBackground');
+  const inputBorder = useThemeColor({}, 'inputBorder');
+  const placeholderColor = useThemeColor({}, 'placeholder');
+  const badgeBg = useThemeColor({}, 'chipBackground');
+  const badgeText = useThemeColor({}, 'mutedForeground');
+  const metaText = useThemeColor({}, 'muted');
+  const accent = useThemeColor({}, 'tint');
+  const onAccent = useThemeColor({}, 'onTint');
+  const mutedForeground = useThemeColor({}, 'mutedForeground');
+  const danger = useThemeColor({}, 'danger');
 
   // Reflect settings changes if updated while on this screen
   useEffect(() => {
@@ -61,11 +66,16 @@ export default function MenuScreen() {
   return (
     <View style={[styles.container, { backgroundColor, paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
       <ScrollView contentContainerStyle={styles.containerContent}>
-        <ThemedView style={[styles.header, { borderBottomColor: borderColor }]}>
-          <ThemedText type="title" style={styles.title}>Full Menu</ThemedText>
+        <ThemedView colorName="surface" style={[styles.header, { borderBottomColor: borderColor }]}>
+          <ThemedText type="title" colorName="tint" style={styles.title}>Full Menu</ThemedText>
         </ThemedView>
 
-      <ThemedView style={[styles.searchContainer, { borderBottomColor: borderColor, backgroundColor: inputBg }]}>
+      <ThemedView
+        style={[
+          styles.searchContainer,
+          { borderBottomColor: borderColor, backgroundColor: inputBg, borderColor: inputBorder },
+        ]}
+      >
         <TextInput
           style={[styles.searchInput, { color: textColor }]}
           placeholder="Search drinks..."
@@ -85,27 +95,35 @@ export default function MenuScreen() {
             Platform.OS === 'web' && styles.categoriesContentWeb
           ]}
         >
-          {categories.map((category) => (
-            <TouchableOpacity
-              key={category}
-              style={([
-                styles.categoryButton,
-                { backgroundColor: cardBg, borderColor: borderColor },
-                selectedCategory === category && [
-                  styles.categoryButtonActive,
-                  category !== 'All' && { borderColor: CATEGORY_COLORS[category], backgroundColor: CATEGORY_COLORS[category] },
-                ],
-              ]) as any}
-              onPress={() => setSelectedCategory(category)}
-            >
-              <ThemedText style={[
-                styles.categoryText,
-                selectedCategory === category && [styles.categoryTextActive, category !== 'All' && { color: '#0A0A0A' }]
-              ]}>
-                {category}
-              </ThemedText>
-            </TouchableOpacity>
-          ))}
+          {categories.map((category) => {
+            const isActive = selectedCategory === category;
+            const customColor = category !== 'All' ? CATEGORY_COLORS[category] : accent;
+            const textColorValue = isActive
+              ? category !== 'All'
+                ? '#FFFFFF'
+                : onAccent
+              : mutedForeground;
+            return (
+              <TouchableOpacity
+                key={category}
+                style={[
+                  styles.categoryButton,
+                  { backgroundColor: cardBg, borderColor },
+                  isActive && {
+                    backgroundColor: customColor,
+                    borderColor: customColor,
+                  },
+                ]}
+                onPress={() => setSelectedCategory(category)}
+              >
+                <ThemedText
+                  style={[styles.categoryText, isActive && styles.categoryTextActive, { color: textColorValue }]}
+                >
+                  {category}
+                </ThemedText>
+              </TouchableOpacity>
+            );
+          })}
         </ScrollView>
       </ThemedView>
 
@@ -117,10 +135,10 @@ export default function MenuScreen() {
           return (
           <TouchableOpacity
             key={drink.id}
-            style={[styles.drinkCard, { backgroundColor: cardBg, borderColor: borderColor }]}
+            style={[styles.drinkCard, { backgroundColor: cardBg, borderColor }]}
             onPress={() => showDrinkDetails(drink)}
           >
-            <View style={[styles.accentBar, { backgroundColor: CATEGORY_COLORS[drink.category] || '#FFA500' }]} />
+            <View style={[styles.accentBar, { backgroundColor: CATEGORY_COLORS[drink.category] || accent }]} />
             <View style={styles.drinkTopRow}>
               <ThemedText type="defaultSemiBold" style={styles.drinkName}>
                 {drink.name}
@@ -129,11 +147,11 @@ export default function MenuScreen() {
                 <Ionicons
                   name={isFavorite(drink.id) ? 'heart' : 'heart-outline'}
                   size={20}
-                  color={isFavorite(drink.id) ? '#FF4D4D' : '#aaa'}
+                  color={isFavorite(drink.id) ? danger : mutedForeground}
                 />
               </TouchableOpacity>
             </View>
-            <ThemedText style={styles.category}>{drink.category}</ThemedText>
+            <ThemedText style={styles.category} colorName="tint">{drink.category}</ThemedText>
 
             <View style={styles.badgeRow}>
               {shownIngredients.map((ing, idx) => (
@@ -143,19 +161,19 @@ export default function MenuScreen() {
               ))}
               {remaining > 0 && !isExpanded && (
                 <TouchableOpacity onPress={() => toggleExpanded(drink.id)}>
-                  <ThemedText style={[styles.moreText, { color: '#FFA500' }]}>+{remaining} more</ThemedText>
+                  <ThemedText style={styles.moreText} colorName="tint">+{remaining} more</ThemedText>
                 </TouchableOpacity>
               )}
               {isExpanded && (
                 <TouchableOpacity onPress={() => toggleExpanded(drink.id)}>
-                  <ThemedText style={[styles.moreText, { color: '#FFA500' }]}>Show less</ThemedText>
+                  <ThemedText style={styles.moreText} colorName="tint">Show less</ThemedText>
                 </TouchableOpacity>
               )}
             </View>
 
             <View style={styles.metaRow}>
               <ThemedText style={[styles.metaText, { color: metaText }]}>{drink.prepTime}</ThemedText>
-              <ThemedText style={[styles.metaText, { color: DIFFICULTY_COLORS[drink.difficulty] || '#FFA500', fontWeight: '700' }]}>
+              <ThemedText style={[styles.metaText, { color: DIFFICULTY_COLORS[drink.difficulty] || accent, fontWeight: '700' }]}>
                 {drink.difficulty}
               </ThemedText>
             </View>
@@ -164,7 +182,7 @@ export default function MenuScreen() {
         
         {filteredDrinks.length === 0 && (
           <ThemedView style={styles.emptyState}>
-            <ThemedText style={styles.emptyText}>No drinks found</ThemedText>
+            <ThemedText style={styles.emptyText} colorName="muted">No drinks found</ThemedText>
           </ThemedView>
         )}
       </ThemedView>
@@ -188,7 +206,6 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#FFA500',
     textAlign: 'center',
   },
   searchContainer: {
@@ -227,14 +244,10 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
   },
-  categoryButtonActive: {
-    borderColor: '#FFA500',
-  },
   categoryText: {
     fontSize: 14,
   },
   categoryTextActive: {
-    color: '#FFA500',
     fontWeight: '600',
   },
   drinksContainer: {
@@ -273,7 +286,6 @@ const styles = StyleSheet.create({
   },
   category: {
     fontSize: 13,
-    color: '#FFA500',
     marginTop: 2,
   },
   badgeRow: {
@@ -310,6 +322,5 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 16,
-    color: '#999',
   },
 });

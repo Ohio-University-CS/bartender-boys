@@ -1,9 +1,10 @@
 import React, { useEffect, useRef } from 'react';
 import { View, StyleSheet, Platform } from 'react-native';
 import { GLView } from 'expo-gl';
-import { Asset } from 'expo-asset';
 import * as THREE from 'three';
 import { Renderer } from 'expo-three';
+
+import { useThemeColor } from '@/hooks/use-theme-color';
 
 type BartenderAvatarProps = {
   /** Is the bartender currently talking? */
@@ -31,8 +32,11 @@ type BartenderAvatarProps = {
 export function BartenderAvatar({
   isTalking = false,
   modelPath,
-  backgroundColor = '#0a0a0a',
+  backgroundColor,
 }: BartenderAvatarProps) {
+  const accent = useThemeColor({}, 'tint');
+  const fallbackBackground = useThemeColor({}, 'surface');
+  const canvasColor = backgroundColor ?? fallbackBackground;
   const animationFrameRef = useRef<number | null>(null);
   const sceneRef = useRef<any>(null);
   const meshRef = useRef<any>(null);
@@ -43,11 +47,11 @@ export function BartenderAvatar({
   // Setup renderer
   const renderer = new Renderer({ gl });
     renderer.setSize(gl.drawingBufferWidth, gl.drawingBufferHeight);
-  renderer.setClearColor(new THREE.Color(backgroundColor), 1);
+  renderer.setClearColor(new THREE.Color(canvasColor), 1);
 
     // Setup scene
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(backgroundColor);
+  scene.background = new THREE.Color(canvasColor);
     sceneRef.current = scene;
 
     // Setup camera - closer for upper body shot
@@ -204,13 +208,13 @@ export function BartenderAvatar({
 
   useEffect(() => {
     if (sceneRef.current) {
-      sceneRef.current.background = new THREE.Color(backgroundColor);
+      sceneRef.current.background = new THREE.Color(canvasColor);
     }
-  }, [backgroundColor]);
+  }, [canvasColor]);
 
   return (
-    <View style={[styles.outerContainer, { backgroundColor }]}>
-      <View style={[styles.container, isWeb && styles.containerWeb]}>
+    <View style={[styles.outerContainer, { backgroundColor: canvasColor }]}>
+      <View style={[styles.container, isWeb && styles.containerWeb, { borderColor: accent }]}>
         <GLView
           style={styles.glView}
           onContextCreate={onContextCreate}
@@ -234,7 +238,6 @@ const styles = StyleSheet.create({
     borderRadius: 9999, // Fully circular
     overflow: 'hidden',
     borderWidth: Platform.OS === 'web' ? 3 : 2, // Thinner border on mobile
-    borderColor: '#FFA500',
   },
   containerWeb: {
     maxWidth: 500, // Larger on web, centered

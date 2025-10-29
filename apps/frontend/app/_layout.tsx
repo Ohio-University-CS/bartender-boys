@@ -11,11 +11,12 @@ import { FavoritesProvider } from '@/contexts/favorites';
 function ThemedContainer({ children }: { children: React.ReactNode }) {
   const colorScheme = useColorScheme();
   const { theme } = useSettings();
-  const scheme = theme === 'system' ? colorScheme : theme;
+  const scheme = (theme === 'system' ? colorScheme : theme) ?? 'light';
+  const statusBarStyle = scheme === 'dark' ? 'light' : 'dark';
   return (
     <ThemeProvider value={scheme === 'dark' ? DarkTheme : DefaultTheme}>
       {children}
-      <StatusBar style="auto" />
+      <StatusBar style={statusBarStyle} />
     </ThemeProvider>
   );
 }

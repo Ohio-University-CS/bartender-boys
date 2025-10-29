@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { StyleSheet, View, TextInput, TouchableOpacity, FlatList, Text, KeyboardAvoidingView, Platform } from 'react-native';
+import { StyleSheet, View, TextInput, TouchableOpacity, FlatList, KeyboardAvoidingView, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { API_BASE_URL } from '@/environment';
@@ -8,6 +8,7 @@ import { useRouter } from 'expo-router';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import Markdown from 'react-native-markdown-display';
 import { BartenderAvatar } from '@/components/BartenderAvatar';
+import { ThemedText } from '@/components/themed-text';
 // EventSource usage:
 // - Web: use native window.EventSource
 // - Native: dynamically require('react-native-sse') at runtime to avoid build-time dependency when not installed
@@ -51,15 +52,17 @@ export default function ChatScreen() {
   // Theme colors
   const backgroundColor = useThemeColor({}, 'background');
   const textColor = useThemeColor({}, 'text');
-  const inputBg = useThemeColor({ light: '#ffffff', dark: '#121212' }, 'background');
-  const inputBorder = useThemeColor({ light: '#d0d0d0', dark: '#1f1f1f' }, 'background');
-  const borderColor = useThemeColor({ light: '#e0e0e0', dark: '#222' }, 'background');
-  const aiBubbleBg = useThemeColor({ light: '#f0f0f0', dark: '#1a1a1a' }, 'background');
-  const aiBubbleBorder = useThemeColor({ light: '#d0d0d0', dark: '#2a2a2a' }, 'background');
-  const bubbleText = useThemeColor({ light: '#000', dark: '#fff' }, 'text');
-  const placeholderColor = useThemeColor({ light: '#888', dark: '#666' }, 'text');
-  const avatarBorder = useThemeColor({ light: '#e0e0e0', dark: '#222' }, 'background');
-  const avatarBackground = useThemeColor({ light: '#ffffff', dark: '#000000' }, 'background');
+  const inputBg = useThemeColor({}, 'inputBackground');
+  const inputBorder = useThemeColor({}, 'inputBorder');
+  const borderColor = useThemeColor({}, 'border');
+  const aiBubbleBg = useThemeColor({}, 'surface');
+  const aiBubbleBorder = useThemeColor({}, 'border');
+  const bubbleText = useThemeColor({}, 'text');
+  const placeholderColor = useThemeColor({}, 'placeholder');
+  const avatarBorder = useThemeColor({}, 'border');
+  const avatarBackground = useThemeColor({}, 'surface');
+  const accent = useThemeColor({}, 'tint');
+  const onAccent = useThemeColor({}, 'onTint');
 
   useEffect(() => {
     return () => {
@@ -229,30 +232,46 @@ export default function ChatScreen() {
     }
   }, [input, busy, baseUrl, messages, finalizeTalking, stopTalkingImmediately]);
 
-  const renderItem = ({ item }: { item: ChatMsg }) => (
-    <View style={[
-      styles.bubble,
-      item.role === 'user' ? styles.userBubble : [styles.aiBubble, { backgroundColor: aiBubbleBg, borderColor: aiBubbleBorder }]
-    ]}>
-      {item.role === 'assistant' ? (
-        <Markdown style={{
-          body: { color: bubbleText, fontSize: 15, lineHeight: 22 },
-          paragraph: { marginBottom: 8 },
-          code_inline: { backgroundColor: aiBubbleBg, paddingHorizontal: 4, paddingVertical: 2, borderRadius: 4, fontSize: 13, fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace' }) },
-          fence: { backgroundColor: aiBubbleBg, padding: 12, borderRadius: 4, marginVertical: 8 },
-          code_block: { backgroundColor: aiBubbleBg, padding: 12, borderRadius: 4, marginVertical: 8 },
-          list_item: { marginBottom: 4 },
-          strong: { fontWeight: '700' },
-          em: { fontStyle: 'italic' },
-          link: { color: '#FFA500' },
-        }}>
-          {item.content}
-        </Markdown>
-      ) : (
-        <Text style={[styles.bubbleText, { color: '#000' }]}>{item.content}</Text>
-      )}
-    </View>
-  );
+  const renderItem = ({ item }: { item: ChatMsg }) => {
+    const isUser = item.role === 'user';
+    return (
+      <View
+        style={[
+          styles.bubble,
+          isUser
+            ? [styles.userBubble, { backgroundColor: accent }]
+            : [styles.aiBubble, { backgroundColor: aiBubbleBg, borderColor: aiBubbleBorder }],
+        ]}
+      >
+        {isUser ? (
+          <ThemedText style={[styles.bubbleText, { color: onAccent }]}>{item.content}</ThemedText>
+        ) : (
+          <Markdown
+            style={{
+              body: { color: bubbleText, fontSize: 15, lineHeight: 22 },
+              paragraph: { marginBottom: 8 },
+              code_inline: {
+                backgroundColor: aiBubbleBg,
+                paddingHorizontal: 4,
+                paddingVertical: 2,
+                borderRadius: 4,
+                fontSize: 13,
+                fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace' }),
+              },
+              fence: { backgroundColor: aiBubbleBg, padding: 12, borderRadius: 4, marginVertical: 8 },
+              code_block: { backgroundColor: aiBubbleBg, padding: 12, borderRadius: 4, marginVertical: 8 },
+              list_item: { marginBottom: 4 },
+              strong: { fontWeight: '700' },
+              em: { fontStyle: 'italic' },
+              link: { color: accent },
+            }}
+          >
+            {item.content}
+          </Markdown>
+        )}
+      </View>
+    );
+  };
 
   return (
     <View style={[styles.container, { backgroundColor, paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
@@ -267,12 +286,12 @@ export default function ChatScreen() {
           contentContainerStyle={styles.list}
         />
         <TouchableOpacity
-          style={styles.talkBtn}
+          style={[styles.talkBtn, { backgroundColor: accent, shadowColor: accent }]}
           onPress={() => router.push('/bartender' as never)}
           accessibilityLabel="Talk to bartender"
         >
-          <Ionicons name="mic" size={16} color="#000" />
-          <Text style={styles.talkText}>Talk to bartender</Text>
+          <Ionicons name="mic" size={16} color={onAccent} />
+          <ThemedText style={styles.talkText} colorName="onTint">Talk to bartender</ThemedText>
         </TouchableOpacity>
         <View style={[styles.inputRow, { borderTopColor: borderColor }]}>
           <TextInput
@@ -284,8 +303,8 @@ export default function ChatScreen() {
             onSubmitEditing={onSend}
             editable={!busy}
           />
-          <TouchableOpacity style={styles.sendBtn} onPress={onSend} disabled={busy}>
-            <Ionicons name="paper-plane" size={18} color="#000" />
+          <TouchableOpacity style={[styles.sendBtn, { backgroundColor: accent }]} onPress={onSend} disabled={busy}>
+            <Ionicons name="paper-plane" size={18} color={onAccent} />
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -305,12 +324,12 @@ const styles = StyleSheet.create({
   },
   list: { padding: 12, paddingBottom: 120 },
   bubble: { maxWidth: '80%', padding: 10, borderRadius: 12, marginBottom: 8 },
-  userBubble: { alignSelf: 'flex-end', backgroundColor: '#FFA500' },
+  userBubble: { alignSelf: 'flex-end' },
   aiBubble: { alignSelf: 'flex-start', borderWidth: 1 },
   bubbleText: {},
   inputRow: { flexDirection: 'row', padding: 12, gap: 8, borderTopWidth: 1 },
   input: { flex: 1, padding: 12, borderRadius: 10, borderWidth: 1 },
-  sendBtn: { backgroundColor: '#FFA500', paddingHorizontal: 14, alignItems: 'center', justifyContent: 'center', borderRadius: 10 },
-  talkBtn: { position: 'absolute', right: 16, bottom: 80, backgroundColor: '#FFA500', borderRadius: 999, paddingVertical: 10, paddingHorizontal: 12, flexDirection: 'row', gap: 6, alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 6, shadowOffset: { width: 0, height: 3 } },
-  talkText: { color: '#000', fontWeight: '700' },
+  sendBtn: { paddingHorizontal: 14, alignItems: 'center', justifyContent: 'center', borderRadius: 10 },
+  talkBtn: { position: 'absolute', right: 16, bottom: 80, borderRadius: 999, paddingVertical: 10, paddingHorizontal: 12, flexDirection: 'row', gap: 6, alignItems: 'center', shadowOpacity: 0.2, shadowRadius: 6, shadowOffset: { width: 0, height: 3 } },
+  talkText: { fontWeight: '700' },
 });

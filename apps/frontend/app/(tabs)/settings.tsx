@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { StyleSheet, ScrollView, View, Text, Switch, TouchableOpacity, Alert, Platform, TextInput } from 'react-native';
+import { StyleSheet, ScrollView, View, Switch, TouchableOpacity, Alert, Platform, TextInput } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import SegmentedControl from '@react-native-segmented-control/segmented-control';
 import { ThemedText } from '@/components/themed-text';
@@ -25,16 +25,21 @@ export default function SettingsScreen() {
 
   // Theme colors
   const backgroundColor = useThemeColor({}, 'background');
-  const cardBg = useThemeColor({ light: '#f5f5f5', dark: '#121212' }, 'background');
-  const borderColor = useThemeColor({ light: '#e0e0e0', dark: '#1f1f1f' }, 'background');
-  const helpText = useThemeColor({ light: '#666', dark: '#aaa' }, 'text');
-  const chipBg = useThemeColor({ light: '#e8e8e8', dark: '#1a1a1a' }, 'background');
-  const chipBorder = useThemeColor({ light: '#d0d0d0', dark: '#2a2a2a' }, 'background');
-  const segmentBg = useThemeColor({ light: '#f0f0f0', dark: '#1a1a1a' }, 'background');
+  const surface = useThemeColor({}, 'surfaceElevated');
+  const borderColor = useThemeColor({}, 'border');
+  const helpText = useThemeColor({}, 'muted');
+  const chipBg = useThemeColor({}, 'chipBackground');
+  const chipBorder = useThemeColor({}, 'chipBorder');
+  const segmentBg = useThemeColor({}, 'surfaceAlt');
   const textColor = useThemeColor({}, 'text');
-  const inputBg = useThemeColor({ light: '#ffffff', dark: '#1a1a1a' }, 'background');
-  const inputBorder = useThemeColor({ light: '#d0d0d0', dark: '#2a2a2a' }, 'background');
-  const placeholderColor = useThemeColor({ light: '#999', dark: '#666' }, 'text');
+  const inputBg = useThemeColor({}, 'inputBackground');
+  const inputBorder = useThemeColor({}, 'inputBorder');
+  const placeholderColor = useThemeColor({}, 'placeholder');
+  const accent = useThemeColor({}, 'tint');
+  const onAccent = useThemeColor({}, 'onTint');
+  const mutedForeground = useThemeColor({}, 'mutedForeground');
+  const danger = useThemeColor({}, 'danger');
+  const onDanger = useThemeColor({}, 'onDanger');
 
   const [nameInput, setNameInput] = useState(displayName);
   const [pronounsInput, setPronounsInput] = useState(profilePronouns);
@@ -96,9 +101,9 @@ export default function SettingsScreen() {
   return (
     <View style={[styles.container, { backgroundColor, paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
       <ScrollView contentContainerStyle={styles.containerContent}>
-      <ThemedView style={[styles.section, { backgroundColor: cardBg, borderColor: borderColor }]}>
-        <ThemedText type="title" style={styles.sectionTitle}>Profile</ThemedText>
-        <ThemedText style={[styles.help, { color: helpText }]}>Personalize how the bartender greets you</ThemedText>
+      <ThemedView colorName="surfaceElevated" style={[styles.section, { borderColor }]}> 
+        <ThemedText type="subtitle" colorName="tint" style={styles.sectionTitle}>Profile</ThemedText>
+        <ThemedText style={styles.help} colorName="muted">Personalize how the bartender greets you</ThemedText>
         <TextInput
           placeholder="Your name"
           value={nameInput}
@@ -143,23 +148,23 @@ export default function SettingsScreen() {
         />
         <View style={styles.rowGap}>
           <TouchableOpacity
-            style={[styles.button, { backgroundColor: '#FFA500' }]}
+            style={[styles.button, { backgroundColor: accent }]}
             onPress={handleSaveProfile}
           >
-            <Text style={styles.buttonText}>Save Profile</Text>
+            <ThemedText style={styles.buttonText} colorName="onTint">Save Profile</ThemedText>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.button, styles.secondary, { backgroundColor: inputBg, borderColor: inputBorder }]}
+            style={[styles.button, styles.secondary, { backgroundColor: surface, borderColor: inputBorder }]}
             onPress={handleClearProfile}
           >
-            <Text style={styles.secondaryText}>Clear</Text>
+            <ThemedText style={styles.secondaryText} colorName="tint">Clear</ThemedText>
           </TouchableOpacity>
         </View>
       </ThemedView>
 
-      <ThemedView style={[styles.section, { backgroundColor: cardBg, borderColor: borderColor }]}>
-        <ThemedText type="title" style={styles.sectionTitle}>Appearance</ThemedText>
-        <ThemedText style={[styles.help, { color: helpText }]}>Select a theme mode</ThemedText>
+      <ThemedView colorName="surfaceElevated" style={[styles.section, { borderColor }]}> 
+        <ThemedText type="subtitle" colorName="tint" style={styles.sectionTitle}>Appearance</ThemedText>
+        <ThemedText style={styles.help} colorName="muted">Select a theme mode</ThemedText>
         {Platform.OS === 'ios' ? (
           <SegmentedControl
             values={["System", "Light", "Dark"]}
@@ -169,10 +174,10 @@ export default function SettingsScreen() {
               const selected = index === 0 ? 'system' : index === 1 ? 'light' : 'dark';
               setTheme(selected);
             }}
-            tintColor="#FFA500"
+            tintColor={accent}
             backgroundColor={segmentBg}
-            fontStyle={{ color: '#FFA500' }}
-            activeFontStyle={{ color: '#000', fontWeight: '700' }}
+            fontStyle={{ color: mutedForeground, fontWeight: '500' }}
+            activeFontStyle={{ color: onAccent, fontWeight: '700' }}
           />
         ) : (
           <View style={[styles.row, { justifyContent: 'space-around' }]}>
@@ -186,22 +191,28 @@ export default function SettingsScreen() {
                 style={[
                   styles.chip,
                   { backgroundColor: chipBg, borderColor: chipBorder },
-                  theme === opt.key && styles.chipActive
+                  theme === opt.key && [
+                    styles.chipActive,
+                    { backgroundColor: accent, borderColor: accent },
+                  ]
                 ]}
                 onPress={() => setTheme(opt.key)}
               >
-                <Text style={[styles.chipText, theme === opt.key && styles.chipTextActive]}>
+                <ThemedText
+                  style={styles.chipText}
+                  colorName={theme === opt.key ? 'onTint' : 'mutedForeground'}
+                >
                   {opt.label}
-                </Text>
+                </ThemedText>
               </TouchableOpacity>
             ))}
           </View>
         )}
       </ThemedView>
 
-      <ThemedView style={[styles.section, { backgroundColor: cardBg, borderColor: borderColor }]}>
-        <ThemedText type="title" style={styles.sectionTitle}>Menu Defaults</ThemedText>
-        <ThemedText style={[styles.help, { color: helpText }]}>Choose the default category when opening the menu</ThemedText>
+      <ThemedView colorName="surfaceElevated" style={[styles.section, { borderColor }]}> 
+        <ThemedText type="subtitle" colorName="tint" style={styles.sectionTitle}>Menu Defaults</ThemedText>
+        <ThemedText style={styles.help} colorName="muted">Choose the default category when opening the menu</ThemedText>
         <View style={[styles.row, { flexWrap: 'wrap', justifyContent: 'center', gap: 8 }]}>
           {['All', 'Cocktail', 'Whiskey', 'Rum', 'Gin', 'Vodka', 'Tequila', 'Brandy', 'Non-Alcoholic'].map((cat) => (
             <TouchableOpacity
@@ -209,51 +220,77 @@ export default function SettingsScreen() {
               style={[
                 styles.chip,
                 { backgroundColor: chipBg, borderColor: chipBorder },
-                defaultMenuCategory === cat && styles.chipActive
+                defaultMenuCategory === cat && [
+                  styles.chipActive,
+                  { backgroundColor: accent, borderColor: accent },
+                ]
               ]}
               onPress={() => setDefaultMenuCategory(cat)}
             >
-              <Text style={[styles.chipText, defaultMenuCategory === cat && styles.chipTextActive]}>
+              <ThemedText
+                style={styles.chipText}
+                colorName={defaultMenuCategory === cat ? 'onTint' : 'mutedForeground'}
+              >
                 {cat}
-              </Text>
+              </ThemedText>
             </TouchableOpacity>
           ))}
         </View>
         <View style={styles.row}>
           <ThemedText>Show favorites only by default</ThemedText>
-          <Switch value={defaultShowFavorites} onValueChange={setDefaultShowFavorites} />
+          <Switch
+            value={defaultShowFavorites}
+            onValueChange={setDefaultShowFavorites}
+            trackColor={{ false: mutedForeground, true: accent }}
+            thumbColor={Platform.OS === 'android' ? onAccent : undefined}
+          />
         </View>
       </ThemedView>
 
-      <ThemedView style={[styles.section, { backgroundColor: cardBg, borderColor: borderColor }]}>
-        <ThemedText type="title" style={styles.sectionTitle}>Personalization</ThemedText>
+      <ThemedView colorName="surfaceElevated" style={[styles.section, { borderColor }]}> 
+        <ThemedText type="subtitle" colorName="tint" style={styles.sectionTitle}>Personalization</ThemedText>
         <View style={styles.row}>
           <ThemedText>Animations</ThemedText>
-          <Switch value={true} onValueChange={() => {}} />
+          <Switch
+            value={true}
+            onValueChange={() => {}}
+            trackColor={{ false: mutedForeground, true: accent }}
+            thumbColor={Platform.OS === 'android' ? onAccent : undefined}
+          />
         </View>
-        <ThemedText style={[styles.help, { marginTop: 4, color: helpText }]}>Enable smooth animations throughout the app</ThemedText>
-        
+        <ThemedText style={[styles.help, styles.helpInset]} colorName="muted">Enable smooth animations throughout the app</ThemedText>
+
         <View style={styles.row}>
           <ThemedText>Sound Effects</ThemedText>
-          <Switch value={false} onValueChange={() => {}} />
+          <Switch
+            value={false}
+            onValueChange={() => {}}
+            trackColor={{ false: mutedForeground, true: accent }}
+            thumbColor={Platform.OS === 'android' ? onAccent : undefined}
+          />
         </View>
-        <ThemedText style={[styles.help, { marginTop: 4, color: helpText }]}>Play sounds for actions and notifications</ThemedText>
-        
+        <ThemedText style={[styles.help, styles.helpInset]} colorName="muted">Play sounds for actions and notifications</ThemedText>
+
         <View style={styles.row}>
           <ThemedText>Auto-save Favorites</ThemedText>
-          <Switch value={true} onValueChange={() => {}} />
+          <Switch
+            value={true}
+            onValueChange={() => {}}
+            trackColor={{ false: mutedForeground, true: accent }}
+            thumbColor={Platform.OS === 'android' ? onAccent : undefined}
+          />
         </View>
-        <ThemedText style={[styles.help, { marginTop: 4, color: helpText }]}>Automatically sync favorites across sessions</ThemedText>
+        <ThemedText style={[styles.help, styles.helpInset]} colorName="muted">Automatically sync favorites across sessions</ThemedText>
       </ThemedView>
 
-      <ThemedView style={[styles.section, { backgroundColor: cardBg, borderColor: borderColor }]}>
-        <ThemedText type="title" style={styles.sectionTitle}>Account</ThemedText>
+      <ThemedView colorName="surfaceElevated" style={[styles.section, { borderColor }]}> 
+        <ThemedText type="subtitle" colorName="tint" style={styles.sectionTitle}>Account</ThemedText>
         <View style={styles.rowGap}>
           <TouchableOpacity
-            style={[styles.button, { backgroundColor: '#FF4444' }]}
+            style={[styles.button, { backgroundColor: danger }]}
             onPress={handleLogout}
           >
-            <Text style={styles.buttonText}>Log Out</Text>
+            <ThemedText style={styles.buttonText} colorName="onDanger">Log Out</ThemedText>
           </TouchableOpacity>
         </View>
       </ThemedView>
@@ -274,16 +311,17 @@ const styles = StyleSheet.create({
     maxWidth: 680,
     alignSelf: 'center',
   },
-  sectionTitle: { color: '#FFA500', fontSize: 18, marginBottom: 8, textAlign: 'center' },
+  sectionTitle: { fontSize: 18, marginBottom: 8, textAlign: 'center', fontWeight: '700' },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8, width: '100%' },
   rowGap: { gap: 8, paddingTop: 4 },
   input: { borderWidth: 1, borderRadius: 8, padding: 10, marginTop: 8, textAlign: 'left' },
   textArea: { borderWidth: 1, borderRadius: 8, padding: 12, marginTop: 8, minHeight: 96, textAlign: 'left' },
-  button: { backgroundColor: '#FFA500', paddingVertical: 10, borderRadius: 8, alignItems: 'center' },
-  buttonText: { color: '#000', fontWeight: '700' },
+  button: { paddingVertical: 10, borderRadius: 8, alignItems: 'center' },
+  buttonText: { fontWeight: '700' },
   secondary: { borderWidth: 1 },
-  secondaryText: { color: '#FFA500', fontWeight: '600' },
+  secondaryText: { fontWeight: '600' },
   help: { marginBottom: 8, textAlign: 'center' },
+  helpInset: { marginTop: 4 },
   meta: { fontSize: 12, marginTop: 12, textAlign: 'center' },
   chip: {
     paddingVertical: 6,
@@ -292,9 +330,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   chipActive: {
-    backgroundColor: '#FFA500',
-    borderColor: '#FFA500',
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 3,
   },
-  chipText: { color: '#FFA500', fontWeight: '600' },
-  chipTextActive: { color: '#000', fontWeight: '700' },
+  chipText: { fontWeight: '600' },
 });
