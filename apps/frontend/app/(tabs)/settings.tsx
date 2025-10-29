@@ -1,5 +1,5 @@
-import React from 'react';
-import { StyleSheet, ScrollView, View, Text, Switch, TouchableOpacity, Alert, Platform } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { StyleSheet, ScrollView, View, Text, Switch, TouchableOpacity, Alert, Platform, TextInput } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import SegmentedControl from '@react-native-segmented-control/segmented-control';
 import { ThemedText } from '@/components/themed-text';
@@ -14,6 +14,11 @@ export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const {
     theme, setTheme,
+    displayName, setDisplayName,
+    profilePronouns, setProfilePronouns,
+    favoriteSpirit, setFavoriteSpirit,
+    homeBarName, setHomeBarName,
+    bartenderBio, setBartenderBio,
     defaultMenuCategory, setDefaultMenuCategory,
     defaultShowFavorites, setDefaultShowFavorites,
   } = useSettings();
@@ -26,6 +31,44 @@ export default function SettingsScreen() {
   const chipBg = useThemeColor({ light: '#e8e8e8', dark: '#1a1a1a' }, 'background');
   const chipBorder = useThemeColor({ light: '#d0d0d0', dark: '#2a2a2a' }, 'background');
   const segmentBg = useThemeColor({ light: '#f0f0f0', dark: '#1a1a1a' }, 'background');
+  const textColor = useThemeColor({}, 'text');
+  const inputBg = useThemeColor({ light: '#ffffff', dark: '#1a1a1a' }, 'background');
+  const inputBorder = useThemeColor({ light: '#d0d0d0', dark: '#2a2a2a' }, 'background');
+  const placeholderColor = useThemeColor({ light: '#999', dark: '#666' }, 'text');
+
+  const [nameInput, setNameInput] = useState(displayName);
+  const [pronounsInput, setPronounsInput] = useState(profilePronouns);
+  const [spiritInput, setSpiritInput] = useState(favoriteSpirit);
+  const [homeBarInput, setHomeBarInput] = useState(homeBarName);
+  const [bioInput, setBioInput] = useState(bartenderBio);
+
+  useEffect(() => setNameInput(displayName), [displayName]);
+  useEffect(() => setPronounsInput(profilePronouns), [profilePronouns]);
+  useEffect(() => setSpiritInput(favoriteSpirit), [favoriteSpirit]);
+  useEffect(() => setHomeBarInput(homeBarName), [homeBarName]);
+  useEffect(() => setBioInput(bartenderBio), [bartenderBio]);
+
+  const handleSaveProfile = () => {
+    setDisplayName(nameInput.trim());
+    setProfilePronouns(pronounsInput.trim());
+    setFavoriteSpirit(spiritInput.trim());
+    setHomeBarName(homeBarInput.trim());
+    setBartenderBio(bioInput.trim());
+    Alert.alert('Saved', 'Profile details updated');
+  };
+
+  const handleClearProfile = () => {
+    setNameInput('');
+    setPronounsInput('');
+    setSpiritInput('');
+    setHomeBarInput('');
+    setBioInput('');
+    setDisplayName('');
+    setProfilePronouns('');
+    setFavoriteSpirit('');
+    setHomeBarName('');
+    setBartenderBio('');
+  };
 
   const handleLogout = async () => {
     Alert.alert(
@@ -53,6 +96,67 @@ export default function SettingsScreen() {
   return (
     <View style={[styles.container, { backgroundColor, paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
       <ScrollView contentContainerStyle={styles.containerContent}>
+      <ThemedView style={[styles.section, { backgroundColor: cardBg, borderColor: borderColor }]}>
+        <ThemedText type="title" style={styles.sectionTitle}>Profile</ThemedText>
+        <ThemedText style={[styles.help, { color: helpText }]}>Personalize how the bartender greets you</ThemedText>
+        <TextInput
+          placeholder="Your name"
+          value={nameInput}
+          onChangeText={setNameInput}
+          style={[styles.input, { backgroundColor: inputBg, borderColor: inputBorder, color: textColor }]}
+          placeholderTextColor={placeholderColor}
+          autoCapitalize="words"
+        />
+        <TextInput
+          placeholder="Pronouns (e.g., she/her)"
+          value={pronounsInput}
+          onChangeText={setPronounsInput}
+          style={[styles.input, { backgroundColor: inputBg, borderColor: inputBorder, color: textColor }]}
+          placeholderTextColor={placeholderColor}
+          autoCapitalize="none"
+        />
+        <TextInput
+          placeholder="Favorite spirit"
+          value={spiritInput}
+          onChangeText={setSpiritInput}
+          style={[styles.input, { backgroundColor: inputBg, borderColor: inputBorder, color: textColor }]}
+          placeholderTextColor={placeholderColor}
+          autoCapitalize="words"
+        />
+        <TextInput
+          placeholder="Home bar name"
+          value={homeBarInput}
+          onChangeText={setHomeBarInput}
+          style={[styles.input, { backgroundColor: inputBg, borderColor: inputBorder, color: textColor }]}
+          placeholderTextColor={placeholderColor}
+          autoCapitalize="words"
+        />
+        <TextInput
+          placeholder="Add a short bio or preferences"
+          value={bioInput}
+          onChangeText={setBioInput}
+          style={[styles.textArea, { backgroundColor: inputBg, borderColor: inputBorder, color: textColor }]}
+          placeholderTextColor={placeholderColor}
+          multiline
+          numberOfLines={3}
+          textAlignVertical="top"
+        />
+        <View style={styles.rowGap}>
+          <TouchableOpacity
+            style={[styles.button, { backgroundColor: '#FFA500' }]}
+            onPress={handleSaveProfile}
+          >
+            <Text style={styles.buttonText}>Save Profile</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.button, styles.secondary, { backgroundColor: inputBg, borderColor: inputBorder }]}
+            onPress={handleClearProfile}
+          >
+            <Text style={styles.secondaryText}>Clear</Text>
+          </TouchableOpacity>
+        </View>
+      </ThemedView>
+
       <ThemedView style={[styles.section, { backgroundColor: cardBg, borderColor: borderColor }]}>
         <ThemedText type="title" style={styles.sectionTitle}>Appearance</ThemedText>
         <ThemedText style={[styles.help, { color: helpText }]}>Select a theme mode</ThemedText>
@@ -173,7 +277,8 @@ const styles = StyleSheet.create({
   sectionTitle: { color: '#FFA500', fontSize: 18, marginBottom: 8, textAlign: 'center' },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8, width: '100%' },
   rowGap: { gap: 8, paddingTop: 4 },
-  input: { borderWidth: 1, borderRadius: 8, padding: 10, marginTop: 8, textAlign: 'center' },
+  input: { borderWidth: 1, borderRadius: 8, padding: 10, marginTop: 8, textAlign: 'left' },
+  textArea: { borderWidth: 1, borderRadius: 8, padding: 12, marginTop: 8, minHeight: 96, textAlign: 'left' },
   button: { backgroundColor: '#FFA500', paddingVertical: 10, borderRadius: 8, alignItems: 'center' },
   buttonText: { color: '#000', fontWeight: '700' },
   secondary: { borderWidth: 1 },

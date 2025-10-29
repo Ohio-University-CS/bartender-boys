@@ -16,6 +16,10 @@ type SettingsState = {
   idPhotoWidth: number; // e.g. 720/900/1200
   scanTimeoutMs: number; // axios timeout for ID scan
   displayName: string; // user-friendly name
+  profilePronouns: string;
+  favoriteSpirit: string;
+  homeBarName: string;
+  bartenderBio: string;
   defaultMenuCategory: string; // e.g., All, Cocktail, etc.
   defaultShowFavorites: boolean; // show only favorites on menu by default
   setTheme: (t: ThemePref) => void;
@@ -26,6 +30,10 @@ type SettingsState = {
   setIdPhotoWidth: (n: number) => void;
   setScanTimeoutMs: (n: number) => void;
   setDisplayName: (name: string) => void;
+  setProfilePronouns: (value: string) => void;
+  setFavoriteSpirit: (value: string) => void;
+  setHomeBarName: (value: string) => void;
+  setBartenderBio: (value: string) => void;
   setDefaultMenuCategory: (cat: string) => void;
   setDefaultShowFavorites: (v: boolean) => void;
   reset: () => void;
@@ -43,6 +51,10 @@ const TIMEOUT_KEY = 'settings.scanTimeoutMs';
 const DISPLAY_NAME_KEY = 'settings.displayName';
 const DEFAULT_MENU_CATEGORY_KEY = 'settings.defaultMenuCategory';
 const DEFAULT_SHOW_FAVORITES_KEY = 'settings.defaultShowFavorites';
+const PROFILE_PRONOUNS_KEY = 'settings.profilePronouns';
+const FAVORITE_SPIRIT_KEY = 'settings.favoriteSpirit';
+const HOME_BAR_NAME_KEY = 'settings.homeBarName';
+const BARTENDER_BIO_KEY = 'settings.bartenderBio';
 
 export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = useState<ThemePref>('dark');
@@ -53,6 +65,10 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const [idPhotoWidth, setIdPhotoWidthState] = useState<number>(900);
   const [scanTimeoutMs, setScanTimeoutMsState] = useState<number>(60000);
   const [displayName, setDisplayNameState] = useState<string>('');
+  const [profilePronouns, setProfilePronounsState] = useState<string>('');
+  const [favoriteSpirit, setFavoriteSpiritState] = useState<string>('');
+  const [homeBarName, setHomeBarNameState] = useState<string>('');
+  const [bartenderBio, setBartenderBioState] = useState<string>('');
   const [defaultMenuCategory, setDefaultMenuCategoryState] = useState<string>('All');
   const [defaultShowFavorites, setDefaultShowFavoritesState] = useState<boolean>(false);
 
@@ -60,7 +76,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     (async () => {
       try {
-        const [t, url, h, hs, d, w, to, dn, dmc, dsf] = await Promise.all([
+        const [t, url, h, hs, d, w, to, dn, pronouns, spirit, homeBar, bio, dmc, dsf] = await Promise.all([
           AsyncStorage.getItem(THEME_KEY),
           AsyncStorage.getItem(API_KEY),
           AsyncStorage.getItem(HAPTICS_KEY),
@@ -69,6 +85,10 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
           AsyncStorage.getItem(PHOTO_WIDTH_KEY),
           AsyncStorage.getItem(TIMEOUT_KEY),
           AsyncStorage.getItem(DISPLAY_NAME_KEY),
+          AsyncStorage.getItem(PROFILE_PRONOUNS_KEY),
+          AsyncStorage.getItem(FAVORITE_SPIRIT_KEY),
+          AsyncStorage.getItem(HOME_BAR_NAME_KEY),
+          AsyncStorage.getItem(BARTENDER_BIO_KEY),
           AsyncStorage.getItem(DEFAULT_MENU_CATEGORY_KEY),
           AsyncStorage.getItem(DEFAULT_SHOW_FAVORITES_KEY),
         ]);
@@ -80,6 +100,10 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
         if (w && !Number.isNaN(Number(w))) setIdPhotoWidthState(Number(w));
         if (to && !Number.isNaN(Number(to))) setScanTimeoutMsState(Number(to));
         if (typeof dn === 'string') setDisplayNameState(dn);
+        if (typeof pronouns === 'string') setProfilePronounsState(pronouns);
+        if (typeof spirit === 'string') setFavoriteSpiritState(spirit);
+        if (typeof homeBar === 'string') setHomeBarNameState(homeBar);
+        if (typeof bio === 'string') setBartenderBioState(bio);
         if (typeof dmc === 'string' && dmc.length) setDefaultMenuCategoryState(dmc);
         if (dsf === 'true' || dsf === 'false') setDefaultShowFavoritesState(dsf === 'true');
       } catch {}
@@ -116,6 +140,22 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     else AsyncStorage.removeItem(DISPLAY_NAME_KEY).catch(() => {});
   }, [displayName]);
   useEffect(() => {
+    if (profilePronouns) AsyncStorage.setItem(PROFILE_PRONOUNS_KEY, profilePronouns).catch(() => {});
+    else AsyncStorage.removeItem(PROFILE_PRONOUNS_KEY).catch(() => {});
+  }, [profilePronouns]);
+  useEffect(() => {
+    if (favoriteSpirit) AsyncStorage.setItem(FAVORITE_SPIRIT_KEY, favoriteSpirit).catch(() => {});
+    else AsyncStorage.removeItem(FAVORITE_SPIRIT_KEY).catch(() => {});
+  }, [favoriteSpirit]);
+  useEffect(() => {
+    if (homeBarName) AsyncStorage.setItem(HOME_BAR_NAME_KEY, homeBarName).catch(() => {});
+    else AsyncStorage.removeItem(HOME_BAR_NAME_KEY).catch(() => {});
+  }, [homeBarName]);
+  useEffect(() => {
+    if (bartenderBio) AsyncStorage.setItem(BARTENDER_BIO_KEY, bartenderBio).catch(() => {});
+    else AsyncStorage.removeItem(BARTENDER_BIO_KEY).catch(() => {});
+  }, [bartenderBio]);
+  useEffect(() => {
     AsyncStorage.setItem(DEFAULT_MENU_CATEGORY_KEY, defaultMenuCategory).catch(() => {});
   }, [defaultMenuCategory]);
   useEffect(() => {
@@ -131,6 +171,10 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     idPhotoWidth,
     scanTimeoutMs,
     displayName,
+    profilePronouns,
+    favoriteSpirit,
+    homeBarName,
+    bartenderBio,
     defaultMenuCategory,
     defaultShowFavorites,
     setTheme: setThemeState,
@@ -141,6 +185,10 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     setIdPhotoWidth: setIdPhotoWidthState,
     setScanTimeoutMs: setScanTimeoutMsState,
     setDisplayName: setDisplayNameState,
+    setProfilePronouns: setProfilePronounsState,
+    setFavoriteSpirit: setFavoriteSpiritState,
+    setHomeBarName: setHomeBarNameState,
+    setBartenderBio: setBartenderBioState,
     setDefaultMenuCategory: setDefaultMenuCategoryState,
     setDefaultShowFavorites: setDefaultShowFavoritesState,
     reset: () => {
@@ -152,6 +200,10 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
       setIdPhotoWidthState(900);
       setScanTimeoutMsState(60000);
       setDisplayNameState('');
+      setProfilePronounsState('');
+      setFavoriteSpiritState('');
+      setHomeBarNameState('');
+      setBartenderBioState('');
       setDefaultMenuCategoryState('All');
       setDefaultShowFavoritesState(false);
       AsyncStorage.multiRemove([
@@ -163,13 +215,17 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
         PHOTO_WIDTH_KEY,
         TIMEOUT_KEY,
         DISPLAY_NAME_KEY,
+        PROFILE_PRONOUNS_KEY,
+        FAVORITE_SPIRIT_KEY,
+        HOME_BAR_NAME_KEY,
+        BARTENDER_BIO_KEY,
         DEFAULT_MENU_CATEGORY_KEY,
         DEFAULT_SHOW_FAVORITES_KEY,
       ]).catch(() => {});
       // Ensure logger follows reset
       logger.setEnabled(!IS_PROD && (!IS_PROD));
     },
-  }), [theme, apiBaseUrl, hapticsEnabled, hapticStrength, debugLogs, idPhotoWidth, scanTimeoutMs, displayName, defaultMenuCategory, defaultShowFavorites]);
+  }), [theme, apiBaseUrl, hapticsEnabled, hapticStrength, debugLogs, idPhotoWidth, scanTimeoutMs, displayName, profilePronouns, favoriteSpirit, homeBarName, bartenderBio, defaultMenuCategory, defaultShowFavorites]);
 
   return (
     <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>

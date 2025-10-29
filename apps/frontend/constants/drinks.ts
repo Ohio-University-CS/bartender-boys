@@ -6,6 +6,7 @@ export interface Drink {
   instructions: string;
   difficulty: 'Easy' | 'Medium' | 'Hard';
   prepTime: string;
+  hardwareSteps?: { pump: string; seconds: number }[];
 }
 
 export const DRINKS: Drink[] = [
@@ -16,7 +17,12 @@ export const DRINKS: Drink[] = [
     ingredients: ['2 oz Tequila', '1 oz Lime Juice', '1 oz Triple Sec', 'Salt rim', 'Lime wedge'],
     instructions: '1. Rim glass with salt\n2. Shake all ingredients with ice\n3. Strain into glass\n4. Garnish with lime wedge',
     difficulty: 'Easy',
-    prepTime: '3 min'
+    prepTime: '3 min',
+    hardwareSteps: [
+      { pump: 'tequila', seconds: 3.0 },
+      { pump: 'lime', seconds: 1.5 },
+      { pump: 'triple_sec', seconds: 1.5 }
+    ]
   },
   {
     id: '2',
@@ -25,7 +31,12 @@ export const DRINKS: Drink[] = [
     ingredients: ['2 oz Bourbon', '1 sugar cube', '2 dashes Angostura bitters', 'Orange peel', 'Ice'],
     instructions: '1. Muddle sugar cube with bitters\n2. Add bourbon and ice\n3. Stir gently\n4. Express orange peel over drink',
     difficulty: 'Medium',
-    prepTime: '4 min'
+    prepTime: '4 min',
+    hardwareSteps: [
+      { pump: 'bourbon', seconds: 3.0 },
+      { pump: 'simple_syrup', seconds: 1.0 },
+      { pump: 'bitters', seconds: 0.5 }
+    ]
   },
   {
     id: '3',
@@ -34,7 +45,12 @@ export const DRINKS: Drink[] = [
     ingredients: ['2 oz White Rum', '1 oz Lime Juice', '2 tsp Sugar', '6-8 Mint leaves', 'Soda water'],
     instructions: '1. Muddle mint and sugar\n2. Add lime juice and rum\n3. Fill with ice\n4. Top with soda water\n5. Garnish with mint',
     difficulty: 'Easy',
-    prepTime: '5 min'
+    prepTime: '5 min',
+    hardwareSteps: [
+      { pump: 'white_rum', seconds: 3.0 },
+      { pump: 'lime', seconds: 1.5 },
+      { pump: 'simple_syrup', seconds: 1.0 }
+    ]
   },
   {
     id: '4',

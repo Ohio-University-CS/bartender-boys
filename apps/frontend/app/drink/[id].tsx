@@ -1,17 +1,56 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image } from 'react-native';
+import React, { useCallback, useMemo, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Alert } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { DRINKS } from '@/constants/drinks';
 import { useFavorites } from '@/contexts/favorites';
 import { CATEGORY_COLORS, DIFFICULTY_COLORS } from '@/constants/ui-palette';
+import { API_BASE_URL } from '@/environment';
 
 export default function DrinkDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { isFavorite, toggleFavorite } = useFavorites();
-  
+
   const drink = DRINKS.find(d => d.id === id);
+  const [pouring, setPouring] = useState(false);
+
+  const hardwareSteps = useMemo(() => drink?.hardwareSteps ?? null, [drink]);
+
+  const handlePour = useCallback(async () => {
+    if (!drink) return;
+    if (!hardwareSteps || hardwareSteps.length === 0) {
+      Alert.alert('No dispenser recipe', 'This drink has no hardware mapping yet. Configure hardwareSteps in constants/drinks.ts.');
+      return;
+    }
+
+    try {
+      setPouring(true);
+      const response = await fetch(`${API_BASE_URL}/drinks/dispense`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ steps: hardwareSteps, pause_between: 0.5 }),
+      });
+
+      if (!response.ok) {
+        const errorBody = await response.text();
+        throw new Error(errorBody || `Backend returned ${response.status}`);
+      }
+
+      const result = await response.json();
+      const pourSummary = Array.isArray(result?.results)
+        ? result.results.map((step: any) => `${step.pump || 'pump'}: ${step.seconds ?? '?'}s`).join('\n')
+        : undefined;
+
+      Alert.alert('Dispensing started', pourSummary || 'Your drink is on the way!');
+    } catch (error: any) {
+      Alert.alert('Dispense failed', error?.message ?? 'Unknown error');
+    } finally {
+      setPouring(false);
+    }
+  }, [drink, hardwareSteps]);
 
   if (!drink) {
     return (
@@ -103,9 +142,14 @@ export default function DrinkDetailScreen() {
           </View>
 
           {/* Pour Button */}
-          <TouchableOpacity style={styles.pourButton} activeOpacity={0.8}>
+          <TouchableOpacity
+            style={[styles.pourButton, pouring && styles.pourButtonDisabled]}
+            activeOpacity={0.8}
+            onPress={handlePour}
+            disabled={pouring}
+          >
             <Ionicons name="wine" size={24} color="#000" />
-            <Text style={styles.pourButtonText}>Pour This Drink</Text>
+            <Text style={styles.pourButtonText}>{pouring ? 'Dispensing...' : 'Pour This Drink'}</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -272,6 +316,9 @@ const styles = StyleSheet.create({
     color: '#000',
     fontSize: 18,
     fontWeight: '700',
+  },
+  pourButtonDisabled: {
+    opacity: 0.7,
   },
   errorContainer: {
     flex: 1,
