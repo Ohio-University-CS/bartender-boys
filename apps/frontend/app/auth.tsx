@@ -29,7 +29,7 @@ export default function AuthScreen() {
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [checkingBypass, setCheckingBypass] = useState(true);
-  const { apiBaseUrl } = useSettings();
+  const { apiBaseUrl, idPhotoWidth, scanTimeoutMs } = useSettings();
 
   useEffect(() => {
     // On mount, if user previously skipped or verified, go straight to app
@@ -37,7 +37,7 @@ export default function AuthScreen() {
       try {
         const isVerified = await AsyncStorage.getItem('isVerified');
         if (isVerified === 'true') {
-          router.replace('/(tabs)');
+          router.replace('/(tabs)/menu');
           return;
         }
       } catch {}
@@ -46,6 +46,17 @@ export default function AuthScreen() {
       }
     })();
   }, [router]);
+
+  // On web, automatically skip ID verification to avoid blank/permission issues
+  useEffect(() => {
+    if (!checkingBypass && typeof window !== 'undefined' && Platform.OS === 'web') {
+      // Small delay to let the screen mount smoothly
+      const t = setTimeout(() => {
+        onSkip();
+      }, 300);
+      return () => clearTimeout(t);
+    }
+  }, [checkingBypass]);
 
   useEffect(() => {
     if (!permission?.granted) {
@@ -57,7 +68,7 @@ export default function AuthScreen() {
     try {
       await AsyncStorage.setItem('isVerified', 'true');
     } catch {}
-    router.replace('/(tabs)');
+    router.replace('/(tabs)/menu');
   };
 
   const onCapture = async () => {
@@ -72,7 +83,7 @@ export default function AuthScreen() {
         
         const manipulated = await ImageManipulator.manipulateAsync(
           photo.uri,
-          [{ resize: { width: 900 } }],
+          [{ resize: { width: idPhotoWidth || 900 } }],
           { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG }
         );
         setCapturedImage(manipulated.uri);
@@ -95,7 +106,7 @@ export default function AuthScreen() {
         const apiResponse = await axios.post(
           `${baseUrl}/id-scanning/scan`, 
           { image_data: base64 },
-          { timeout: 60000 } // 60 second timeout for OpenAI processing
+          { timeout: scanTimeoutMs || 60000 } // timeout for OpenAI processing
         );
         console.log('Response received:', apiResponse.data);
         setScanResult(apiResponse.data);
@@ -110,7 +121,7 @@ export default function AuthScreen() {
 
         // If it looks valid, continue to app
         if (apiResponse.data?.is_valid) {
-          router.replace('/(tabs)');
+          router.replace('/(tabs)/menu');
         } else {
           Alert.alert('Invalid ID', 'The ID could not be verified. Please try again with a clear photo of a valid ID.');
           setCapturedImage(null);

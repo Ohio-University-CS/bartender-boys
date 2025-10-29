@@ -8,13 +8,21 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
+  const scheme = (colorScheme ?? 'light') as 'light' | 'dark';
+  const palette = Colors[scheme];
 
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
+        tabBarActiveTintColor: palette.tint,
+        tabBarInactiveTintColor: palette.muted,
         headerShown: false,
         tabBarButton: HapticTab,
+        tabBarStyle: {
+          backgroundColor: palette.surface,
+          borderTopColor: palette.border,
+        },
+        tabBarLabelStyle: { fontWeight: '600' },
       }}>
       <Tabs.Screen
         name="index"
@@ -23,6 +31,16 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
         }}
       />
+      <Tabs.Screen
+        name="favorites"
+        options={{
+          title: 'Favorites',
+          tabBarIcon: ({ color }) => <IconSymbol size={24} name="heart.fill" color={color} />,
+        }}
+      />
+      {/* Hide legacy routes if files still exist */}
+      <Tabs.Screen name="index" options={{ href: null }} />
+      <Tabs.Screen name="explore" options={{ href: null }} />
       <Tabs.Screen
         name="explore"
         options={{

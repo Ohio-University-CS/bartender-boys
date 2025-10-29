@@ -10,9 +10,11 @@ export enum LogLevel {
 class Logger {
   private static instance: Logger;
   private isProduction: boolean;
+  private enabled: boolean;
 
   private constructor() {
     this.isProduction = IS_PROD;
+    this.enabled = !IS_PROD; // default: enabled in dev, disabled in prod
   }
 
   public static getInstance(): Logger {
@@ -23,11 +25,9 @@ class Logger {
   }
 
   private shouldLog(level: LogLevel): boolean {
-    // In production, don't log anything
-    if (this.isProduction) {
-      return false;
-    }
-    return true;
+    // In production, don't log anything regardless of toggle
+    if (this.isProduction) return false;
+    return this.enabled;
   }
 
   private formatMessage(level: string, message: string, ...args: any[]): string {
@@ -61,6 +61,15 @@ class Logger {
 
   public log(message: string, ...args: any[]): void {
     this.info(message, ...args);
+  }
+
+  public setEnabled(enabled: boolean) {
+    // No-op in prod; keep disabled
+    if (this.isProduction) {
+      this.enabled = false;
+      return;
+    }
+    this.enabled = enabled;
   }
 }
 

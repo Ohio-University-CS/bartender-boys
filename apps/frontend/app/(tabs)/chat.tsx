@@ -1,13 +1,23 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
-import { StyleSheet, View, TextInput, TouchableOpacity, FlatList, Text, KeyboardAvoidingView, Platform } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { StyleSheet, View, TextInput, TouchableOpacity, FlatList, KeyboardAvoidingView, Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import axios from 'axios';
 import { API_BASE_URL } from '@/environment';
 import { useSettings } from '@/contexts/settings';
+import { useRouter } from 'expo-router';
+import { useThemeColor } from '@/hooks/use-theme-color';
+import Markdown from 'react-native-markdown-display';
+import { BartenderAvatar } from '@/components/BartenderAvatar';
+import { ThemedText } from '@/components/themed-text';
+// EventSource usage:
+// - Web: use native window.EventSource
+// - Native: dynamically require('react-native-sse') at runtime to avoid build-time dependency when not installed
 
 type ChatMsg = { id: string; role: 'user' | 'assistant'; content: string };
 
 export default function ChatScreen() {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { apiBaseUrl } = useSettings();
   const baseUrl = apiBaseUrl || API_BASE_URL;
   const [input, setInput] = useState('');
@@ -15,6 +25,52 @@ export default function ChatScreen() {
     { id: 'welcome', role: 'assistant', content: "Hey! I'm your Bartender AI. Ask me for recipes, swaps, or pairing ideas." },
   ]);
   const [busy, setBusy] = useState(false);
+  const [isTalking, setIsTalking] = useState(false);
+  const talkingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const stopTalkingImmediately = useCallback(() => {
+    if (talkingTimeoutRef.current) {
+      clearTimeout(talkingTimeoutRef.current);
+      talkingTimeoutRef.current = null;
+    }
+    setIsTalking(false);
+  }, []);
+
+  const finalizeTalking = useCallback((text: string) => {
+    if (talkingTimeoutRef.current) {
+      clearTimeout(talkingTimeoutRef.current);
+      talkingTimeoutRef.current = null;
+    }
+    const wordCount = text.trim() ? text.trim().split(/\s+/).length : 0;
+    const talkingDuration = Math.max(2000, (wordCount / 150) * 60 * 1000);
+    talkingTimeoutRef.current = setTimeout(() => {
+      setIsTalking(false);
+      talkingTimeoutRef.current = null;
+    }, talkingDuration);
+  }, []);
+
+  // Theme colors
+  const backgroundColor = useThemeColor({}, 'background');
+  const textColor = useThemeColor({}, 'text');
+  const inputBg = useThemeColor({}, 'inputBackground');
+  const inputBorder = useThemeColor({}, 'inputBorder');
+  const borderColor = useThemeColor({}, 'border');
+  const aiBubbleBg = useThemeColor({}, 'surface');
+  const aiBubbleBorder = useThemeColor({}, 'border');
+  const bubbleText = useThemeColor({}, 'text');
+  const placeholderColor = useThemeColor({}, 'placeholder');
+  const avatarBorder = useThemeColor({}, 'border');
+  const avatarBackground = useThemeColor({}, 'surface');
+  const accent = useThemeColor({}, 'tint');
+  const onAccent = useThemeColor({}, 'onTint');
+
+  useEffect(() => {
+    return () => {
+      if (talkingTimeoutRef.current) {
+        clearTimeout(talkingTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const onSend = useCallback(async () => {
     const text = input.trim();
@@ -23,6 +79,7 @@ export default function ChatScreen() {
     setMessages((m) => [...m, userMsg]);
     setInput('');
     setBusy(true);
+    stopTalkingImmediately();
     try {
       const payload = {
         messages: [
@@ -31,58 +88,248 @@ export default function ChatScreen() {
           { role: 'user', content: text },
         ],
       };
-      const resp = await axios.post(`${baseUrl}/chat/respond`, payload, { timeout: 45000 });
-      const reply = String(resp.data?.reply || '');
-      const aiMsg: ChatMsg = { id: `${Date.now()}-ai`, role: 'assistant', content: reply || 'Sorry, I could not think of anything right now.' };
-      setMessages((m) => [...m, aiMsg]);
+      // Prefer EventSource (web native or react-native-sse on native)
+      if (Platform.OS === 'web') {
+        const aiId = `${Date.now()}-ai`;
+        setMessages((m) => [...m, { id: aiId, role: 'assistant', content: '' }]);
+        setIsTalking(true);
+
+        const url = new URL(`${baseUrl}/chat/respond_stream`);
+        url.searchParams.set('q', JSON.stringify(payload));
+
+        let aiText = '';
+        let completed = false;
+        const markComplete = () => {
+          if (completed) return;
+          completed = true;
+          finalizeTalking(aiText);
+        };
+
+        const es = new window.EventSource(url.toString());
+
+        es.addEventListener('open', () => {
+          console.log('[chat] SSE open');
+        });
+
+        es.addEventListener('message', (event: any) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.delta) {
+              aiText += String(data.delta);
+              setMessages((m) =>
+                m.map((msg) => (msg.id === aiId ? { ...msg, content: aiText } : msg))
+              );
+            }
+            if (data.done) {
+              console.log('[chat] SSE done');
+              markComplete();
+              es.close();
+            }
+            if (data.error) {
+              throw new Error(String(data.error));
+            }
+          } catch (err: any) {
+            console.log('[chat] SSE parse error', err?.message || String(err));
+          }
+        });
+
+        // Wait for completion before resolving onSend
+        await new Promise<void>((resolve) => {
+          function cleanup() {
+            es.removeEventListener('message', doneListener);
+            es.removeEventListener('error', errorListener);
+          }
+          function doneListener(event: any) {
+            try {
+              const data = JSON.parse(event.data);
+              if (data.done) {
+                markComplete();
+                cleanup();
+                es.close();
+                resolve();
+              }
+            } catch {}
+          }
+          function errorListener(event: any) {
+            console.log('[chat] SSE connection error', event?.message);
+            stopTalkingImmediately();
+            cleanup();
+            es.close();
+            resolve();
+          }
+          es.addEventListener('message', doneListener);
+          es.addEventListener('error', errorListener);
+        });
+      } else {
+        // Native: use react-native-sse dynamically
+        const aiId = `${Date.now()}-ai`;
+        setMessages((m) => [...m, { id: aiId, role: 'assistant', content: '' }]);
+        setIsTalking(true);
+        const url = `${baseUrl}/chat/respond_stream?q=${encodeURIComponent(JSON.stringify(payload))}`;
+        const { default: EventSourceRN } = await import('react-native-sse');
+        let aiText = '';
+        let completed = false;
+        const markComplete = () => {
+          if (completed) return;
+          completed = true;
+          finalizeTalking(aiText);
+        };
+
+        const es = new EventSourceRN(url);
+        es.addEventListener('open', () => {
+          // no-op
+        });
+        es.addEventListener('message', (event: any) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.delta) {
+              aiText += String(data.delta);
+              setMessages((m) =>
+                m.map((msg) => (msg.id === aiId ? { ...msg, content: aiText } : msg))
+              );
+            }
+            if (data.done) {
+              markComplete();
+              es.close();
+            }
+            if (data.error) {
+              throw new Error(String(data.error));
+            }
+          } catch {}
+        });
+        await new Promise<void>((resolve) => {
+          function cleanup() {
+            es.removeEventListener('message', doneListener);
+            es.removeEventListener('error', errorListener);
+          }
+          function doneListener(event: any) {
+            try {
+              const data = JSON.parse(event.data);
+              if (data.done) {
+                markComplete();
+                cleanup();
+                es.close();
+                resolve();
+              }
+            } catch {}
+          }
+          function errorListener(event: any) {
+            stopTalkingImmediately();
+            cleanup();
+            es.close();
+            resolve();
+          }
+          es.addEventListener('message', doneListener);
+          es.addEventListener('error', errorListener);
+        });
+      }
     } catch (e: any) {
       const msg = e?.response?.data?.detail || e?.message || 'Network error.';
       setMessages((m) => [...m, { id: `${Date.now()}-err`, role: 'assistant', content: `Error: ${msg}` }]);
+      stopTalkingImmediately();
     } finally {
       setBusy(false);
     }
-  }, [input, busy, baseUrl, messages]);
+  }, [input, busy, baseUrl, messages, finalizeTalking, stopTalkingImmediately]);
 
-  const renderItem = ({ item }: { item: ChatMsg }) => (
-    <View style={[styles.bubble, item.role === 'user' ? styles.userBubble : styles.aiBubble]}>
-      <Text style={styles.bubbleText}>{item.content}</Text>
-    </View>
-  );
+  const renderItem = ({ item }: { item: ChatMsg }) => {
+    const isUser = item.role === 'user';
+    return (
+      <View
+        style={[
+          styles.bubble,
+          isUser
+            ? [styles.userBubble, { backgroundColor: accent }]
+            : [styles.aiBubble, { backgroundColor: aiBubbleBg, borderColor: aiBubbleBorder }],
+        ]}
+      >
+        {isUser ? (
+          <ThemedText style={[styles.bubbleText, { color: onAccent }]}>{item.content}</ThemedText>
+        ) : (
+          <Markdown
+            style={{
+              body: { color: bubbleText, fontSize: 15, lineHeight: 22 },
+              paragraph: { marginBottom: 8 },
+              code_inline: {
+                backgroundColor: aiBubbleBg,
+                paddingHorizontal: 4,
+                paddingVertical: 2,
+                borderRadius: 4,
+                fontSize: 13,
+                fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace' }),
+              },
+              fence: { backgroundColor: aiBubbleBg, padding: 12, borderRadius: 4, marginVertical: 8 },
+              code_block: { backgroundColor: aiBubbleBg, padding: 12, borderRadius: 4, marginVertical: 8 },
+              list_item: { marginBottom: 4 },
+              strong: { fontWeight: '700' },
+              em: { fontStyle: 'italic' },
+              link: { color: accent },
+            }}
+          >
+            {item.content}
+          </Markdown>
+        )}
+      </View>
+    );
+  };
 
   return (
-    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <FlatList
-        data={messages}
-        keyExtractor={(it) => it.id}
-        renderItem={renderItem}
-        contentContainerStyle={styles.list}
-      />
-      <View style={styles.inputRow}>
-        <TextInput
-          style={styles.input}
-          placeholder="Ask the bartender..."
-          placeholderTextColor="#888"
-          value={input}
-          onChangeText={setInput}
-          onSubmitEditing={onSend}
-          editable={!busy}
+    <View style={[styles.container, { backgroundColor, paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+  <View style={[styles.avatarContainer, { borderBottomColor: avatarBorder, backgroundColor: avatarBackground }]}> 
+          <BartenderAvatar isTalking={isTalking} backgroundColor={avatarBackground} />
+        </View>
+        <FlatList
+          data={messages}
+          keyExtractor={(it) => it.id}
+          renderItem={renderItem}
+          contentContainerStyle={styles.list}
         />
-        <TouchableOpacity style={styles.sendBtn} onPress={onSend} disabled={busy}>
-          <Ionicons name="paper-plane" size={18} color="#000" />
+        <TouchableOpacity
+          style={[styles.talkBtn, { backgroundColor: accent, shadowColor: accent }]}
+          onPress={() => router.push('/bartender' as never)}
+          accessibilityLabel="Talk to bartender"
+        >
+          <Ionicons name="mic" size={16} color={onAccent} />
+          <ThemedText style={styles.talkText} colorName="onTint">Talk to bartender</ThemedText>
         </TouchableOpacity>
-      </View>
-    </KeyboardAvoidingView>
+        <View style={[styles.inputRow, { borderTopColor: borderColor }]}>
+          <TextInput
+            style={[styles.input, { backgroundColor: inputBg, borderColor: inputBorder, color: textColor }]}
+            placeholder="Ask the bartender..."
+            placeholderTextColor={placeholderColor}
+            value={input}
+            onChangeText={setInput}
+            onSubmitEditing={onSend}
+            editable={!busy}
+          />
+          <TouchableOpacity style={[styles.sendBtn, { backgroundColor: accent }]} onPress={onSend} disabled={busy}>
+            <Ionicons name="paper-plane" size={18} color={onAccent} />
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0C0C0C' },
-  list: { padding: 12 },
+  container: { flex: 1 },
+  avatarContainer: {
+    width: '100%',
+    paddingVertical: Platform.OS === 'web' ? 24 : 12,
+    paddingHorizontal: Platform.OS === 'web' ? 40 : 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderBottomWidth: 1,
+  },
+  list: { padding: 12, paddingBottom: 120 },
   bubble: { maxWidth: '80%', padding: 10, borderRadius: 12, marginBottom: 8 },
-  userBubble: { alignSelf: 'flex-end', backgroundColor: '#FFA500' },
-  aiBubble: { alignSelf: 'flex-start', backgroundColor: '#1a1a1a', borderColor: '#2a2a2a', borderWidth: 1 },
-  bubbleText: { color: '#fff' },
-  inputRow: { flexDirection: 'row', padding: 12, gap: 8, borderTopWidth: 1, borderTopColor: '#222' },
-  input: { flex: 1, backgroundColor: '#121212', color: '#fff', padding: 12, borderRadius: 10, borderWidth: 1, borderColor: '#1f1f1f' },
-  sendBtn: { backgroundColor: '#FFA500', paddingHorizontal: 14, alignItems: 'center', justifyContent: 'center', borderRadius: 10 },
+  userBubble: { alignSelf: 'flex-end' },
+  aiBubble: { alignSelf: 'flex-start', borderWidth: 1 },
+  bubbleText: {},
+  inputRow: { flexDirection: 'row', padding: 12, gap: 8, borderTopWidth: 1 },
+  input: { flex: 1, padding: 12, borderRadius: 10, borderWidth: 1 },
+  sendBtn: { paddingHorizontal: 14, alignItems: 'center', justifyContent: 'center', borderRadius: 10 },
+  talkBtn: { position: 'absolute', right: 16, bottom: 80, borderRadius: 999, paddingVertical: 10, paddingHorizontal: 12, flexDirection: 'row', gap: 6, alignItems: 'center', shadowOpacity: 0.2, shadowRadius: 6, shadowOffset: { width: 0, height: 3 } },
+  talkText: { fontWeight: '700' },
 });
