@@ -20,8 +20,6 @@ type SettingsState = {
   favoriteSpirit: string;
   homeBarName: string;
   bartenderBio: string;
-  defaultMenuCategory: string; // e.g., All, Cocktail, etc.
-  defaultShowFavorites: boolean; // show only favorites on menu by default
   setTheme: (t: ThemePref) => void;
   setApiBaseUrl: (url: string) => void;
   setHapticsEnabled: (v: boolean) => void;
@@ -34,8 +32,6 @@ type SettingsState = {
   setFavoriteSpirit: (value: string) => void;
   setHomeBarName: (value: string) => void;
   setBartenderBio: (value: string) => void;
-  setDefaultMenuCategory: (cat: string) => void;
-  setDefaultShowFavorites: (v: boolean) => void;
   reset: () => void;
 };
 
@@ -49,8 +45,6 @@ const LOGS_KEY = 'settings.debugLogs';
 const PHOTO_WIDTH_KEY = 'settings.idPhotoWidth';
 const TIMEOUT_KEY = 'settings.scanTimeoutMs';
 const DISPLAY_NAME_KEY = 'settings.displayName';
-const DEFAULT_MENU_CATEGORY_KEY = 'settings.defaultMenuCategory';
-const DEFAULT_SHOW_FAVORITES_KEY = 'settings.defaultShowFavorites';
 const PROFILE_PRONOUNS_KEY = 'settings.profilePronouns';
 const FAVORITE_SPIRIT_KEY = 'settings.favoriteSpirit';
 const HOME_BAR_NAME_KEY = 'settings.homeBarName';
@@ -69,14 +63,12 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const [favoriteSpirit, setFavoriteSpiritState] = useState<string>('');
   const [homeBarName, setHomeBarNameState] = useState<string>('');
   const [bartenderBio, setBartenderBioState] = useState<string>('');
-  const [defaultMenuCategory, setDefaultMenuCategoryState] = useState<string>('All');
-  const [defaultShowFavorites, setDefaultShowFavoritesState] = useState<boolean>(false);
 
   // load on mount
   useEffect(() => {
     (async () => {
       try {
-        const [t, url, h, hs, d, w, to, dn, pronouns, spirit, homeBar, bio, dmc, dsf] = await Promise.all([
+        const [t, url, h, hs, d, w, to, dn, pronouns, spirit, homeBar, bio] = await Promise.all([
           AsyncStorage.getItem(THEME_KEY),
           AsyncStorage.getItem(API_KEY),
           AsyncStorage.getItem(HAPTICS_KEY),
@@ -89,8 +81,6 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
           AsyncStorage.getItem(FAVORITE_SPIRIT_KEY),
           AsyncStorage.getItem(HOME_BAR_NAME_KEY),
           AsyncStorage.getItem(BARTENDER_BIO_KEY),
-          AsyncStorage.getItem(DEFAULT_MENU_CATEGORY_KEY),
-          AsyncStorage.getItem(DEFAULT_SHOW_FAVORITES_KEY),
         ]);
         if (t === 'light' || t === 'dark' || t === 'system') setThemeState(t);
         if (url) setApiBaseUrlState(url);
@@ -104,8 +94,6 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
         if (typeof spirit === 'string') setFavoriteSpiritState(spirit);
         if (typeof homeBar === 'string') setHomeBarNameState(homeBar);
         if (typeof bio === 'string') setBartenderBioState(bio);
-        if (typeof dmc === 'string' && dmc.length) setDefaultMenuCategoryState(dmc);
-        if (dsf === 'true' || dsf === 'false') setDefaultShowFavoritesState(dsf === 'true');
       } catch {}
     })();
   }, []);
@@ -155,13 +143,6 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     if (bartenderBio) AsyncStorage.setItem(BARTENDER_BIO_KEY, bartenderBio).catch(() => {});
     else AsyncStorage.removeItem(BARTENDER_BIO_KEY).catch(() => {});
   }, [bartenderBio]);
-  useEffect(() => {
-    AsyncStorage.setItem(DEFAULT_MENU_CATEGORY_KEY, defaultMenuCategory).catch(() => {});
-  }, [defaultMenuCategory]);
-  useEffect(() => {
-    AsyncStorage.setItem(DEFAULT_SHOW_FAVORITES_KEY, String(defaultShowFavorites)).catch(() => {});
-  }, [defaultShowFavorites]);
-
   const value = useMemo<SettingsState>(() => ({
     theme,
     apiBaseUrl,
@@ -175,8 +156,6 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     favoriteSpirit,
     homeBarName,
     bartenderBio,
-    defaultMenuCategory,
-    defaultShowFavorites,
     setTheme: setThemeState,
     setApiBaseUrl: setApiBaseUrlState,
     setHapticsEnabled: setHapticsEnabledState,
@@ -189,8 +168,6 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     setFavoriteSpirit: setFavoriteSpiritState,
     setHomeBarName: setHomeBarNameState,
     setBartenderBio: setBartenderBioState,
-    setDefaultMenuCategory: setDefaultMenuCategoryState,
-    setDefaultShowFavorites: setDefaultShowFavoritesState,
     reset: () => {
       setThemeState('dark');
       setApiBaseUrlState('');
@@ -204,8 +181,6 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
       setFavoriteSpiritState('');
       setHomeBarNameState('');
       setBartenderBioState('');
-      setDefaultMenuCategoryState('All');
-      setDefaultShowFavoritesState(false);
       AsyncStorage.multiRemove([
         THEME_KEY,
         API_KEY,
@@ -219,13 +194,11 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
         FAVORITE_SPIRIT_KEY,
         HOME_BAR_NAME_KEY,
         BARTENDER_BIO_KEY,
-        DEFAULT_MENU_CATEGORY_KEY,
-        DEFAULT_SHOW_FAVORITES_KEY,
       ]).catch(() => {});
       // Ensure logger follows reset
       logger.setEnabled(!IS_PROD && (!IS_PROD));
     },
-  }), [theme, apiBaseUrl, hapticsEnabled, hapticStrength, debugLogs, idPhotoWidth, scanTimeoutMs, displayName, profilePronouns, favoriteSpirit, homeBarName, bartenderBio, defaultMenuCategory, defaultShowFavorites]);
+  }), [theme, apiBaseUrl, hapticsEnabled, hapticStrength, debugLogs, idPhotoWidth, scanTimeoutMs, displayName, profilePronouns, favoriteSpirit, homeBarName, bartenderBio]);
 
   return (
     <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>

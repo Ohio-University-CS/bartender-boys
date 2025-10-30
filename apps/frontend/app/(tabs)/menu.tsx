@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { StyleSheet, ScrollView, TouchableOpacity, TextInput, View, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -8,19 +8,20 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { DRINKS, type Drink } from '@/constants/drinks';
 import { useFavorites } from '../../contexts/favorites';
-import { useSettings } from '@/contexts/settings';
 import { CATEGORY_COLORS, DIFFICULTY_COLORS } from '@/constants/ui-palette';
 import { useThemeColor } from '@/hooks/use-theme-color';
+
+type SortOption = 'difficulty' | 'alcohol' | 'name' | 'prepTime';
 
 export default function MenuScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { defaultMenuCategory, defaultShowFavorites } = useSettings();
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState(defaultMenuCategory || 'All');
-  const [showFavoritesOnly, setShowFavoritesOnly] = useState<boolean>(!!defaultShowFavorites);
+  const [selectedCategory, setSelectedCategory] = useState('All');
+  const showFavoritesOnly = false;
   const { isFavorite, toggleFavorite } = useFavorites();
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [sortBy, setSortBy] = useState<SortOption>('difficulty');
 
   // Theme colors
   const backgroundColor = useThemeColor({}, 'background');
@@ -37,19 +38,30 @@ export default function MenuScreen() {
   const onAccent = useThemeColor({}, 'onTint');
   const mutedForeground = useThemeColor({}, 'mutedForeground');
   const danger = useThemeColor({}, 'danger');
-
-  // Reflect settings changes if updated while on this screen
-  useEffect(() => {
-    setSelectedCategory(defaultMenuCategory || 'All');
-  }, [defaultMenuCategory]);
-  useEffect(() => {
-    setShowFavoritesOnly(!!defaultShowFavorites);
-  }, [defaultShowFavorites]);
+  const chipBg = useThemeColor({}, 'chipBackground');
+  const chipBorder = useThemeColor({}, 'chipBorder');
 
   const toggleExpanded = (id: string) =>
     setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
 
   const categories = ['All', 'Cocktail', 'Whiskey', 'Rum', 'Gin', 'Vodka', 'Tequila', 'Brandy', 'Non-Alcoholic'];
+  const sortOptions: { key: SortOption; label: string }[] = [
+    { key: 'difficulty', label: 'Difficulty' },
+    { key: 'alcohol', label: 'Alcohol Type' },
+    { key: 'name', label: 'A-Z' },
+    { key: 'prepTime', label: 'Prep Time' },
+  ];
+
+  const difficultyRank: Record<Drink['difficulty'], number> = {
+    Hard: 0,
+    Medium: 1,
+    Easy: 2,
+  };
+
+  const parsePrepMinutes = (prepTime: string) => {
+    const parsed = parseInt(prepTime, 10);
+    return Number.isNaN(parsed) ? Number.MAX_SAFE_INTEGER : parsed;
+  };
 
   const filteredDrinks = DRINKS.filter(drink => {
     const matchesSearch = drink.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -58,6 +70,19 @@ export default function MenuScreen() {
     const matchesFavorite = !showFavoritesOnly || isFavorite(drink.id);
     return matchesSearch && matchesCategory && matchesFavorite;
   });
+
+  const sortedDrinks = useMemo(() => {
+    const data = [...filteredDrinks];
+    const sorter = {
+      difficulty: (a: Drink, b: Drink) => difficultyRank[a.difficulty] - difficultyRank[b.difficulty] || a.name.localeCompare(b.name),
+      alcohol: (a: Drink, b: Drink) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name),
+      name: (a: Drink, b: Drink) => a.name.localeCompare(b.name),
+      prepTime: (a: Drink, b: Drink) => parsePrepMinutes(a.prepTime) - parsePrepMinutes(b.prepTime) || a.name.localeCompare(b.name),
+    } satisfies Record<SortOption, (a: Drink, b: Drink) => number>;
+
+    data.sort(sorter[sortBy]);
+    return data;
+  }, [filteredDrinks, sortBy]);
 
   const showDrinkDetails = (drink: Drink) => {
     router.push(`/drink/${drink.id}` as any);
@@ -127,8 +152,38 @@ export default function MenuScreen() {
         </ScrollView>
       </ThemedView>
 
+      <ThemedView style={styles.sortContainer}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.sortContent}
+        >
+          {sortOptions.map((option) => {
+            const isActive = sortBy === option.key;
+            return (
+              <TouchableOpacity
+                key={option.key}
+                style={[
+                  styles.sortButton,
+                  { backgroundColor: chipBg, borderColor: chipBorder },
+                  isActive && { backgroundColor: accent, borderColor: accent },
+                ]}
+                onPress={() => setSortBy(option.key)}
+              >
+                <ThemedText
+                  style={styles.sortText}
+                  colorName={isActive ? 'onTint' : 'mutedForeground'}
+                >
+                  {option.label}
+                </ThemedText>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      </ThemedView>
+
       <ThemedView style={styles.drinksContainer}>
-        {filteredDrinks.map((drink) => {
+        {sortedDrinks.map((drink) => {
           const isExpanded = !!expanded[drink.id];
           const shownIngredients = isExpanded ? drink.ingredients : drink.ingredients.slice(0, 3);
           const remaining = drink.ingredients.length - shownIngredients.length;
@@ -180,7 +235,7 @@ export default function MenuScreen() {
           </TouchableOpacity>
         );})}
         
-        {filteredDrinks.length === 0 && (
+        {sortedDrinks.length === 0 && (
           <ThemedView style={styles.emptyState}>
             <ThemedText style={styles.emptyText} colorName="muted">No drinks found</ThemedText>
           </ThemedView>
@@ -236,6 +291,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     width: '100%',
+  },
+  sortContainer: {
+    width: '100%',
+    marginBottom: 8,
+    paddingHorizontal: 12,
+  },
+  sortContent: {
+    gap: 8,
+    paddingHorizontal: 4,
+  },
+  sortButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  sortText: {
+    fontSize: 14,
+    fontWeight: '600',
   },
   categoryButton: {
     paddingHorizontal: 12,

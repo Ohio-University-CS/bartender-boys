@@ -19,8 +19,6 @@ export default function SettingsScreen() {
     favoriteSpirit, setFavoriteSpirit,
     homeBarName, setHomeBarName,
     bartenderBio, setBartenderBio,
-    defaultMenuCategory, setDefaultMenuCategory,
-    defaultShowFavorites, setDefaultShowFavorites,
   } = useSettings();
 
   // Theme colors
@@ -208,43 +206,6 @@ export default function SettingsScreen() {
             ))}
           </View>
         )}
-      </ThemedView>
-
-      <ThemedView colorName="surfaceElevated" style={[styles.section, { borderColor }]}> 
-        <ThemedText type="subtitle" colorName="tint" style={styles.sectionTitle}>Menu Defaults</ThemedText>
-        <ThemedText style={styles.help} colorName="muted">Choose the default category when opening the menu</ThemedText>
-        <View style={[styles.row, { flexWrap: 'wrap', justifyContent: 'center', gap: 8 }]}>
-          {['All', 'Cocktail', 'Whiskey', 'Rum', 'Gin', 'Vodka', 'Tequila', 'Brandy', 'Non-Alcoholic'].map((cat) => (
-            <TouchableOpacity
-              key={cat}
-              style={[
-                styles.chip,
-                { backgroundColor: chipBg, borderColor: chipBorder },
-                defaultMenuCategory === cat && [
-                  styles.chipActive,
-                  { backgroundColor: accent, borderColor: accent },
-                ]
-              ]}
-              onPress={() => setDefaultMenuCategory(cat)}
-            >
-              <ThemedText
-                style={styles.chipText}
-                colorName={defaultMenuCategory === cat ? 'onTint' : 'mutedForeground'}
-              >
-                {cat}
-              </ThemedText>
-            </TouchableOpacity>
-          ))}
-        </View>
-        <View style={styles.row}>
-          <ThemedText>Show favorites only by default</ThemedText>
-          <Switch
-            value={defaultShowFavorites}
-            onValueChange={setDefaultShowFavorites}
-            trackColor={{ false: mutedForeground, true: accent }}
-            thumbColor={Platform.OS === 'android' ? onAccent : undefined}
-          />
-        </View>
       </ThemedView>
 
       <ThemedView colorName="surfaceElevated" style={[styles.section, { borderColor }]}> 
