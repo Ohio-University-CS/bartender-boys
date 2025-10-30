@@ -22,6 +22,13 @@ type SettingsState = {
   homeBarName: string;
   bartenderBio: string;
   accentColor: AccentOption;
+  pushNotifications: boolean;
+  emailNotifications: boolean;
+  notificationSound: boolean;
+  notificationVibration: boolean;
+  quietHoursEnabled: boolean;
+  quietHoursStart: string;
+  quietHoursEnd: string;
   setTheme: (t: ThemePref) => void;
   setApiBaseUrl: (url: string) => void;
   setHapticsEnabled: (v: boolean) => void;
@@ -35,6 +42,13 @@ type SettingsState = {
   setHomeBarName: (value: string) => void;
   setBartenderBio: (value: string) => void;
   setAccentColor: (value: AccentOption) => void;
+  setPushNotifications: (value: boolean) => void;
+  setEmailNotifications: (value: boolean) => void;
+  setNotificationSound: (value: boolean) => void;
+  setNotificationVibration: (value: boolean) => void;
+  setQuietHoursEnabled: (value: boolean) => void;
+  setQuietHoursStart: (value: string) => void;
+  setQuietHoursEnd: (value: string) => void;
   reset: () => void;
 };
 
@@ -53,6 +67,13 @@ const PROFILE_PRONOUNS_KEY = 'settings.profilePronouns';
 const FAVORITE_SPIRIT_KEY = 'settings.favoriteSpirit';
 const HOME_BAR_NAME_KEY = 'settings.homeBarName';
 const BARTENDER_BIO_KEY = 'settings.bartenderBio';
+const PUSH_NOTIFICATIONS_KEY = 'settings.notifications.push';
+const EMAIL_NOTIFICATIONS_KEY = 'settings.notifications.email';
+const SOUND_NOTIFICATIONS_KEY = 'settings.notifications.sound';
+const VIBRATION_NOTIFICATIONS_KEY = 'settings.notifications.vibration';
+const QUIET_HOURS_ENABLED_KEY = 'settings.notifications.quietHoursEnabled';
+const QUIET_HOURS_START_KEY = 'settings.notifications.quietHoursStart';
+const QUIET_HOURS_END_KEY = 'settings.notifications.quietHoursEnd';
 
 export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = useState<ThemePref>('dark');
@@ -68,12 +89,40 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const [homeBarName, setHomeBarNameState] = useState<string>('');
   const [bartenderBio, setBartenderBioState] = useState<string>('');
   const [accentColor, setAccentColorState] = useState<AccentOption>(DEFAULT_ACCENT);
+  const [pushNotifications, setPushNotificationsState] = useState<boolean>(true);
+  const [emailNotifications, setEmailNotificationsState] = useState<boolean>(false);
+  const [notificationSound, setNotificationSoundState] = useState<boolean>(true);
+  const [notificationVibration, setNotificationVibrationState] = useState<boolean>(true);
+  const [quietHoursEnabled, setQuietHoursEnabledState] = useState<boolean>(false);
+  const [quietHoursStart, setQuietHoursStartState] = useState<string>('22:00');
+  const [quietHoursEnd, setQuietHoursEndState] = useState<string>('06:00');
 
   // load on mount
   useEffect(() => {
     (async () => {
       try {
-        const [t, url, h, hs, d, w, to, dn, pronouns, spirit, homeBar, bio, accent] = await Promise.all([
+        const [
+          t,
+          url,
+          h,
+          hs,
+          d,
+          w,
+          to,
+          dn,
+          pronouns,
+          spirit,
+          homeBar,
+          bio,
+          accent,
+          push,
+          email,
+          sound,
+          vibration,
+          quietEnabled,
+          quietStart,
+          quietEnd,
+        ] = await Promise.all([
           AsyncStorage.getItem(THEME_KEY),
           AsyncStorage.getItem(API_KEY),
           AsyncStorage.getItem(HAPTICS_KEY),
@@ -87,6 +136,13 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
           AsyncStorage.getItem(HOME_BAR_NAME_KEY),
           AsyncStorage.getItem(BARTENDER_BIO_KEY),
           AsyncStorage.getItem(ACCENT_KEY),
+          AsyncStorage.getItem(PUSH_NOTIFICATIONS_KEY),
+          AsyncStorage.getItem(EMAIL_NOTIFICATIONS_KEY),
+          AsyncStorage.getItem(SOUND_NOTIFICATIONS_KEY),
+          AsyncStorage.getItem(VIBRATION_NOTIFICATIONS_KEY),
+          AsyncStorage.getItem(QUIET_HOURS_ENABLED_KEY),
+          AsyncStorage.getItem(QUIET_HOURS_START_KEY),
+          AsyncStorage.getItem(QUIET_HOURS_END_KEY),
         ]);
         if (t === 'light' || t === 'dark' || t === 'system') setThemeState(t);
         if (url) setApiBaseUrlState(url);
@@ -103,6 +159,13 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
         if (typeof accent === 'string' && isAccentOption(accent)) {
           setAccentColorState(accent);
         }
+        if (push === 'true' || push === 'false') setPushNotificationsState(push === 'true');
+        if (email === 'true' || email === 'false') setEmailNotificationsState(email === 'true');
+        if (sound === 'true' || sound === 'false') setNotificationSoundState(sound === 'true');
+        if (vibration === 'true' || vibration === 'false') setNotificationVibrationState(vibration === 'true');
+        if (quietEnabled === 'true' || quietEnabled === 'false') setQuietHoursEnabledState(quietEnabled === 'true');
+        if (typeof quietStart === 'string' && quietStart.length > 0) setQuietHoursStartState(quietStart);
+        if (typeof quietEnd === 'string' && quietEnd.length > 0) setQuietHoursEndState(quietEnd);
       } catch {}
     })();
   }, []);
@@ -155,6 +218,27 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     AsyncStorage.setItem(ACCENT_KEY, accentColor).catch(() => {});
   }, [accentColor]);
+  useEffect(() => {
+    AsyncStorage.setItem(PUSH_NOTIFICATIONS_KEY, String(pushNotifications)).catch(() => {});
+  }, [pushNotifications]);
+  useEffect(() => {
+    AsyncStorage.setItem(EMAIL_NOTIFICATIONS_KEY, String(emailNotifications)).catch(() => {});
+  }, [emailNotifications]);
+  useEffect(() => {
+    AsyncStorage.setItem(SOUND_NOTIFICATIONS_KEY, String(notificationSound)).catch(() => {});
+  }, [notificationSound]);
+  useEffect(() => {
+    AsyncStorage.setItem(VIBRATION_NOTIFICATIONS_KEY, String(notificationVibration)).catch(() => {});
+  }, [notificationVibration]);
+  useEffect(() => {
+    AsyncStorage.setItem(QUIET_HOURS_ENABLED_KEY, String(quietHoursEnabled)).catch(() => {});
+  }, [quietHoursEnabled]);
+  useEffect(() => {
+    AsyncStorage.setItem(QUIET_HOURS_START_KEY, quietHoursStart).catch(() => {});
+  }, [quietHoursStart]);
+  useEffect(() => {
+    AsyncStorage.setItem(QUIET_HOURS_END_KEY, quietHoursEnd).catch(() => {});
+  }, [quietHoursEnd]);
   const value = useMemo<SettingsState>(() => ({
     theme,
     apiBaseUrl,
@@ -168,7 +252,14 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     favoriteSpirit,
     homeBarName,
     bartenderBio,
-  accentColor,
+    accentColor,
+    pushNotifications,
+    emailNotifications,
+    notificationSound,
+    notificationVibration,
+    quietHoursEnabled,
+    quietHoursStart,
+    quietHoursEnd,
     setTheme: setThemeState,
     setApiBaseUrl: setApiBaseUrlState,
     setHapticsEnabled: setHapticsEnabledState,
@@ -182,6 +273,13 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     setHomeBarName: setHomeBarNameState,
     setBartenderBio: setBartenderBioState,
     setAccentColor: setAccentColorState,
+    setPushNotifications: setPushNotificationsState,
+    setEmailNotifications: setEmailNotificationsState,
+    setNotificationSound: setNotificationSoundState,
+    setNotificationVibration: setNotificationVibrationState,
+    setQuietHoursEnabled: setQuietHoursEnabledState,
+    setQuietHoursStart: setQuietHoursStartState,
+    setQuietHoursEnd: setQuietHoursEndState,
     reset: () => {
       setThemeState('dark');
       setApiBaseUrlState('');
@@ -196,6 +294,13 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
       setHomeBarNameState('');
       setBartenderBioState('');
       setAccentColorState(DEFAULT_ACCENT);
+      setPushNotificationsState(true);
+      setEmailNotificationsState(false);
+      setNotificationSoundState(true);
+      setNotificationVibrationState(true);
+      setQuietHoursEnabledState(false);
+      setQuietHoursStartState('22:00');
+      setQuietHoursEndState('06:00');
       AsyncStorage.multiRemove([
         THEME_KEY,
         API_KEY,
@@ -210,11 +315,39 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
         HOME_BAR_NAME_KEY,
         BARTENDER_BIO_KEY,
         ACCENT_KEY,
+        PUSH_NOTIFICATIONS_KEY,
+        EMAIL_NOTIFICATIONS_KEY,
+        SOUND_NOTIFICATIONS_KEY,
+        VIBRATION_NOTIFICATIONS_KEY,
+        QUIET_HOURS_ENABLED_KEY,
+        QUIET_HOURS_START_KEY,
+        QUIET_HOURS_END_KEY,
       ]).catch(() => {});
       // Ensure logger follows reset
       logger.setEnabled(!IS_PROD && (!IS_PROD));
     },
-  }), [theme, apiBaseUrl, hapticsEnabled, hapticStrength, debugLogs, idPhotoWidth, scanTimeoutMs, displayName, profilePronouns, favoriteSpirit, homeBarName, bartenderBio, accentColor]);
+  }), [
+    theme,
+    apiBaseUrl,
+    hapticsEnabled,
+    hapticStrength,
+    debugLogs,
+    idPhotoWidth,
+    scanTimeoutMs,
+    displayName,
+    profilePronouns,
+    favoriteSpirit,
+    homeBarName,
+    bartenderBio,
+    accentColor,
+    pushNotifications,
+    emailNotifications,
+    notificationSound,
+    notificationVibration,
+    quietHoursEnabled,
+    quietHoursStart,
+    quietHoursEnd,
+  ]);
 
   return (
     <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>
