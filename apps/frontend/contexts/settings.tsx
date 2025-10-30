@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useMemo, useState } from '
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { IS_PROD } from '@/environment';
 import { logger } from '@/utils/logger';
+import { DEFAULT_ACCENT, isAccentOption, type AccentOption } from '@/constants/theme';
 
 type ThemePref = 'system' | 'light' | 'dark';
 
@@ -20,6 +21,7 @@ type SettingsState = {
   favoriteSpirit: string;
   homeBarName: string;
   bartenderBio: string;
+  accentColor: AccentOption;
   setTheme: (t: ThemePref) => void;
   setApiBaseUrl: (url: string) => void;
   setHapticsEnabled: (v: boolean) => void;
@@ -32,6 +34,7 @@ type SettingsState = {
   setFavoriteSpirit: (value: string) => void;
   setHomeBarName: (value: string) => void;
   setBartenderBio: (value: string) => void;
+  setAccentColor: (value: AccentOption) => void;
   reset: () => void;
 };
 
@@ -45,6 +48,7 @@ const LOGS_KEY = 'settings.debugLogs';
 const PHOTO_WIDTH_KEY = 'settings.idPhotoWidth';
 const TIMEOUT_KEY = 'settings.scanTimeoutMs';
 const DISPLAY_NAME_KEY = 'settings.displayName';
+const ACCENT_KEY = 'settings.accentColor';
 const PROFILE_PRONOUNS_KEY = 'settings.profilePronouns';
 const FAVORITE_SPIRIT_KEY = 'settings.favoriteSpirit';
 const HOME_BAR_NAME_KEY = 'settings.homeBarName';
@@ -63,12 +67,13 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const [favoriteSpirit, setFavoriteSpiritState] = useState<string>('');
   const [homeBarName, setHomeBarNameState] = useState<string>('');
   const [bartenderBio, setBartenderBioState] = useState<string>('');
+  const [accentColor, setAccentColorState] = useState<AccentOption>(DEFAULT_ACCENT);
 
   // load on mount
   useEffect(() => {
     (async () => {
       try {
-        const [t, url, h, hs, d, w, to, dn, pronouns, spirit, homeBar, bio] = await Promise.all([
+        const [t, url, h, hs, d, w, to, dn, pronouns, spirit, homeBar, bio, accent] = await Promise.all([
           AsyncStorage.getItem(THEME_KEY),
           AsyncStorage.getItem(API_KEY),
           AsyncStorage.getItem(HAPTICS_KEY),
@@ -81,6 +86,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
           AsyncStorage.getItem(FAVORITE_SPIRIT_KEY),
           AsyncStorage.getItem(HOME_BAR_NAME_KEY),
           AsyncStorage.getItem(BARTENDER_BIO_KEY),
+          AsyncStorage.getItem(ACCENT_KEY),
         ]);
         if (t === 'light' || t === 'dark' || t === 'system') setThemeState(t);
         if (url) setApiBaseUrlState(url);
@@ -94,6 +100,9 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
         if (typeof spirit === 'string') setFavoriteSpiritState(spirit);
         if (typeof homeBar === 'string') setHomeBarNameState(homeBar);
         if (typeof bio === 'string') setBartenderBioState(bio);
+        if (typeof accent === 'string' && isAccentOption(accent)) {
+          setAccentColorState(accent);
+        }
       } catch {}
     })();
   }, []);
@@ -143,6 +152,9 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     if (bartenderBio) AsyncStorage.setItem(BARTENDER_BIO_KEY, bartenderBio).catch(() => {});
     else AsyncStorage.removeItem(BARTENDER_BIO_KEY).catch(() => {});
   }, [bartenderBio]);
+  useEffect(() => {
+    AsyncStorage.setItem(ACCENT_KEY, accentColor).catch(() => {});
+  }, [accentColor]);
   const value = useMemo<SettingsState>(() => ({
     theme,
     apiBaseUrl,
@@ -156,6 +168,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     favoriteSpirit,
     homeBarName,
     bartenderBio,
+  accentColor,
     setTheme: setThemeState,
     setApiBaseUrl: setApiBaseUrlState,
     setHapticsEnabled: setHapticsEnabledState,
@@ -168,6 +181,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     setFavoriteSpirit: setFavoriteSpiritState,
     setHomeBarName: setHomeBarNameState,
     setBartenderBio: setBartenderBioState,
+    setAccentColor: setAccentColorState,
     reset: () => {
       setThemeState('dark');
       setApiBaseUrlState('');
@@ -181,6 +195,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
       setFavoriteSpiritState('');
       setHomeBarNameState('');
       setBartenderBioState('');
+      setAccentColorState(DEFAULT_ACCENT);
       AsyncStorage.multiRemove([
         THEME_KEY,
         API_KEY,
@@ -194,11 +209,12 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
         FAVORITE_SPIRIT_KEY,
         HOME_BAR_NAME_KEY,
         BARTENDER_BIO_KEY,
+        ACCENT_KEY,
       ]).catch(() => {});
       // Ensure logger follows reset
       logger.setEnabled(!IS_PROD && (!IS_PROD));
     },
-  }), [theme, apiBaseUrl, hapticsEnabled, hapticStrength, debugLogs, idPhotoWidth, scanTimeoutMs, displayName, profilePronouns, favoriteSpirit, homeBarName, bartenderBio]);
+  }), [theme, apiBaseUrl, hapticsEnabled, hapticStrength, debugLogs, idPhotoWidth, scanTimeoutMs, displayName, profilePronouns, favoriteSpirit, homeBarName, bartenderBio, accentColor]);
 
   return (
     <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>

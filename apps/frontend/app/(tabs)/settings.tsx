@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import SegmentedControl from '@react-native-segmented-control/segmented-control';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { ACCENT_OPTIONS } from '@/constants/theme';
 import { useSettings } from '@/contexts/settings';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useThemeColor } from '@/hooks/use-theme-color';
@@ -17,8 +18,9 @@ export default function SettingsScreen() {
     displayName, setDisplayName,
     profilePronouns, setProfilePronouns,
     favoriteSpirit, setFavoriteSpirit,
-    homeBarName, setHomeBarName,
-    bartenderBio, setBartenderBio,
+  homeBarName, setHomeBarName,
+  bartenderBio, setBartenderBio,
+  accentColor, setAccentColor,
   } = useSettings();
 
   // Theme colors
@@ -206,6 +208,33 @@ export default function SettingsScreen() {
             ))}
           </View>
         )}
+        <ThemedText style={[styles.help, styles.helpInset]} colorName="muted">Accent color</ThemedText>
+        <View style={styles.accentRow}>
+          {ACCENT_OPTIONS.map((option) => {
+            const isActive = accentColor === option.key;
+            return (
+              <TouchableOpacity
+                key={option.key}
+                style={styles.accentChoice}
+                onPress={() => setAccentColor(option.key)}
+              >
+                <View
+                  style={[
+                    styles.accentSwatch,
+                    { backgroundColor: option.preview },
+                    isActive && [styles.accentSwatchActive, { borderColor: accent }],
+                  ]}
+                />
+                <ThemedText
+                  style={styles.accentLabel}
+                  colorName={isActive ? 'tint' : 'mutedForeground'}
+                >
+                  {option.label}
+                </ThemedText>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
       </ThemedView>
 
       <ThemedView colorName="surfaceElevated" style={[styles.section, { borderColor }]}> 
@@ -298,4 +327,30 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   chipText: { fontWeight: '600' },
+  accentRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 16,
+    justifyContent: 'center',
+    paddingTop: 12,
+  },
+  accentChoice: {
+    alignItems: 'center',
+    width: 96,
+  },
+  accentSwatch: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 2,
+    borderColor: 'transparent',
+    marginBottom: 6,
+  },
+  accentSwatchActive: {
+    borderWidth: 3,
+  },
+  accentLabel: {
+    fontSize: 12,
+    textAlign: 'center',
+  },
 });

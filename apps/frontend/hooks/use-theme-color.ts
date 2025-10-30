@@ -3,7 +3,10 @@
  * https://docs.expo.dev/guides/color-schemes/
  */
 
-import { Colors } from '@/constants/theme';
+import { useMemo } from 'react';
+
+import { Colors, createThemeColors } from '@/constants/theme';
+import { useSettings } from '@/contexts/settings';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export function useThemeColor(
@@ -11,11 +14,13 @@ export function useThemeColor(
   colorName: keyof typeof Colors.light & keyof typeof Colors.dark
 ) {
   const theme = useColorScheme() ?? 'light';
+  const { accentColor } = useSettings();
+  const palette = useMemo(() => createThemeColors(accentColor), [accentColor]);
   const colorFromProps = props[theme];
 
   if (colorFromProps) {
     return colorFromProps;
   } else {
-    return Colors[theme][colorName];
+    return palette[theme][colorName] ?? Colors[theme][colorName];
   }
 }
