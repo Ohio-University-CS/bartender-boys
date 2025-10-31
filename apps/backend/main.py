@@ -1,13 +1,24 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from id_scanning.routes import router as id_scanning_router
 from chat.routes import router as chat_router
 from drinks.routes import router as drinks_router
+from services.db import connect_to_mongo, close_mongo_connection
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await connect_to_mongo()
+    try:
+        yield
+    finally:
+        await close_mongo_connection()
 
 app = FastAPI(
     title="Bartender Boys API",
     description="Backend API for Bartender Boys application",
-    version="0.1.0"
+    version="0.1.0",
+    lifespan=lifespan,
 )
 
 # Add CORS middleware

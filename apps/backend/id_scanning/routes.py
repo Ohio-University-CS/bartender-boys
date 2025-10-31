@@ -1,9 +1,11 @@
 import logging
+from datetime import datetime, time
 from fastapi import APIRouter, HTTPException
 
 from id_scanning.models import IDScanRequest, IDScanResponse
 from id_scanning.utils import decode_base64_image, validate_image_format, clean_extracted_data
 from services.openai import OpenAIService
+from services.users import get_or_insert_user_from_id_scan
 from settings import settings
 
 logger = logging.getLogger(__name__)
@@ -85,6 +87,7 @@ async def scan_id(request: IDScanRequest):
         print(f"Date of Birth: {result.get('date_of_birth', 'N/A')}")
         print(f"Sex: {result.get('sex', 'N/A')}")
         print(f"Eye Color: {result.get('eye_color', 'N/A')}")
+        print(f"Driver's License #: {result.get('drivers_license_number', 'N/A')}")
         print(f"Is Valid: {result.get('is_valid', 'N/A')}")
         print(f"Raw Response: {result.get('raw_response', 'N/A')}")
         
@@ -103,8 +106,27 @@ async def scan_id(request: IDScanRequest):
         # Clean and validate the extracted data
         cleaned_data = clean_extracted_data(result)
         
-        # Create response
-        response = IDScanResponse(**cleaned_data)
+        # Fetch existing user or insert new one without modifying existing records
+        try:
+            user_doc = await get_or_insert_user_from_id_scan(cleaned_data)
+        except Exception as e:
+            logger.error("Failed to persist/fetch user record: %s", str(e))
+            user_doc = cleaned_data
+
+        # Create response from stored/existing user document, restricting to known fields
+        allowed_keys = {
+            "name",
+            "state",
+            "date_of_birth",
+            "sex",
+            "eye_color",
+            "drivers_license_number",
+            "is_valid",
+            "error",
+            "raw_response",
+        }
+        response_payload = {k: user_doc.get(k) for k in allowed_keys if k in user_doc}
+        response = IDScanResponse(**response_payload)
         
         logger.info("ID scanning completed successfully")
         return response
