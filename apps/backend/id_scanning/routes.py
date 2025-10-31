@@ -85,6 +85,7 @@ async def scan_id(request: IDScanRequest):
         print(f"Date of Birth: {result.get('date_of_birth', 'N/A')}")
         print(f"Sex: {result.get('sex', 'N/A')}")
         print(f"Eye Color: {result.get('eye_color', 'N/A')}")
+        print(f"Driver's License #: {result.get('drivers_license_number', 'N/A')}")
         print(f"Is Valid: {result.get('is_valid', 'N/A')}")
         print(f"Raw Response: {result.get('raw_response', 'N/A')}")
         

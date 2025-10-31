@@ -48,9 +48,10 @@ class OpenAIService:
         - date_of_birth: Date of birth in YYYY-MM-DD format
         - sex: Gender/sex as indicated on the ID
         - eye_color: Eye color as listed on the ID
+        - drivers_license_number: Driver's license number printed on the card (starts with "VH" and then has 6 numbers). Return uppercase string without spaces.
         - is_valid: Boolean indicating if this appears to be a legitimate ID
         
-        Return only valid JSON with these exact field names. If any information is not visible or unclear, use null for that field.
+        Return only valid JSON with these exact field names. If any information is not visible or unclear, use null for that field. Do not include any extra keys. Ensure drivers_license_number is null if no value explicitly visible.
         """
         
         retry_count = 0
