@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException
 from id_scanning.models import IDScanRequest, IDScanResponse
 from id_scanning.utils import decode_base64_image, validate_image_format, clean_extracted_data
 from services.openai import OpenAIService
-from services.users import get_or_insert_user_from_id_scan
+from data.users import get_or_insert_user_from_id_scan
 from settings import settings
 
 logger = logging.getLogger(__name__)
