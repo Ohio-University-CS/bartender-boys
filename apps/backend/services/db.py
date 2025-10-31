@@ -1,4 +1,5 @@
 from typing import AsyncGenerator, Optional
+import logging
 
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 
@@ -7,10 +8,32 @@ from settings import settings
 
 _client: Optional[AsyncIOMotorClient] = None
 _db: Optional[AsyncIOMotorDatabase] = None
+logger = logging.getLogger(__name__)
 
 
 async def ensure_indexes(db: AsyncIOMotorDatabase) -> None:
     """Create required indexes for collections used by the application."""
+    users = db["users"]
+
+    # Ensure the users index on driversLicenseNumber is partial unique
+    try:
+        existing_names = [idx.get("name") async for idx in users.list_indexes()]
+        if "driversLicenseNumber_1" in existing_names:
+            try:
+                await users.drop_index("driversLicenseNumber_1")
+                logger.info("Dropped non-partial index driversLicenseNumber_1 on users collection")
+            except Exception as drop_err:
+                logger.warning("Could not drop index driversLicenseNumber_1: %s", drop_err)
+
+        await users.create_index(
+            "driversLicenseNumber",
+            unique=True,
+            partialFilterExpression={"driversLicenseNumber": {"$exists": True, "$ne": None}},
+        )
+        logger.info("Ensured partial unique index on users.driversLicenseNumber")
+    except Exception as e:
+        logger.warning("Failed ensuring users indexes: %s", e)
+
     # Example:
     # await db["drinks"].create_index([("name", 1)], unique=True)
     return None
