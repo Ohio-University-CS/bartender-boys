@@ -29,6 +29,10 @@ export default function SettingsScreen() {
     setBartenderBio,
     accentColor,
     setAccentColor,
+  animationsEnabled,
+  setAnimationsEnabled,
+  autoSaveFavorites,
+  setAutoSaveFavorites,
     pushNotifications,
     setPushNotifications,
     emailNotifications,
@@ -412,8 +416,8 @@ export default function SettingsScreen() {
         <View style={styles.row}>
           <ThemedText>Animations</ThemedText>
           <Switch
-            value={true}
-            onValueChange={() => {}}
+            value={animationsEnabled}
+            onValueChange={setAnimationsEnabled}
             trackColor={{ false: mutedForeground, true: accent }}
             thumbColor={Platform.OS === 'android' ? onAccent : undefined}
           />
@@ -423,8 +427,8 @@ export default function SettingsScreen() {
         <View style={styles.row}>
           <ThemedText>Auto-save Favorites</ThemedText>
           <Switch
-            value={true}
-            onValueChange={() => {}}
+            value={autoSaveFavorites}
+            onValueChange={setAutoSaveFavorites}
             trackColor={{ false: mutedForeground, true: accent }}
             thumbColor={Platform.OS === 'android' ? onAccent : undefined}
           />

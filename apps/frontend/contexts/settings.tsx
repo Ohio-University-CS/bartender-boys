@@ -22,6 +22,8 @@ type SettingsState = {
   homeBarName: string;
   bartenderBio: string;
   accentColor: AccentOption;
+  animationsEnabled: boolean;
+  autoSaveFavorites: boolean;
   pushNotifications: boolean;
   emailNotifications: boolean;
   notificationSound: boolean;
@@ -42,6 +44,8 @@ type SettingsState = {
   setHomeBarName: (value: string) => void;
   setBartenderBio: (value: string) => void;
   setAccentColor: (value: AccentOption) => void;
+  setAnimationsEnabled: (value: boolean) => void;
+  setAutoSaveFavorites: (value: boolean) => void;
   setPushNotifications: (value: boolean) => void;
   setEmailNotifications: (value: boolean) => void;
   setNotificationSound: (value: boolean) => void;
@@ -67,6 +71,8 @@ const PROFILE_PRONOUNS_KEY = 'settings.profilePronouns';
 const FAVORITE_SPIRIT_KEY = 'settings.favoriteSpirit';
 const HOME_BAR_NAME_KEY = 'settings.homeBarName';
 const BARTENDER_BIO_KEY = 'settings.bartenderBio';
+const ANIMATIONS_KEY = 'settings.animationsEnabled';
+const AUTO_SAVE_FAVORITES_KEY = 'settings.autoSaveFavorites';
 const PUSH_NOTIFICATIONS_KEY = 'settings.notifications.push';
 const EMAIL_NOTIFICATIONS_KEY = 'settings.notifications.email';
 const SOUND_NOTIFICATIONS_KEY = 'settings.notifications.sound';
@@ -89,6 +95,8 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const [homeBarName, setHomeBarNameState] = useState<string>('');
   const [bartenderBio, setBartenderBioState] = useState<string>('');
   const [accentColor, setAccentColorState] = useState<AccentOption>(DEFAULT_ACCENT);
+  const [animationsEnabled, setAnimationsEnabledState] = useState<boolean>(true);
+  const [autoSaveFavorites, setAutoSaveFavoritesState] = useState<boolean>(true);
   const [pushNotifications, setPushNotificationsState] = useState<boolean>(true);
   const [emailNotifications, setEmailNotificationsState] = useState<boolean>(false);
   const [notificationSound, setNotificationSoundState] = useState<boolean>(true);
@@ -115,6 +123,8 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
           homeBar,
           bio,
           accent,
+          animations,
+          autoSave,
           push,
           email,
           sound,
@@ -136,6 +146,8 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
           AsyncStorage.getItem(HOME_BAR_NAME_KEY),
           AsyncStorage.getItem(BARTENDER_BIO_KEY),
           AsyncStorage.getItem(ACCENT_KEY),
+          AsyncStorage.getItem(ANIMATIONS_KEY),
+          AsyncStorage.getItem(AUTO_SAVE_FAVORITES_KEY),
           AsyncStorage.getItem(PUSH_NOTIFICATIONS_KEY),
           AsyncStorage.getItem(EMAIL_NOTIFICATIONS_KEY),
           AsyncStorage.getItem(SOUND_NOTIFICATIONS_KEY),
@@ -159,6 +171,8 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
         if (typeof accent === 'string' && isAccentOption(accent)) {
           setAccentColorState(accent);
         }
+        if (animations === 'true' || animations === 'false') setAnimationsEnabledState(animations === 'true');
+        if (autoSave === 'true' || autoSave === 'false') setAutoSaveFavoritesState(autoSave === 'true');
         if (push === 'true' || push === 'false') setPushNotificationsState(push === 'true');
         if (email === 'true' || email === 'false') setEmailNotificationsState(email === 'true');
         if (sound === 'true' || sound === 'false') setNotificationSoundState(sound === 'true');
@@ -219,6 +233,12 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     AsyncStorage.setItem(ACCENT_KEY, accentColor).catch(() => {});
   }, [accentColor]);
   useEffect(() => {
+    AsyncStorage.setItem(ANIMATIONS_KEY, String(animationsEnabled)).catch(() => {});
+  }, [animationsEnabled]);
+  useEffect(() => {
+    AsyncStorage.setItem(AUTO_SAVE_FAVORITES_KEY, String(autoSaveFavorites)).catch(() => {});
+  }, [autoSaveFavorites]);
+  useEffect(() => {
     AsyncStorage.setItem(PUSH_NOTIFICATIONS_KEY, String(pushNotifications)).catch(() => {});
   }, [pushNotifications]);
   useEffect(() => {
@@ -253,6 +273,8 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     homeBarName,
     bartenderBio,
     accentColor,
+  animationsEnabled,
+  autoSaveFavorites,
     pushNotifications,
     emailNotifications,
     notificationSound,
@@ -273,6 +295,8 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     setHomeBarName: setHomeBarNameState,
     setBartenderBio: setBartenderBioState,
     setAccentColor: setAccentColorState,
+  setAnimationsEnabled: setAnimationsEnabledState,
+  setAutoSaveFavorites: setAutoSaveFavoritesState,
     setPushNotifications: setPushNotificationsState,
     setEmailNotifications: setEmailNotificationsState,
     setNotificationSound: setNotificationSoundState,
@@ -294,6 +318,8 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
       setHomeBarNameState('');
       setBartenderBioState('');
       setAccentColorState(DEFAULT_ACCENT);
+  setAnimationsEnabledState(true);
+  setAutoSaveFavoritesState(true);
       setPushNotificationsState(true);
       setEmailNotificationsState(false);
       setNotificationSoundState(true);
@@ -315,6 +341,8 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
         HOME_BAR_NAME_KEY,
         BARTENDER_BIO_KEY,
         ACCENT_KEY,
+  ANIMATIONS_KEY,
+  AUTO_SAVE_FAVORITES_KEY,
         PUSH_NOTIFICATIONS_KEY,
         EMAIL_NOTIFICATIONS_KEY,
         SOUND_NOTIFICATIONS_KEY,
@@ -340,6 +368,8 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     homeBarName,
     bartenderBio,
     accentColor,
+  animationsEnabled,
+  autoSaveFavorites,
     pushNotifications,
     emailNotifications,
     notificationSound,
