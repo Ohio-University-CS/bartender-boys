@@ -2,5 +2,9 @@
   "dependencies": {
     "expo": "^54.0.22",
     "expo-linear-gradient": "^15.0.7"
+  },
+  "devDependencies": {
+    "@types/react": "~19.1.10",
+    "typescript": "~5.9.2"
   }
 }
