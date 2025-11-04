@@ -5,6 +5,7 @@ from id_scanning.routes import router as id_scanning_router
 from chat.routes import router as chat_router
 from drinks.routes import router as drinks_router
 from realtime.routes import router as realtime_router
+from iot.routes import router as iot_router
 from settings import settings
 from services.db import connect_to_mongo, close_mongo_connection
 
@@ -40,6 +41,7 @@ app.include_router(id_scanning_router)
 app.include_router(chat_router)
 app.include_router(drinks_router)
 app.include_router(realtime_router)
+app.include_router(iot_router)
 
 @app.get("/")
 async def root():
