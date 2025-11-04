@@ -8,6 +8,8 @@ import { BartenderAvatar } from '@/components/BartenderAvatar';
 import { ThemedText } from '@/components/themed-text';
 import LiveAudioStream from 'react-native-live-audio-stream';
 import { useWebSocket } from '@/hooks/use-websocket';
+import { Audio } from 'expo-av';
+import * as FileSystem from 'expo-file-system/legacy';
 
 export default function BartenderScreen() {
   const router = useRouter();
@@ -17,6 +19,174 @@ export default function BartenderScreen() {
   
   // Generate a client ID for this session
   const clientIdRef = useRef<string>(`client-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`);
+  
+  // Convert PCM16 base64 data to WAV format
+  const convertPCM16ToWAV = useCallback((base64PCM: string): string => {
+    // Decode base64 to get PCM data
+    const binaryString = atob(base64PCM);
+    const pcmData = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      pcmData[i] = binaryString.charCodeAt(i);
+    }
+    
+    // WAV file parameters (matching OpenAI Realtime API specs)
+    const sampleRate = 24000;
+    const channels = 1; // mono
+    const bitsPerSample = 16;
+    const dataLength = pcmData.length;
+    const fileSize = 36 + dataLength; // 36 bytes header + data
+    
+    // Create WAV header
+    const header = new ArrayBuffer(44);
+    const view = new DataView(header);
+    
+    // RIFF header
+    view.setUint8(0, 0x52); // 'R'
+    view.setUint8(1, 0x49); // 'I'
+    view.setUint8(2, 0x46); // 'F'
+    view.setUint8(3, 0x46); // 'F'
+    view.setUint32(4, fileSize, true); // File size - 8
+    view.setUint8(8, 0x57); // 'W'
+    view.setUint8(9, 0x41); // 'A'
+    view.setUint8(10, 0x56); // 'V'
+    view.setUint8(11, 0x45); // 'E'
+    
+    // Format chunk
+    view.setUint8(12, 0x66); // 'f'
+    view.setUint8(13, 0x6D); // 'm'
+    view.setUint8(14, 0x74); // 't'
+    view.setUint8(15, 0x20); // ' '
+    view.setUint32(16, 16, true); // Format chunk size
+    view.setUint16(20, 1, true); // Audio format (1 = PCM)
+    view.setUint16(22, channels, true); // Number of channels
+    view.setUint32(24, sampleRate, true); // Sample rate
+    view.setUint32(28, sampleRate * channels * (bitsPerSample / 8), true); // Byte rate
+    view.setUint16(32, channels * (bitsPerSample / 8), true); // Block align
+    view.setUint16(34, bitsPerSample, true); // Bits per sample
+    
+    // Data chunk
+    view.setUint8(36, 0x64); // 'd'
+    view.setUint8(37, 0x61); // 'a'
+    view.setUint8(38, 0x74); // 't'
+    view.setUint8(39, 0x61); // 'a'
+    view.setUint32(40, dataLength, true); // Data size
+    
+    // Combine header and PCM data
+    const wavData = new Uint8Array(44 + dataLength);
+    wavData.set(new Uint8Array(header), 0);
+    wavData.set(pcmData, 44);
+    
+    // Convert to base64
+    let binary = '';
+    for (let i = 0; i < wavData.length; i++) {
+      binary += String.fromCharCode(wavData[i]);
+    }
+    return btoa(binary);
+  }, []);
+
+  // Handle incoming audio response and play it
+  const handleAudioResponseComplete = useCallback(async (base64Data: string) => {
+    try {
+      console.log('[bartender] Processing complete audio response, length:', base64Data.length);
+      
+      // Convert PCM16 to WAV format
+      const wavBase64 = convertPCM16ToWAV(base64Data);
+      
+      if (Platform.OS === 'web') {
+        // Web: Convert base64 to Blob and play using HTML5 Audio
+        const binaryString = atob(wavBase64);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        const blob = new Blob([bytes], { type: 'audio/wav' });
+        const audioUrl = URL.createObjectURL(blob);
+        
+        const audioElement = new window.Audio(audioUrl);
+        audioElement.onended = () => {
+          URL.revokeObjectURL(audioUrl);
+        };
+        audioElement.onerror = (error: string | Event) => {
+          console.error('[bartender] Error playing audio (web):', error);
+          URL.revokeObjectURL(audioUrl);
+        };
+        
+        await audioElement.play();
+        console.log('[bartender] Audio playback started (web)');
+      } else {
+        // Native: Save to file and play using expo-av
+        const fileName = `audio_${Date.now()}.wav`;
+        const cacheDir = FileSystem.cacheDirectory;
+        if (!cacheDir) {
+          throw new Error('Unable to get cache directory');
+        }
+        const fileUri = `${cacheDir}${fileName}`;
+        
+        // Write WAV data to file (FileSystem expects base64 string)
+        await FileSystem.writeAsStringAsync(fileUri, wavBase64, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        
+        console.log('[bartender] Audio file saved:', fileUri);
+        
+        // Unload previous sound if any
+        if (soundRef.current) {
+          await soundRef.current.unloadAsync();
+        }
+        
+        // Load and play the audio file
+        const { sound } = await Audio.Sound.createAsync(
+          { uri: fileUri },
+          { shouldPlay: true }
+        );
+        
+        soundRef.current = sound;
+        
+        sound.setOnPlaybackStatusUpdate((status) => {
+          if (status.isLoaded && status.didJustFinish) {
+            console.log('[bartender] Audio playback finished');
+            sound.unloadAsync().catch(console.error);
+            FileSystem.deleteAsync(fileUri, { idempotent: true }).catch(console.error);
+            soundRef.current = null;
+          }
+        });
+        
+        console.log('[bartender] Audio playback started (native)');
+      }
+    } catch (error) {
+      console.error('[bartender] Error handling audio response:', error);
+    }
+  }, [convertPCM16ToWAV]);
+  
+  // Handle WebSocket messages
+  const handleWebSocketMessage = useCallback((message: any) => {
+    if (message.type === 'response.audio.delta') {
+      // Collect audio delta chunks
+      if (message.delta && typeof message.delta === 'string') {
+        const responseId = message.response_id;
+        
+        // If this is a new response, reset the buffer
+        if (currentResponseIdRef.current !== responseId) {
+          audioResponseBufferRef.current = '';
+          currentResponseIdRef.current = responseId;
+        }
+        
+        // Append the delta to the buffer
+        audioResponseBufferRef.current += message.delta;
+        console.log('[bartender] Audio delta received, buffer size:', audioResponseBufferRef.current.length);
+      }
+    } else if (message.type === 'response.audio.done') {
+      // Audio stream is complete, process the full buffer
+      const completeBase64 = audioResponseBufferRef.current;
+      if (completeBase64) {
+        console.log('[bartender] Audio stream complete, processing buffer');
+        handleAudioResponseComplete(completeBase64);
+        // Reset buffer
+        audioResponseBufferRef.current = '';
+        currentResponseIdRef.current = null;
+      }
+    }
+  }, [handleAudioResponseComplete]);
   
   // WebSocket connection
   const { isConnected, sendMessage } = useWebSocket({
@@ -30,6 +200,7 @@ export default function BartenderScreen() {
     onError: (error) => {
       console.error('[bartender] WebSocket error:', error);
     },
+    onMessage: handleWebSocketMessage,
     autoConnect: true,
   });
   
@@ -43,6 +214,11 @@ export default function BartenderScreen() {
   // Audio item ID for tracking the conversation item
   const audioItemIdRef = useRef<string>(`audio-item-${Date.now()}`);
   const audioBufferCreatedRef = useRef<boolean>(false);
+  
+  // Audio response buffer for collecting incoming audio deltas
+  const audioResponseBufferRef = useRef<string>('');
+  const currentResponseIdRef = useRef<string | null>(null);
+  const soundRef = useRef<Audio.Sound | null>(null);
   
   // Create audio buffer item before sending chunks
   const createAudioBuffer = useCallback(() => {
@@ -138,6 +314,16 @@ export default function BartenderScreen() {
     };
   }, [isRecording]);
 
+  // Cleanup audio on unmount
+  useEffect(() => {
+    return () => {
+      if (soundRef.current) {
+        soundRef.current.unloadAsync().catch(console.error);
+        soundRef.current = null;
+      }
+    };
+  }, []);
+
   // Convert blob to base64
   const blobToBase64 = useCallback((blob: Blob): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -199,7 +385,15 @@ export default function BartenderScreen() {
       mediaRecorder.onerror = (event) => {
         console.error('[bartender] MediaRecorder error:', event);
         Alert.alert('Recording Error', 'An error occurred while recording audio.');
-        stopRecording();
+        setIsRecording(false);
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+          mediaRecorderRef.current.stop();
+        }
+        if (mediaStreamRef.current) {
+          mediaStreamRef.current.getTracks().forEach(track => track.stop());
+          mediaStreamRef.current = null;
+        }
+        mediaRecorderRef.current = null;
       };
 
       // Start recording with timeslice to get chunks every 250ms
