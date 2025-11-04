@@ -19,7 +19,7 @@ export default function BartenderScreen() {
   const clientIdRef = useRef<string>(`client-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`);
   
   // WebSocket connection
-  const { isConnected } = useWebSocket({
+  const { isConnected, sendMessage } = useWebSocket({
     clientId: clientIdRef.current,
     onConnect: () => {
       console.log('[bartender] WebSocket connected');
@@ -40,8 +40,61 @@ export default function BartenderScreen() {
   // Native-specific refs
   const audioStreamInitialized = useRef<boolean>(false);
   
-  // Base64 callback ref - this will be called with base64 chunks as they're recorded
-  const onAudioChunkRef = useRef<((base64: string) => void) | null>(null);
+  // Audio item ID for tracking the conversation item
+  const audioItemIdRef = useRef<string>(`audio-item-${Date.now()}`);
+  const audioBufferCreatedRef = useRef<boolean>(false);
+  
+  // Create audio buffer item before sending chunks
+  const createAudioBuffer = useCallback(() => {
+    if (!isConnected || audioBufferCreatedRef.current) {
+      return;
+    }
+    
+    try {
+      // Create a new audio buffer item using conversation.item.create
+      audioItemIdRef.current = `audio-item-${Date.now()}`;
+      sendMessage({
+        type: 'conversation.item.create',
+        item: {
+          type: 'input_audio_buffer',
+          audio_buffer: {
+            format: Platform.OS === 'web' ? 'opus' : 'pcm16',
+            sample_rate: 24000,
+            channels: 1,
+          },
+        },
+      });
+      audioBufferCreatedRef.current = true;
+      console.log('[bartender] Created audio buffer:', audioItemIdRef.current);
+    } catch (error) {
+      console.error('[bartender] Error creating audio buffer:', error);
+    }
+  }, [isConnected, sendMessage]);
+  
+  // Function to send audio chunk via WebSocket
+  const sendAudioChunk = useCallback((base64: string) => {
+    if (!isConnected) {
+      console.warn('[bartender] Cannot send audio chunk: WebSocket not connected');
+      return;
+    }
+    
+    // Create buffer if not already created (synchronously, don't wait)
+    if (!audioBufferCreatedRef.current) {
+      createAudioBuffer();
+      // Note: We'll send the chunk anyway - the backend should handle it
+      // In a real implementation, you might want to queue chunks
+    }
+    
+    try {
+      // Send audio chunk - OpenAI expects input_audio_buffer.append with 'audio' parameter
+      sendMessage({
+        type: 'input_audio_buffer.append',
+        audio: base64,
+      });
+    } catch (error) {
+      console.error('[bartender] Error sending audio chunk:', error);
+    }
+  }, [isConnected, sendMessage, createAudioBuffer]);
 
   // Theme colors
   const backgroundColor = useThemeColor({}, 'background');
@@ -127,8 +180,8 @@ export default function BartenderScreen() {
               base64Length: base64.length,
               timestamp: Date.now(),
             });
-            // Call the callback if provided
-            onAudioChunkRef.current?.(base64);
+            // Send audio chunk via WebSocket
+            sendAudioChunk(base64);
           } catch (error) {
             console.error('[bartender] Error converting chunk to base64:', error);
           }
@@ -160,7 +213,7 @@ export default function BartenderScreen() {
         error.message || 'Please allow microphone access to use voice features.'
       );
     }
-  }, [blobToBase64]);
+  }, [blobToBase64, sendAudioChunk]);
 
   // Native: Start recording with react-native-live-audio-stream
   const startRecordingNative = useCallback(() => {
@@ -186,8 +239,8 @@ export default function BartenderScreen() {
           firstChars: base64Data.substring(0, 50) + '...',
           timestamp: Date.now(),
         });
-        // Call the callback if provided
-        onAudioChunkRef.current?.(base64Data);
+        // Send audio chunk via WebSocket
+        sendAudioChunk(base64Data);
       };
 
       LiveAudioStream.on('data', handleAudioData);
@@ -203,7 +256,7 @@ export default function BartenderScreen() {
         error.message || 'Failed to start recording. Please try again.'
       );
     }
-  }, []);
+  }, [sendAudioChunk]);
 
   const startRecording = useCallback(() => {
     if (Platform.OS === 'web') {
@@ -218,6 +271,19 @@ export default function BartenderScreen() {
     if (!isRecording) return;
 
     setIsRecording(false);
+
+    // Commit the audio buffer if it was created
+    if (audioBufferCreatedRef.current && isConnected) {
+      try {
+        sendMessage({
+          type: 'input_audio_buffer.commit',
+        });
+        console.log('[bartender] Committed audio buffer');
+      } catch (error) {
+        console.error('[bartender] Error committing audio buffer:', error);
+      }
+      audioBufferCreatedRef.current = false;
+    }
 
     if (Platform.OS === 'web') {
       if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
@@ -237,7 +303,7 @@ export default function BartenderScreen() {
         console.error('[bartender] Error stopping recording (native):', error);
       }
     }
-  }, [isRecording]);
+  }, [isRecording, isConnected, sendMessage]);
 
   // Toggle recording
   const toggleRecording = useCallback(() => {
