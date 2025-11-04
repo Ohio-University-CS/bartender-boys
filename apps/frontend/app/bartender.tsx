@@ -20,20 +20,46 @@ export default function BartenderScreen() {
   // Generate a client ID for this session
   const clientIdRef = useRef<string>(`client-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`);
   
-  // Convert PCM16 base64 data to WAV format
+  // Convert PCM16 base64 data to WAV format with audio amplification
   const convertPCM16ToWAV = useCallback((base64PCM: string): string => {
     // Decode base64 to get PCM data
     const binaryString = atob(base64PCM);
-    const pcmData = new Uint8Array(binaryString.length);
+    const pcmBytes = new Uint8Array(binaryString.length);
     for (let i = 0; i < binaryString.length; i++) {
-      pcmData[i] = binaryString.charCodeAt(i);
+      pcmBytes[i] = binaryString.charCodeAt(i);
+    }
+    
+    // Amplify audio data (2.5x gain for louder volume)
+    const gainMultiplier = 10;
+    const numSamples = Math.floor(pcmBytes.length / 2);
+    const amplifiedBytes = new Uint8Array(pcmBytes.length);
+    const pcmView = new DataView(pcmBytes.buffer);
+    const amplifiedView = new DataView(amplifiedBytes.buffer);
+    
+    // Process 16-bit samples (little-endian)
+    for (let i = 0; i < numSamples; i++) {
+      const byteIndex = i * 2;
+      // Read 16-bit signed integer (little-endian)
+      const sample = pcmView.getInt16(byteIndex, true);
+      
+      // Apply gain and clamp to prevent clipping
+      let amplifiedSample = Math.round(sample * gainMultiplier);
+      amplifiedSample = Math.max(-32768, Math.min(32767, amplifiedSample));
+      
+      // Write back as 16-bit signed integer (little-endian)
+      amplifiedView.setInt16(byteIndex, amplifiedSample, true);
+    }
+    
+    // Copy any trailing bytes (shouldn't happen with 16-bit PCM, but handle it anyway)
+    if (pcmBytes.length % 2 !== 0) {
+      amplifiedBytes[pcmBytes.length - 1] = pcmBytes[pcmBytes.length - 1];
     }
     
     // WAV file parameters (matching OpenAI Realtime API specs)
     const sampleRate = 24000;
     const channels = 1; // mono
     const bitsPerSample = 16;
-    const dataLength = pcmData.length;
+    const dataLength = amplifiedBytes.length;
     const fileSize = 36 + dataLength; // 36 bytes header + data
     
     // Create WAV header
@@ -71,10 +97,10 @@ export default function BartenderScreen() {
     view.setUint8(39, 0x61); // 'a'
     view.setUint32(40, dataLength, true); // Data size
     
-    // Combine header and PCM data
+    // Combine header and amplified PCM data
     const wavData = new Uint8Array(44 + dataLength);
     wavData.set(new Uint8Array(header), 0);
-    wavData.set(pcmData, 44);
+    wavData.set(amplifiedBytes, 44);
     
     // Convert to base64
     let binary = '';
@@ -103,6 +129,7 @@ export default function BartenderScreen() {
         const audioUrl = URL.createObjectURL(blob);
         
         const audioElement = new window.Audio(audioUrl);
+        audioElement.volume = 1.0; // Set to maximum volume
         audioElement.onended = () => {
           URL.revokeObjectURL(audioUrl);
         };
@@ -137,7 +164,7 @@ export default function BartenderScreen() {
         // Load and play the audio file
         const { sound } = await Audio.Sound.createAsync(
           { uri: fileUri },
-          { shouldPlay: true }
+          { shouldPlay: true, volume: 1.0 } // Set to maximum volume
         );
         
         soundRef.current = sound;
