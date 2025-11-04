@@ -7,7 +7,6 @@ import { useSettings } from '@/contexts/settings';
 import { useRouter } from 'expo-router';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import Markdown from 'react-native-markdown-display';
-import { BartenderAvatar } from '@/components/BartenderAvatar';
 import { ThemedText } from '@/components/themed-text';
 // EventSource usage:
 // - Web: use native window.EventSource
@@ -59,8 +58,6 @@ export default function ChatScreen() {
   const aiBubbleBorder = useThemeColor({}, 'border');
   const bubbleText = useThemeColor({}, 'text');
   const placeholderColor = useThemeColor({}, 'placeholder');
-  const avatarBorder = useThemeColor({}, 'border');
-  const avatarBackground = useThemeColor({}, 'surface');
   const accent = useThemeColor({}, 'tint');
   const onAccent = useThemeColor({}, 'onTint');
 
@@ -276,9 +273,6 @@ export default function ChatScreen() {
   return (
     <View style={[styles.container, { backgroundColor, paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-  <View style={[styles.avatarContainer, { borderBottomColor: avatarBorder, backgroundColor: avatarBackground }]}> 
-          <BartenderAvatar isTalking={isTalking} backgroundColor={avatarBackground} />
-        </View>
         <FlatList
           data={messages}
           keyExtractor={(it) => it.id}
@@ -314,14 +308,6 @@ export default function ChatScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  avatarContainer: {
-    width: '100%',
-    paddingVertical: Platform.OS === 'web' ? 24 : 12,
-    paddingHorizontal: Platform.OS === 'web' ? 40 : 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderBottomWidth: 1,
-  },
   list: { padding: 12, paddingBottom: 120 },
   bubble: { maxWidth: '80%', padding: 10, borderRadius: 12, marginBottom: 8 },
   userBubble: { alignSelf: 'flex-end' },
