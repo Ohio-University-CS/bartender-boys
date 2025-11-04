@@ -5,14 +5,24 @@ This test verifies that clients can successfully connect to the WebSocket endpoi
 """
 import pytest
 import sys
+import importlib
 from pathlib import Path
+from unittest.mock import patch, AsyncMock
 from fastapi.testclient import TestClient
 
 # Add parent directory to path to import main
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
-def test_websocket_connection():
+@pytest.fixture(autouse=True)
+def mock_mongo():
+    """Mock MongoDB connection functions for all tests."""
+    with patch('services.db.connect_to_mongo', new_callable=AsyncMock) as mock_connect, \
+         patch('services.db.close_mongo_connection', new_callable=AsyncMock) as mock_close:
+        yield mock_connect, mock_close
+
+
+def test_websocket_connection(mock_mongo):
     """
     Test that a client can successfully connect to the WebSocket endpoint.
     
@@ -23,6 +33,9 @@ def test_websocket_connection():
     4. Verifies the client can send messages
     5. Verifies proper cleanup on disconnect
     """
+    # Import main after patching to ensure it uses the mocked functions
+    import main
+    importlib.reload(main)
     from main import app
     from services.websocket_service import websocket_manager
     
@@ -70,10 +83,13 @@ def test_websocket_connection():
         f"Client {client_id} should be disconnected after closing connection"
 
 
-def test_multiple_websocket_connections():
+def test_multiple_websocket_connections(mock_mongo):
     """
     Test that multiple clients can connect simultaneously.
     """
+    # Import main after patching to ensure it uses the mocked functions
+    import main
+    importlib.reload(main)
     from main import app
     from services.websocket_service import websocket_manager
     
@@ -115,10 +131,13 @@ def test_multiple_websocket_connections():
                 f"Client {client_id} should be disconnected"
 
 
-def test_websocket_reconnection_supersedes_old_connection():
+def test_websocket_reconnection_supersedes_old_connection(mock_mongo):
     """
     Test that a new connection from the same client_id supersedes the old one.
     """
+    # Import main after patching to ensure it uses the mocked functions
+    import main
+    importlib.reload(main)
     from main import app
     from services.websocket_service import websocket_manager
     
