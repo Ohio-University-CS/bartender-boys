@@ -196,17 +196,25 @@ export default function AuthScreen() {
             <Text style={styles.processingText}>Processing ID...</Text>
           </View>
         ) : (
-          <TouchableOpacity
-            style={[styles.captureButton, isCapturing && styles.captureButtonActive]}
-            onPress={onCapture}
-            disabled={isCapturing}
-          >
-            {isCapturing ? (
-              <ActivityIndicator color="#000" />
-            ) : (
-              <Text style={styles.captureText}>Capture ID</Text>
-            )}
-          </TouchableOpacity>
+          <>
+            <TouchableOpacity
+              style={[styles.captureButton, isCapturing && styles.captureButtonActive]}
+              onPress={onCapture}
+              disabled={isCapturing}
+            >
+              {isCapturing ? (
+                <ActivityIndicator color="#000" />
+              ) : (
+                <Text style={styles.captureText}>Capture ID</Text>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.skipButton}
+              onPress={onSkip}
+            >
+              <Text style={styles.skipButtonText}>Skip for now</Text>
+            </TouchableOpacity>
+          </>
         )}
       </View>
     </View>
@@ -301,6 +309,19 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '500',
+  },
+  skipButton: {
+    backgroundColor: 'transparent',
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#666',
+  },
+  skipButtonText: {
+    color: '#bbb',
+    fontWeight: '500',
+    fontSize: 16,
   },
 });
 

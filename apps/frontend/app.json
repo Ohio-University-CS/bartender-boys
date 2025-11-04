@@ -11,7 +11,8 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "NSCameraUsageDescription": "This app uses the camera to verify your ID."
+        "NSCameraUsageDescription": "This app uses the camera to verify your ID.",
+        "NSMicrophoneUsageDescription": "This app uses the microphone to record audio for voice conversations with the bartender."
       }
     },
     "android": {

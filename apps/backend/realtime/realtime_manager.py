@@ -17,17 +17,21 @@ from .models import (
     ErrorMessage, ErrorDetail
 )
 
+# Import WebSocket service
+from services.websocket_service import websocket_manager
+
 logger = logging.getLogger(__name__)
 
 class OpenAIRealtimeManager:
     def __init__(self):
-        self.active_connection: Optional[WebSocket] = None
         self.openai_websocket: Optional[websockets.WebSocketServerProtocol] = None
+        self.listener_task: Optional[asyncio.Task] = None
         self.current_token: Optional[str] = None
         self.token_expires_at: Optional[datetime] = None
         self.openai_api_key = os.getenv("OPENAI_API_KEY")
         self.openai_websocket_url = "wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-10-01"
         self.is_connected_to_openai = False
+        self.openai_lock = asyncio.Lock()
         
         if not self.openai_api_key:
             logger.warning("OPENAI_API_KEY not found in environment variables")
@@ -84,43 +88,63 @@ class OpenAIRealtimeManager:
             return False
         return datetime.now() < self.token_expires_at
     
-    async def connect_client(self, websocket: WebSocket, client_id: str):
-        """Connect a client to OpenAI Realtime API"""
-        if self.active_connection:
-            await websocket.close(code=1008, reason="Another client is already connected")
-            return
-        
-        await websocket.accept()
-        self.active_connection = websocket
-        
-        logger.info(f"Client {client_id} connected to OpenAI Realtime API")
-        
-        try:
-            # Connect to OpenAI Realtime API
-            await self.connect_to_openai_realtime(client_id)
+    async def handle_client_connection(self, websocket: WebSocket, client_id: str):
+        """
+        Handle a client WebSocket connection using the WebSocket service.
+        This method manages the entire connection lifecycle.
+        """
+        async def on_connect(connected_client_id: str):
+            """Callback when client connects"""
+            logger.info(f"Client {connected_client_id} connected to OpenAI Realtime API")
             
-            # Send connection confirmation using typed model
-            connection_msg = ConnectionEstablished(
-                client_id=client_id,
-                message="Connected to OpenAI Realtime API",
-                openai_connected=self.is_connected_to_openai
-            )
-            await self.send_to_client(connection_msg)
+            # Try to connect to OpenAI Realtime API - don't fail the connection if this fails
+            openai_connected = False
+            try:
+                await self.connect_to_openai_realtime(connected_client_id)
+                openai_connected = self.is_connected_to_openai
+                logger.info(f"OpenAI connection status for {connected_client_id}: {openai_connected}")
+            except HTTPException as e:
+                logger.error(f"Failed to connect to OpenAI for {connected_client_id}: {e.detail}")
+                openai_connected = False
+            except Exception as e:
+                logger.error(f"Unexpected error connecting to OpenAI for {connected_client_id}: {e}", exc_info=True)
+                openai_connected = False
             
-            # Handle messages from client
-            while True:
-                data = await websocket.receive_text()
-                message = json.loads(data)
-                await self.handle_client_message(message, client_id)
-                
-        except WebSocketDisconnect:
-            logger.info(f"Client {client_id} disconnected from OpenAI Realtime API")
-        except Exception as e:
-            logger.error(f"Error handling client {client_id}: {e}")
-        finally:
-            # Disconnect from OpenAI when client disconnects
-            await self.disconnect_from_openai()
-            self.active_connection = None
+            # Send connection confirmation regardless of OpenAI connection status
+            try:
+                connection_msg = ConnectionEstablished(
+                    client_id=connected_client_id,
+                    message="Connected to OpenAI Realtime API" if openai_connected else "Connected, but OpenAI connection failed",
+                    openai_connected=openai_connected
+                )
+                success = await websocket_manager.send_json(connected_client_id, connection_msg.dict())
+                if success:
+                    logger.info(f"Sent connection confirmation to {connected_client_id}")
+                else:
+                    logger.warning(f"Failed to send connection confirmation to {connected_client_id}")
+            except Exception as e:
+                logger.error(f"Exception sending connection confirmation to {connected_client_id}: {e}", exc_info=True)
+        
+        async def on_message(connected_client_id: str, message: Dict[str, Any]):
+            """Callback when client sends a message"""
+            await self.handle_client_message(message, connected_client_id)
+        
+        async def on_disconnect(connected_client_id: str):
+            """Callback when client disconnects"""
+            logger.info(f"Client {connected_client_id} disconnected from OpenAI Realtime API")
+            # Only disconnect from OpenAI if there are no more active clients
+            active_clients = websocket_manager.get_active_clients()
+            if not active_clients:
+                await self.disconnect_from_openai()
+        
+        # Use the WebSocket service to handle the connection lifecycle
+        await websocket_manager.handle_connection(
+            websocket=websocket,
+            client_id=client_id,
+            on_message=on_message,
+            on_connect=on_connect,
+            on_disconnect=on_disconnect
+        )
     
     async def handle_client_message(self, message: Dict[str, Any], client_id: str):
         """Handle messages from client using typed models"""
@@ -130,7 +154,7 @@ class OpenAIRealtimeManager:
             await self._handle_parsed_message(parsed_message, client_id)
         except Exception as e:
             logger.error(f"Error handling client message: {e}")
-            await self.send_error_to_client(f"Failed to process message: {str(e)}")
+            await self.send_error_to_client(f"Failed to process message: {str(e)}", client_id=client_id)
     
     def _parse_message(self, message: Dict[str, Any]) -> OpenAIMessage:
         """Parse a raw message into a typed model"""
@@ -160,13 +184,13 @@ class OpenAIRealtimeManager:
             message_type = message.type
         
         if message_type == "get_token":
-            await self._handle_get_token()
+            await self._handle_get_token(client_id)
         elif message_type == "conversation.item.create":
             await self.send_message_to_openai(message.dict())
         elif message_type == "response.create":
             await self.send_message_to_openai(message.dict())
         elif message_type == "function_call":
-            await self._handle_function_call(message)
+            await self._handle_function_call(message, client_id)
         else:
             # Forward other messages to OpenAI
             logger.info(f"Forwarding message to OpenAI: {message_type}")
@@ -175,7 +199,7 @@ class OpenAIRealtimeManager:
             else:
                 await self.send_message_to_openai(message.dict())
     
-    async def _handle_get_token(self):
+    async def _handle_get_token(self, client_id: str):
         """Handle get token request"""
         try:
             session_data = await self.get_ephemeral_token()
@@ -185,11 +209,11 @@ class OpenAIRealtimeManager:
                 model=session_data["model"],
                 voice=session_data["voice"]
             )
-            await self.send_to_client(token_response.dict())
+            await websocket_manager.send_json(client_id, token_response.dict())
         except Exception as e:
-            await self.send_error_to_client(f"Failed to get session: {str(e)}")
+            await self.send_error_to_client(f"Failed to get session: {str(e)}", client_id=client_id)
     
-    async def _handle_function_call(self, message):
+    async def _handle_function_call(self, message, client_id: str):
         """Handle function call"""
         function_name = message.function_name
         function_args = message.arguments
@@ -202,7 +226,7 @@ class OpenAIRealtimeManager:
             "function_name": function_name,
             "result": result
         }
-        await self.send_to_client(function_result)
+        await websocket_manager.send_json(client_id, function_result)
     
     async def process_function_call(self, function_name: str, arguments: Dict[str, Any]) -> Any:
         """Process function calls from OpenAI"""
@@ -236,21 +260,34 @@ class OpenAIRealtimeManager:
         else:
             return {"error": f"Unknown function: {function_name}"}
     
-    async def send_to_client(self, message: Union[Dict[str, Any], BaseModel]):
-        """Send message to connected client"""
-        if self.active_connection:
-            try:
-                if isinstance(message, BaseModel):
-                    message_dict = message.dict()
-                else:
-                    message_dict = message
-                await self.active_connection.send_text(json.dumps(message_dict))
-            except Exception as e:
-                logger.error(f"Error sending message to client: {e}")
-                self.active_connection = None
+    async def send_to_client(self, message: Union[Dict[str, Any], BaseModel], client_id: Optional[str] = None):
+        """
+        Send message to connected client(s).
+        
+        Args:
+            message: Message to send (dict or BaseModel)
+            client_id: Optional specific client ID. If None, sends to all active clients.
+        """
+        if isinstance(message, BaseModel):
+            message_dict = message.dict()
+        else:
+            message_dict = message
+        
+        if client_id:
+            # Send to specific client
+            await websocket_manager.send_json(client_id, message_dict)
+        else:
+            # Send to all active clients
+            active_clients = websocket_manager.get_active_clients()
+            if not active_clients:
+                logger.warning("No active clients to send message to")
+                return
+            
+            for cid in active_clients:
+                await websocket_manager.send_json(cid, message_dict)
     
-    async def send_error_to_client(self, error_message: str):
-        """Send error message to client"""
+    async def send_error_to_client(self, error_message: str, client_id: Optional[str] = None):
+        """Send error message to client(s)"""
         error = ErrorMessage(
             event_id=f"error_{datetime.now().strftime('%Y%m%d%H%M%S')}",
             error=ErrorDetail(
@@ -259,53 +296,70 @@ class OpenAIRealtimeManager:
                 message=error_message
             )
         )
-        await self.send_to_client(error)
+        await self.send_to_client(error, client_id=client_id)
     
     async def connect_to_openai_realtime(self, client_id: str) -> Dict[str, Any]:
         """
-        Connect to OpenAI Realtime API using WebSocket
+        Connect to OpenAI Realtime API using WebSocket.
+        Only one OpenAI connection is maintained at a time.
         """
-        if not self.openai_api_key:
-            logger.error("OpenAI API key not configured")
-            raise HTTPException(status_code=500, detail="OpenAI API key not configured")
-        
-        try:
-            # Connect to OpenAI's WebSocket endpoint
-            headers = {
-                "Authorization": f"Bearer {self.openai_api_key}",
-                "OpenAI-Beta": "realtime=v1"
-            }
+        async with self.openai_lock:
+            # If already connected, reuse the connection
+            if self.is_connected_to_openai and self.openai_websocket:
+                logger.info(f"Reusing existing OpenAI connection for client {client_id}")
+                return {
+                    "status": "connected",
+                    "client_id": client_id,
+                    "model": "gpt-4o-realtime-preview-2024-10-01",
+                    "openai_connected": True
+                }
             
-            logger.info(f"Connecting to OpenAI Realtime API for client {client_id}")
-            logger.info(f"WebSocket URL: {self.openai_websocket_url}")
-            logger.info(f"Headers: {headers}")
+            if not self.openai_api_key:
+                logger.error("OpenAI API key not configured")
+                raise HTTPException(status_code=500, detail="OpenAI API key not configured")
             
-            # Create WebSocket connection to OpenAI
-            self.openai_websocket = await websockets.connect(
-                self.openai_websocket_url,
-                extra_headers=headers,
-                ping_interval=20,
-                ping_timeout=10
-            )
-            
-            self.is_connected_to_openai = True
-            logger.info(f"Successfully connected to OpenAI Realtime API for client {client_id}")
-            
-            # Start listening for messages from OpenAI
-            asyncio.create_task(self.listen_to_openai_messages())
-            
-            return {
-                "status": "connected",
-                "client_id": client_id,
-                "model": "gpt-4o-realtime-preview-2024-10-01",
-                "openai_connected": True
-            }
-            
-        except Exception as e:
-            logger.error(f"Failed to connect to OpenAI Realtime API: {e}")
-            logger.error(f"Error type: {type(e)}")
-            self.is_connected_to_openai = False
-            raise HTTPException(status_code=500, detail=f"Failed to connect to OpenAI: {str(e)}")
+            try:
+                # Connect to OpenAI's WebSocket endpoint
+                headers = {
+                    "Authorization": f"Bearer {self.openai_api_key}",
+                    "OpenAI-Beta": "realtime=v1"
+                }
+                
+                logger.info(f"Connecting to OpenAI Realtime API for client {client_id}")
+                
+                # Create WebSocket connection to OpenAI
+                # websockets>=15 renamed parameter to additional_headers
+                header_items = [(k, v) for k, v in headers.items()]
+                self.openai_websocket = await websockets.connect(
+                    self.openai_websocket_url,
+                    additional_headers=header_items,
+                    ping_interval=20,
+                    ping_timeout=10
+                )
+                
+                self.is_connected_to_openai = True
+                logger.info(f"Successfully connected to OpenAI Realtime API for client {client_id}")
+                
+                # Start listening for messages from OpenAI (single listener guard)
+                if self.listener_task and not self.listener_task.done():
+                    try:
+                        self.listener_task.cancel()
+                    except Exception:
+                        pass
+                self.listener_task = asyncio.create_task(self.listen_to_openai_messages())
+                
+                return {
+                    "status": "connected",
+                    "client_id": client_id,
+                    "model": "gpt-4o-realtime-preview-2024-10-01",
+                    "openai_connected": True
+                }
+                
+            except Exception as e:
+                logger.error(f"Failed to connect to OpenAI Realtime API: {e}")
+                logger.error(f"Error type: {type(e)}")
+                self.is_connected_to_openai = False
+                raise HTTPException(status_code=500, detail=f"Failed to connect to OpenAI: {str(e)}")
     
     async def listen_to_openai_messages(self):
         """Listen for messages from OpenAI WebSocket"""
@@ -320,7 +374,7 @@ class OpenAIRealtimeManager:
                     # Handle session creation
                     if data.get("type") == "session.created":
                         logger.info("OpenAI session created successfully!")
-                        # Send session info to client using typed model
+                        # Send session info to all connected clients
                         session_notification = SessionCreatedNotification(
                             session_id=data["session"]["id"],
                             model=data["session"]["model"],
@@ -328,7 +382,7 @@ class OpenAIRealtimeManager:
                         )
                         await self.send_to_client(session_notification)
                     
-                    # Forward all messages to connected client
+                    # Forward all messages to all connected clients
                     await self.forward_openai_message_to_client(data)
                     
                 except json.JSONDecodeError as e:
@@ -347,12 +401,8 @@ class OpenAIRealtimeManager:
     
     async def forward_openai_message_to_client(self, message: Dict[str, Any]):
         """Forward OpenAI message to connected client"""
-        if self.active_connection:
-            try:
-                await self.active_connection.send_text(json.dumps(message))
-            except Exception as e:
-                logger.error(f"Error forwarding message to client: {e}")
-                self.active_connection = None
+        # Use the same safe sending method
+        await self.send_to_client(message)
     
     async def send_message_to_openai(self, message: Dict[str, Any]):
         """Send message to OpenAI WebSocket"""
@@ -380,11 +430,19 @@ class OpenAIRealtimeManager:
             finally:
                 self.openai_websocket = None
                 self.is_connected_to_openai = False
+        if self.listener_task and not self.listener_task.done():
+            try:
+                self.listener_task.cancel()
+            except Exception:
+                pass
+        self.listener_task = None
     
     def get_status(self) -> Dict[str, Any]:
         """Get current status of OpenAI Realtime connection"""
+        active_clients = websocket_manager.get_active_clients()
         return {
-            "has_active_connection": self.active_connection is not None,
+            "active_clients": active_clients,
+            "active_client_count": len(active_clients),
             "has_valid_token": self.is_token_valid(),
             "token_expires_at": self.token_expires_at.isoformat() if self.token_expires_at else None,
             "api_key_configured": bool(self.openai_api_key),
