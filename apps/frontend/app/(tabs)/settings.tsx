@@ -10,6 +10,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { useRouter } from 'expo-router';
 import Constants from 'expo-constants';
+import { API_BASE_URL } from '@/environment';
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -17,6 +18,8 @@ export default function SettingsScreen() {
   const {
     theme,
     setTheme,
+    apiBaseUrl,
+    setApiBaseUrl,
     displayName,
     setDisplayName,
     profilePronouns,
@@ -73,6 +76,7 @@ export default function SettingsScreen() {
   const [bioInput, setBioInput] = useState(bartenderBio);
   const [quietStartInput, setQuietStartInput] = useState(quietHoursStart);
   const [quietEndInput, setQuietEndInput] = useState(quietHoursEnd);
+  const [apiUrlInput, setApiUrlInput] = useState(apiBaseUrl || API_BASE_URL);
 
   useEffect(() => setNameInput(displayName), [displayName]);
   useEffect(() => setPronounsInput(profilePronouns), [profilePronouns]);
@@ -81,6 +85,7 @@ export default function SettingsScreen() {
   useEffect(() => setBioInput(bartenderBio), [bartenderBio]);
   useEffect(() => setQuietStartInput(quietHoursStart), [quietHoursStart]);
   useEffect(() => setQuietEndInput(quietHoursEnd), [quietHoursEnd]);
+  useEffect(() => setApiUrlInput(apiBaseUrl || API_BASE_URL), [apiBaseUrl]);
 
   const handleSaveProfile = () => {
     setDisplayName(nameInput.trim());
@@ -434,6 +439,53 @@ export default function SettingsScreen() {
           />
         </View>
         <ThemedText style={[styles.help, styles.helpInset]} colorName="muted">Automatically sync favorites across sessions</ThemedText>
+      </ThemedView>
+
+      <ThemedView colorName="surfaceElevated" style={[styles.section, { borderColor }]}> 
+        <ThemedText type="subtitle" colorName="tint" style={styles.sectionTitle}>Development</ThemedText>
+        <ThemedText style={styles.help} colorName="muted">Backend API URL (for development)</ThemedText>
+        <ThemedText style={[styles.help, styles.helpInset]} colorName="muted">
+          Current: {apiBaseUrl || API_BASE_URL}
+        </ThemedText>
+        <TextInput
+          placeholder={`http://${Platform.OS === 'ios' ? 'YOUR_MAC_IP' : 'localhost'}:8000`}
+          value={apiUrlInput}
+          onChangeText={setApiUrlInput}
+          style={[styles.input, { backgroundColor: inputBg, borderColor: inputBorder, color: textColor }]}
+          placeholderTextColor={placeholderColor}
+          autoCapitalize="none"
+          autoCorrect={false}
+          keyboardType="url"
+        />
+        <View style={styles.rowGap}>
+          <TouchableOpacity
+            style={[styles.button, { backgroundColor: accent }]}
+            onPress={() => {
+              const trimmed = apiUrlInput.trim();
+              if (trimmed) {
+                setApiBaseUrl(trimmed);
+                Alert.alert('Saved', 'API URL updated. Restart the app if connection issues persist.');
+              } else {
+                setApiBaseUrl('');
+                Alert.alert('Cleared', 'Using default API URL');
+              }
+            }}
+          >
+            <ThemedText style={styles.buttonText} colorName="onTint">Save API URL</ThemedText>
+          </TouchableOpacity>
+          {apiBaseUrl && (
+            <TouchableOpacity
+              style={[styles.button, styles.secondary, { backgroundColor: surface, borderColor: inputBorder }]}
+              onPress={() => {
+                setApiBaseUrl('');
+                setApiUrlInput(API_BASE_URL);
+                Alert.alert('Reset', 'Using default API URL');
+              }}
+            >
+              <ThemedText style={styles.secondaryText} colorName="tint">Reset to Default</ThemedText>
+            </TouchableOpacity>
+          )}
+        </View>
       </ThemedView>
 
       <ThemedView colorName="surfaceElevated" style={[styles.section, { borderColor }]}> 
