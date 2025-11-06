@@ -7,7 +7,6 @@ import { useSettings } from '@/contexts/settings';
 import { useRouter } from 'expo-router';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import Markdown from 'react-native-markdown-display';
-import { BartenderAvatar } from '@/components/BartenderAvatar';
 import { ThemedText } from '@/components/themed-text';
 // EventSource usage:
 // - Web: use native window.EventSource
@@ -25,7 +24,7 @@ export default function ChatScreen() {
     { id: 'welcome', role: 'assistant', content: "Hey! I'm your Bartender AI. Ask me for recipes, swaps, or pairing ideas." },
   ]);
   const [busy, setBusy] = useState(false);
-  const [isTalking, setIsTalking] = useState(false);
+  const [, setIsTalking] = useState(false);
   const talkingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const listRef = useRef<FlatList<ChatMsg> | null>(null);
 
@@ -60,8 +59,6 @@ export default function ChatScreen() {
   const aiBubbleBorder = useThemeColor({}, 'border');
   const bubbleText = useThemeColor({}, 'text');
   const placeholderColor = useThemeColor({}, 'placeholder');
-  const avatarBorder = useThemeColor({}, 'border');
-  const avatarBackground = useThemeColor({}, 'surface');
   const accent = useThemeColor({}, 'tint');
   const onAccent = useThemeColor({}, 'onTint');
 
@@ -282,12 +279,6 @@ export default function ChatScreen() {
     <View style={[styles.container, { backgroundColor, paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
       <KeyboardAvoidingView style={styles.keyboard} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <View style={styles.content}>
-          <View style={[styles.avatarContainer, { borderBottomColor: avatarBorder, backgroundColor: avatarBackground }]}>
-            <BartenderAvatar
-              isTalking={isTalking}
-              backgroundColor={avatarBackground}
-            />
-          </View>
           <FlatList
             ref={listRef}
             data={messages}
@@ -331,14 +322,6 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   keyboard: { flex: 1 },
   content: { flex: 1 },
-  avatarContainer: {
-    width: '100%',
-    paddingVertical: Platform.OS === 'web' ? 20 : 8,
-    paddingHorizontal: Platform.OS === 'web' ? 32 : 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderBottomWidth: 1,
-  },
   list: { flex: 1 },
   listContent: { paddingHorizontal: 12, paddingTop: 12, paddingBottom: 20 },
   bubble: { maxWidth: '80%', padding: 10, borderRadius: 12, marginBottom: 8 },
