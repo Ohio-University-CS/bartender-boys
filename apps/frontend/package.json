@@ -8,7 +8,9 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@expo/metro-runtime": "~6.1.2",
@@ -57,7 +59,8 @@
     "eslint": "^9.25.0",
     "eslint-config-expo": "~10.0.0",
     "expo-three": "^8.0.0",
-    "typescript": "~5.9.2"
+    "typescript": "~5.9.2",
+    "vitest": "^1.0.0"
   },
   "private": true
 }
