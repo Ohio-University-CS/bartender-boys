@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 
 
 class Drink(BaseModel):
@@ -31,7 +31,7 @@ class DispenseStep(BaseModel):
     pump: str = Field(..., description="Identifier of the pump to activate")
     seconds: float = Field(..., gt=0, le=15, description="How long to run the pump")
 
-    @validator("pump")
+    @field_validator("pump")
     def pump_must_not_be_empty(cls, value: str) -> str:  # noqa: D417 - pydantic validator signature
         if not value.strip():
             raise ValueError("pump must not be empty")
