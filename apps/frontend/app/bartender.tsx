@@ -8,7 +8,7 @@ import { BartenderAvatar } from '@/components/BartenderAvatar';
 import { ThemedText } from '@/components/themed-text';
 import LiveAudioStream from 'react-native-live-audio-stream';
 import { useWebSocket } from '@/hooks/use-websocket';
-import { Audio } from 'expo-av';
+import { Audio, InterruptionModeIOS } from 'expo-av';
 import * as FileSystem from 'expo-file-system/legacy';
 
 export default function BartenderScreen() {
@@ -20,7 +20,7 @@ export default function BartenderScreen() {
   // Generate a client ID for this session
   const clientIdRef = useRef<string>(`client-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`);
   
-  // Convert PCM16 base64 data to WAV format with audio amplification
+  // Convert PCM16 base64 data to WAV format
   const convertPCM16ToWAV = useCallback((base64PCM: string): string => {
     // Decode base64 to get PCM data
     const binaryString = atob(base64PCM);
@@ -29,37 +29,11 @@ export default function BartenderScreen() {
       pcmBytes[i] = binaryString.charCodeAt(i);
     }
     
-    // Amplify audio data (2.5x gain for louder volume)
-    const gainMultiplier = 10;
-    const numSamples = Math.floor(pcmBytes.length / 2);
-    const amplifiedBytes = new Uint8Array(pcmBytes.length);
-    const pcmView = new DataView(pcmBytes.buffer);
-    const amplifiedView = new DataView(amplifiedBytes.buffer);
-    
-    // Process 16-bit samples (little-endian)
-    for (let i = 0; i < numSamples; i++) {
-      const byteIndex = i * 2;
-      // Read 16-bit signed integer (little-endian)
-      const sample = pcmView.getInt16(byteIndex, true);
-      
-      // Apply gain and clamp to prevent clipping
-      let amplifiedSample = Math.round(sample * gainMultiplier);
-      amplifiedSample = Math.max(-32768, Math.min(32767, amplifiedSample));
-      
-      // Write back as 16-bit signed integer (little-endian)
-      amplifiedView.setInt16(byteIndex, amplifiedSample, true);
-    }
-    
-    // Copy any trailing bytes (shouldn't happen with 16-bit PCM, but handle it anyway)
-    if (pcmBytes.length % 2 !== 0) {
-      amplifiedBytes[pcmBytes.length - 1] = pcmBytes[pcmBytes.length - 1];
-    }
-    
     // WAV file parameters (matching OpenAI Realtime API specs)
     const sampleRate = 24000;
     const channels = 1; // mono
     const bitsPerSample = 16;
-    const dataLength = amplifiedBytes.length;
+    const dataLength = pcmBytes.length;
     const fileSize = 36 + dataLength; // 36 bytes header + data
     
     // Create WAV header
@@ -97,10 +71,10 @@ export default function BartenderScreen() {
     view.setUint8(39, 0x61); // 'a'
     view.setUint32(40, dataLength, true); // Data size
     
-    // Combine header and amplified PCM data
+    // Combine header and PCM data
     const wavData = new Uint8Array(44 + dataLength);
     wavData.set(new Uint8Array(header), 0);
-    wavData.set(amplifiedBytes, 44);
+    wavData.set(pcmBytes, 44);
     
     // Convert to base64
     let binary = '';
@@ -155,6 +129,20 @@ export default function BartenderScreen() {
         });
         
         console.log('[bartender] Audio file saved:', fileUri);
+
+        // Ensure iOS routes playback to speaker (Playback category)
+        try {
+          await Audio.setAudioModeAsync({
+            allowsRecordingIOS: false,
+            playsInSilentModeIOS: true,
+            staysActiveInBackground: false,
+            interruptionModeIOS: InterruptionModeIOS.DoNotMix,
+            shouldDuckAndroid: true,
+            playThroughEarpieceAndroid: false,
+          });
+        } catch (e) {
+          console.warn('[bartender] Failed to set audio mode for playback:', e);
+        }
         
         // Unload previous sound if any
         if (soundRef.current) {
@@ -439,6 +427,16 @@ export default function BartenderScreen() {
   // Native: Start recording with react-native-live-audio-stream
   const startRecordingNative = useCallback(() => {
     try {
+      // Configure audio for recording (iOS: PlayAndRecord)
+      Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+        staysActiveInBackground: false,
+        interruptionModeIOS: InterruptionModeIOS.DoNotMix,
+        shouldDuckAndroid: true,
+        playThroughEarpieceAndroid: false,
+      }).catch((e) => console.warn('[bartender] Failed to set audio mode for recording:', e));
+
       // Ensure audio stream is initialized
       if (!audioStreamInitialized.current) {
         const options = {
@@ -520,6 +518,15 @@ export default function BartenderScreen() {
       try {
         LiveAudioStream.stop();
         console.log('[bartender] Recording stopped (native)');
+        // Switch audio back to playback mode so responses use speaker
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: false,
+          playsInSilentModeIOS: true,
+          staysActiveInBackground: false,
+          interruptionModeIOS: InterruptionModeIOS.DoNotMix,
+          shouldDuckAndroid: true,
+          playThroughEarpieceAndroid: false,
+        });
       } catch (error) {
         console.error('[bartender] Error stopping recording (native):', error);
       }
