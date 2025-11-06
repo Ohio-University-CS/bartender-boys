@@ -133,6 +133,20 @@ def clean_extracted_data(data: Dict[str, Any]) -> Dict[str, Any]:
     if 'eye_color' in data and data['eye_color']:
         cleaned['eye_color'] = str(data['eye_color']).strip()
     
+    # Clean driver's license number (must start with VH)
+    # Accepts keys 'drivers_license_number' or common alternatives for resilience
+    dl_keys = ['drivers_license_number', 'driver_license_number', 'license_number', 'id_number']
+    dl_value = None
+    for key in dl_keys:
+        if key in data and data[key]:
+            dl_value = str(data[key])
+            break
+    if dl_value:
+        candidate = re.sub(r"\s+", "", dl_value).upper()
+        match = re.match(r'^VH[A-Z0-9]+', candidate)
+        if match:
+            cleaned['drivers_license_number'] = match.group(0)
+
     # Clean is_valid
     if 'is_valid' in data:
         if isinstance(data['is_valid'], bool):
