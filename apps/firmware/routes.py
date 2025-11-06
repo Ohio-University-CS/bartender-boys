@@ -39,6 +39,10 @@ class HardwareMapping(BaseModel):
     pumps: dict[str, int]
     flow_rates_ml_per_second: dict[str, float] | None = None
     defaults: dict[str, float] | None = None
+<<<<<<< Updated upstream
+=======
+    calibration: dict[str, dict[str, float | str]] | None = None
+>>>>>>> Stashed changes
 
 
 def load_hardware_mapping() -> HardwareMapping | None:
@@ -51,7 +55,11 @@ def load_hardware_mapping() -> HardwareMapping | None:
     try:
         data = json.loads(config_path.read_text(encoding="utf-8"))
         return HardwareMapping.model_validate(data)
+<<<<<<< Updated upstream
     except Exception as exc:  # Broad to capture JSON or validation errors
+=======
+    except Exception as exc:
+>>>>>>> Stashed changes
         logger.error("Failed to load hardware mapping: %s", exc)
         raise HTTPException(status_code=500, detail="Invalid hardware mapping configuration")
 
@@ -78,6 +86,11 @@ async def receive_drink_request(request: PourRequest) -> PourResponse:
     mapping = load_hardware_mapping()
     if mapping:
         logger.info("Loaded hardware mapping for pumps: %s", mapping.pumps)
+<<<<<<< Updated upstream
+=======
+        if mapping.defaults:
+            logger.info("Hardware defaults: %s", mapping.defaults)
+>>>>>>> Stashed changes
     else:
         logger.warning("No hardware mapping configured; operating in logging-only mode")
     
