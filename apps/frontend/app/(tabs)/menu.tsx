@@ -179,9 +179,12 @@ export default function MenuScreen() {
         </ScrollView>
       </ThemedView>
 
-      <ThemedView style={styles.filterSection}>
-        <View style={styles.toggleRow}>
-          <ThemedText style={styles.filterLabel} colorName="mutedForeground">
+      <ThemedView style={[styles.filterSection, Platform.OS === 'web' && styles.filterSectionWeb]}>
+        <View style={[styles.toggleRow, Platform.OS === 'web' && styles.toggleRowWeb]}>
+          <ThemedText
+            style={[styles.filterLabel, Platform.OS === 'web' && styles.filterLabelWeb]}
+            colorName="mutedForeground"
+          >
             Automation ready only
           </ThemedText>
           <Switch
@@ -189,17 +192,21 @@ export default function MenuScreen() {
             onValueChange={setHardwareOnly}
             thumbColor={hardwareOnly ? accent : '#ffffff'}
             trackColor={{ false: chipBorder, true: accent }}
+            style={Platform.OS === 'web' ? styles.switchWeb : undefined}
           />
         </View>
 
-        <ThemedText style={styles.filterLabel} colorName="mutedForeground">
+        <ThemedText
+          style={[styles.filterLabel, Platform.OS === 'web' && styles.filterLabelWeb]}
+          colorName="mutedForeground"
+        >
           Prep time
         </ThemedText>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.sortContent}
-          style={styles.filterScroll}
+          contentContainerStyle={[styles.sortContent, Platform.OS === 'web' && styles.sortContentWeb]}
+          style={[styles.filterScroll, Platform.OS === 'web' && styles.filterScrollWeb]}
         >
           {prepTimeOptions.map((option) => {
             const isActive = prepTimeFilter === option.key;
@@ -224,14 +231,17 @@ export default function MenuScreen() {
           })}
         </ScrollView>
 
-        <ThemedText style={styles.filterLabel} colorName="mutedForeground">
+        <ThemedText
+          style={[styles.filterLabel, Platform.OS === 'web' && styles.filterLabelWeb]}
+          colorName="mutedForeground"
+        >
           Ingredient count
         </ThemedText>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.sortContent}
-          style={styles.filterScroll}
+          contentContainerStyle={[styles.sortContent, Platform.OS === 'web' && styles.sortContentWeb]}
+          style={[styles.filterScroll, Platform.OS === 'web' && styles.filterScrollWeb]}
         >
           {ingredientCountOptions.map((option) => {
             const isActive = ingredientCountFilter === option.key;
@@ -257,11 +267,11 @@ export default function MenuScreen() {
         </ScrollView>
       </ThemedView>
 
-      <ThemedView style={styles.sortContainer}>
+      <ThemedView style={[styles.sortContainer, Platform.OS === 'web' && styles.sortContainerWeb]}>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.sortContent}
+          contentContainerStyle={[styles.sortContent, Platform.OS === 'web' && styles.sortContentWeb]}
         >
           {sortOptions.map((option) => {
             const isActive = sortBy === option.key;
@@ -402,28 +412,54 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     paddingHorizontal: 12,
   },
+  sortContainerWeb: {
+    alignItems: 'center',
+  },
   filterSection: {
     width: '100%',
     paddingHorizontal: 12,
     gap: 12,
     marginBottom: 12,
   },
+  filterSectionWeb: {
+    alignItems: 'center',
+  },
   filterLabel: {
     fontSize: 14,
     fontWeight: '600',
     marginBottom: 4,
   },
+  filterLabelWeb: {
+    textAlign: 'center',
+    alignSelf: 'center',
+  },
   filterScroll: {
     marginBottom: 4,
+  },
+  filterScrollWeb: {
+    alignSelf: 'center',
   },
   toggleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+  toggleRowWeb: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    alignSelf: 'center',
+  },
+  switchWeb: {
+    marginLeft: 12,
+  },
   sortContent: {
     gap: 8,
     paddingHorizontal: 4,
+  },
+  sortContentWeb: {
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   sortButton: {
     paddingHorizontal: 12,
