@@ -1,7 +1,10 @@
+import json
 import logging
-from fastapi import APIRouter
-from pydantic import BaseModel
+from pathlib import Path
 from typing import Literal
+
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +33,29 @@ class PourResponse(BaseModel):
     message: str
 
 
+class HardwareMapping(BaseModel):
+    """Mapping between logical components and physical GPIO pins."""
+
+    pumps: dict[str, int]
+    flow_rates_ml_per_second: dict[str, float] | None = None
+    defaults: dict[str, float] | None = None
+
+
+def load_hardware_mapping() -> HardwareMapping | None:
+    """Load the Raspberry Pi hardware mapping if present."""
+    config_path = Path(__file__).resolve().parent.parent / "backend" / "config" / "pi_mapping.json"
+    if not config_path.exists():
+        logger.info("Hardware mapping file not found at %s", config_path)
+        return None
+
+    try:
+        data = json.loads(config_path.read_text(encoding="utf-8"))
+        return HardwareMapping.model_validate(data)
+    except Exception as exc:  # Broad to capture JSON or validation errors
+        logger.error("Failed to load hardware mapping: %s", exc)
+        raise HTTPException(status_code=500, detail="Invalid hardware mapping configuration")
+
+
 @router.post("/drink", response_model=PourResponse)
 async def receive_drink_request(request: PourRequest) -> PourResponse:
     """
@@ -48,6 +74,12 @@ async def receive_drink_request(request: PourRequest) -> PourResponse:
     logger.info(f"Ingredients: {', '.join(drink.ingredients)}")
     logger.info(f"Instructions: {drink.instructions}")
     logger.info(f"Prep time: {drink.prepTime}")
+
+    mapping = load_hardware_mapping()
+    if mapping:
+        logger.info("Loaded hardware mapping for pumps: %s", mapping.pumps)
+    else:
+        logger.warning("No hardware mapping configured; operating in logging-only mode")
     
     return PourResponse(
         status="ok",
