@@ -208,8 +208,11 @@ export default function AuthScreen() {
                 <Text style={styles.captureText}>Capture ID</Text>
               )}
             </TouchableOpacity>
-            <TouchableOpacity style={styles.secondaryButton} onPress={onSkip}>
-              <Text style={styles.secondaryButtonText}>Skip for now</Text>
+            <TouchableOpacity
+              style={styles.skipButton}
+              onPress={onSkip}
+            >
+              <Text style={styles.skipButtonText}>Skip for now</Text>
             </TouchableOpacity>
           </>
         )}
@@ -284,15 +287,6 @@ const styles = StyleSheet.create({
     color: '#000',
     fontWeight: '600',
   },
-  secondaryButton: {
-    alignSelf: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-  },
-  secondaryButtonText: {
-    color: '#FFA500',
-    fontSize: 16,
-  },
   captureButton: {
     backgroundColor: '#FFA500',
     borderRadius: 12,
@@ -315,6 +309,19 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '500',
+  },
+  skipButton: {
+    backgroundColor: 'transparent',
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#666',
+  },
+  skipButtonText: {
+    color: '#bbb',
+    fontWeight: '500',
+    fontSize: 16,
   },
 });
 

@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useMemo, useState } from '
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { IS_PROD } from '@/environment';
 import { logger } from '@/utils/logger';
+import { DEFAULT_ACCENT, isAccentOption, type AccentOption } from '@/constants/theme';
 
 type ThemePref = 'system' | 'light' | 'dark';
 
@@ -20,8 +21,16 @@ type SettingsState = {
   favoriteSpirit: string;
   homeBarName: string;
   bartenderBio: string;
-  defaultMenuCategory: string; // e.g., All, Cocktail, etc.
-  defaultShowFavorites: boolean; // show only favorites on menu by default
+  accentColor: AccentOption;
+  animationsEnabled: boolean;
+  autoSaveFavorites: boolean;
+  pushNotifications: boolean;
+  emailNotifications: boolean;
+  notificationSound: boolean;
+  notificationVibration: boolean;
+  quietHoursEnabled: boolean;
+  quietHoursStart: string;
+  quietHoursEnd: string;
   setTheme: (t: ThemePref) => void;
   setApiBaseUrl: (url: string) => void;
   setHapticsEnabled: (v: boolean) => void;
@@ -34,8 +43,16 @@ type SettingsState = {
   setFavoriteSpirit: (value: string) => void;
   setHomeBarName: (value: string) => void;
   setBartenderBio: (value: string) => void;
-  setDefaultMenuCategory: (cat: string) => void;
-  setDefaultShowFavorites: (v: boolean) => void;
+  setAccentColor: (value: AccentOption) => void;
+  setAnimationsEnabled: (value: boolean) => void;
+  setAutoSaveFavorites: (value: boolean) => void;
+  setPushNotifications: (value: boolean) => void;
+  setEmailNotifications: (value: boolean) => void;
+  setNotificationSound: (value: boolean) => void;
+  setNotificationVibration: (value: boolean) => void;
+  setQuietHoursEnabled: (value: boolean) => void;
+  setQuietHoursStart: (value: string) => void;
+  setQuietHoursEnd: (value: string) => void;
   reset: () => void;
 };
 
@@ -49,12 +66,20 @@ const LOGS_KEY = 'settings.debugLogs';
 const PHOTO_WIDTH_KEY = 'settings.idPhotoWidth';
 const TIMEOUT_KEY = 'settings.scanTimeoutMs';
 const DISPLAY_NAME_KEY = 'settings.displayName';
-const DEFAULT_MENU_CATEGORY_KEY = 'settings.defaultMenuCategory';
-const DEFAULT_SHOW_FAVORITES_KEY = 'settings.defaultShowFavorites';
+const ACCENT_KEY = 'settings.accentColor';
 const PROFILE_PRONOUNS_KEY = 'settings.profilePronouns';
 const FAVORITE_SPIRIT_KEY = 'settings.favoriteSpirit';
 const HOME_BAR_NAME_KEY = 'settings.homeBarName';
 const BARTENDER_BIO_KEY = 'settings.bartenderBio';
+const ANIMATIONS_KEY = 'settings.animationsEnabled';
+const AUTO_SAVE_FAVORITES_KEY = 'settings.autoSaveFavorites';
+const PUSH_NOTIFICATIONS_KEY = 'settings.notifications.push';
+const EMAIL_NOTIFICATIONS_KEY = 'settings.notifications.email';
+const SOUND_NOTIFICATIONS_KEY = 'settings.notifications.sound';
+const VIBRATION_NOTIFICATIONS_KEY = 'settings.notifications.vibration';
+const QUIET_HOURS_ENABLED_KEY = 'settings.notifications.quietHoursEnabled';
+const QUIET_HOURS_START_KEY = 'settings.notifications.quietHoursStart';
+const QUIET_HOURS_END_KEY = 'settings.notifications.quietHoursEnd';
 
 export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = useState<ThemePref>('dark');
@@ -69,14 +94,45 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const [favoriteSpirit, setFavoriteSpiritState] = useState<string>('');
   const [homeBarName, setHomeBarNameState] = useState<string>('');
   const [bartenderBio, setBartenderBioState] = useState<string>('');
-  const [defaultMenuCategory, setDefaultMenuCategoryState] = useState<string>('All');
-  const [defaultShowFavorites, setDefaultShowFavoritesState] = useState<boolean>(false);
+  const [accentColor, setAccentColorState] = useState<AccentOption>(DEFAULT_ACCENT);
+  const [animationsEnabled, setAnimationsEnabledState] = useState<boolean>(true);
+  const [autoSaveFavorites, setAutoSaveFavoritesState] = useState<boolean>(true);
+  const [pushNotifications, setPushNotificationsState] = useState<boolean>(true);
+  const [emailNotifications, setEmailNotificationsState] = useState<boolean>(false);
+  const [notificationSound, setNotificationSoundState] = useState<boolean>(true);
+  const [notificationVibration, setNotificationVibrationState] = useState<boolean>(true);
+  const [quietHoursEnabled, setQuietHoursEnabledState] = useState<boolean>(false);
+  const [quietHoursStart, setQuietHoursStartState] = useState<string>('22:00');
+  const [quietHoursEnd, setQuietHoursEndState] = useState<string>('06:00');
 
   // load on mount
   useEffect(() => {
     (async () => {
       try {
-        const [t, url, h, hs, d, w, to, dn, pronouns, spirit, homeBar, bio, dmc, dsf] = await Promise.all([
+        const [
+          t,
+          url,
+          h,
+          hs,
+          d,
+          w,
+          to,
+          dn,
+          pronouns,
+          spirit,
+          homeBar,
+          bio,
+          accent,
+          animations,
+          autoSave,
+          push,
+          email,
+          sound,
+          vibration,
+          quietEnabled,
+          quietStart,
+          quietEnd,
+        ] = await Promise.all([
           AsyncStorage.getItem(THEME_KEY),
           AsyncStorage.getItem(API_KEY),
           AsyncStorage.getItem(HAPTICS_KEY),
@@ -89,8 +145,16 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
           AsyncStorage.getItem(FAVORITE_SPIRIT_KEY),
           AsyncStorage.getItem(HOME_BAR_NAME_KEY),
           AsyncStorage.getItem(BARTENDER_BIO_KEY),
-          AsyncStorage.getItem(DEFAULT_MENU_CATEGORY_KEY),
-          AsyncStorage.getItem(DEFAULT_SHOW_FAVORITES_KEY),
+          AsyncStorage.getItem(ACCENT_KEY),
+          AsyncStorage.getItem(ANIMATIONS_KEY),
+          AsyncStorage.getItem(AUTO_SAVE_FAVORITES_KEY),
+          AsyncStorage.getItem(PUSH_NOTIFICATIONS_KEY),
+          AsyncStorage.getItem(EMAIL_NOTIFICATIONS_KEY),
+          AsyncStorage.getItem(SOUND_NOTIFICATIONS_KEY),
+          AsyncStorage.getItem(VIBRATION_NOTIFICATIONS_KEY),
+          AsyncStorage.getItem(QUIET_HOURS_ENABLED_KEY),
+          AsyncStorage.getItem(QUIET_HOURS_START_KEY),
+          AsyncStorage.getItem(QUIET_HOURS_END_KEY),
         ]);
         if (t === 'light' || t === 'dark' || t === 'system') setThemeState(t);
         if (url) setApiBaseUrlState(url);
@@ -104,8 +168,18 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
         if (typeof spirit === 'string') setFavoriteSpiritState(spirit);
         if (typeof homeBar === 'string') setHomeBarNameState(homeBar);
         if (typeof bio === 'string') setBartenderBioState(bio);
-        if (typeof dmc === 'string' && dmc.length) setDefaultMenuCategoryState(dmc);
-        if (dsf === 'true' || dsf === 'false') setDefaultShowFavoritesState(dsf === 'true');
+        if (typeof accent === 'string' && isAccentOption(accent)) {
+          setAccentColorState(accent);
+        }
+        if (animations === 'true' || animations === 'false') setAnimationsEnabledState(animations === 'true');
+        if (autoSave === 'true' || autoSave === 'false') setAutoSaveFavoritesState(autoSave === 'true');
+        if (push === 'true' || push === 'false') setPushNotificationsState(push === 'true');
+        if (email === 'true' || email === 'false') setEmailNotificationsState(email === 'true');
+        if (sound === 'true' || sound === 'false') setNotificationSoundState(sound === 'true');
+        if (vibration === 'true' || vibration === 'false') setNotificationVibrationState(vibration === 'true');
+        if (quietEnabled === 'true' || quietEnabled === 'false') setQuietHoursEnabledState(quietEnabled === 'true');
+        if (typeof quietStart === 'string' && quietStart.length > 0) setQuietHoursStartState(quietStart);
+        if (typeof quietEnd === 'string' && quietEnd.length > 0) setQuietHoursEndState(quietEnd);
       } catch {}
     })();
   }, []);
@@ -156,12 +230,35 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     else AsyncStorage.removeItem(BARTENDER_BIO_KEY).catch(() => {});
   }, [bartenderBio]);
   useEffect(() => {
-    AsyncStorage.setItem(DEFAULT_MENU_CATEGORY_KEY, defaultMenuCategory).catch(() => {});
-  }, [defaultMenuCategory]);
+    AsyncStorage.setItem(ACCENT_KEY, accentColor).catch(() => {});
+  }, [accentColor]);
   useEffect(() => {
-    AsyncStorage.setItem(DEFAULT_SHOW_FAVORITES_KEY, String(defaultShowFavorites)).catch(() => {});
-  }, [defaultShowFavorites]);
-
+    AsyncStorage.setItem(ANIMATIONS_KEY, String(animationsEnabled)).catch(() => {});
+  }, [animationsEnabled]);
+  useEffect(() => {
+    AsyncStorage.setItem(AUTO_SAVE_FAVORITES_KEY, String(autoSaveFavorites)).catch(() => {});
+  }, [autoSaveFavorites]);
+  useEffect(() => {
+    AsyncStorage.setItem(PUSH_NOTIFICATIONS_KEY, String(pushNotifications)).catch(() => {});
+  }, [pushNotifications]);
+  useEffect(() => {
+    AsyncStorage.setItem(EMAIL_NOTIFICATIONS_KEY, String(emailNotifications)).catch(() => {});
+  }, [emailNotifications]);
+  useEffect(() => {
+    AsyncStorage.setItem(SOUND_NOTIFICATIONS_KEY, String(notificationSound)).catch(() => {});
+  }, [notificationSound]);
+  useEffect(() => {
+    AsyncStorage.setItem(VIBRATION_NOTIFICATIONS_KEY, String(notificationVibration)).catch(() => {});
+  }, [notificationVibration]);
+  useEffect(() => {
+    AsyncStorage.setItem(QUIET_HOURS_ENABLED_KEY, String(quietHoursEnabled)).catch(() => {});
+  }, [quietHoursEnabled]);
+  useEffect(() => {
+    AsyncStorage.setItem(QUIET_HOURS_START_KEY, quietHoursStart).catch(() => {});
+  }, [quietHoursStart]);
+  useEffect(() => {
+    AsyncStorage.setItem(QUIET_HOURS_END_KEY, quietHoursEnd).catch(() => {});
+  }, [quietHoursEnd]);
   const value = useMemo<SettingsState>(() => ({
     theme,
     apiBaseUrl,
@@ -175,8 +272,16 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     favoriteSpirit,
     homeBarName,
     bartenderBio,
-    defaultMenuCategory,
-    defaultShowFavorites,
+    accentColor,
+  animationsEnabled,
+  autoSaveFavorites,
+    pushNotifications,
+    emailNotifications,
+    notificationSound,
+    notificationVibration,
+    quietHoursEnabled,
+    quietHoursStart,
+    quietHoursEnd,
     setTheme: setThemeState,
     setApiBaseUrl: setApiBaseUrlState,
     setHapticsEnabled: setHapticsEnabledState,
@@ -189,8 +294,16 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     setFavoriteSpirit: setFavoriteSpiritState,
     setHomeBarName: setHomeBarNameState,
     setBartenderBio: setBartenderBioState,
-    setDefaultMenuCategory: setDefaultMenuCategoryState,
-    setDefaultShowFavorites: setDefaultShowFavoritesState,
+    setAccentColor: setAccentColorState,
+  setAnimationsEnabled: setAnimationsEnabledState,
+  setAutoSaveFavorites: setAutoSaveFavoritesState,
+    setPushNotifications: setPushNotificationsState,
+    setEmailNotifications: setEmailNotificationsState,
+    setNotificationSound: setNotificationSoundState,
+    setNotificationVibration: setNotificationVibrationState,
+    setQuietHoursEnabled: setQuietHoursEnabledState,
+    setQuietHoursStart: setQuietHoursStartState,
+    setQuietHoursEnd: setQuietHoursEndState,
     reset: () => {
       setThemeState('dark');
       setApiBaseUrlState('');
@@ -204,8 +317,16 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
       setFavoriteSpiritState('');
       setHomeBarNameState('');
       setBartenderBioState('');
-      setDefaultMenuCategoryState('All');
-      setDefaultShowFavoritesState(false);
+      setAccentColorState(DEFAULT_ACCENT);
+  setAnimationsEnabledState(true);
+  setAutoSaveFavoritesState(true);
+      setPushNotificationsState(true);
+      setEmailNotificationsState(false);
+      setNotificationSoundState(true);
+      setNotificationVibrationState(true);
+      setQuietHoursEnabledState(false);
+      setQuietHoursStartState('22:00');
+      setQuietHoursEndState('06:00');
       AsyncStorage.multiRemove([
         THEME_KEY,
         API_KEY,
@@ -219,13 +340,44 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
         FAVORITE_SPIRIT_KEY,
         HOME_BAR_NAME_KEY,
         BARTENDER_BIO_KEY,
-        DEFAULT_MENU_CATEGORY_KEY,
-        DEFAULT_SHOW_FAVORITES_KEY,
+        ACCENT_KEY,
+  ANIMATIONS_KEY,
+  AUTO_SAVE_FAVORITES_KEY,
+        PUSH_NOTIFICATIONS_KEY,
+        EMAIL_NOTIFICATIONS_KEY,
+        SOUND_NOTIFICATIONS_KEY,
+        VIBRATION_NOTIFICATIONS_KEY,
+        QUIET_HOURS_ENABLED_KEY,
+        QUIET_HOURS_START_KEY,
+        QUIET_HOURS_END_KEY,
       ]).catch(() => {});
       // Ensure logger follows reset
       logger.setEnabled(!IS_PROD && (!IS_PROD));
     },
-  }), [theme, apiBaseUrl, hapticsEnabled, hapticStrength, debugLogs, idPhotoWidth, scanTimeoutMs, displayName, profilePronouns, favoriteSpirit, homeBarName, bartenderBio, defaultMenuCategory, defaultShowFavorites]);
+  }), [
+    theme,
+    apiBaseUrl,
+    hapticsEnabled,
+    hapticStrength,
+    debugLogs,
+    idPhotoWidth,
+    scanTimeoutMs,
+    displayName,
+    profilePronouns,
+    favoriteSpirit,
+    homeBarName,
+    bartenderBio,
+    accentColor,
+  animationsEnabled,
+  autoSaveFavorites,
+    pushNotifications,
+    emailNotifications,
+    notificationSound,
+    notificationVibration,
+    quietHoursEnabled,
+    quietHoursStart,
+    quietHoursEnd,
+  ]);
 
   return (
     <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>
