@@ -5,6 +5,7 @@ import { Asset } from 'expo-asset';
 import * as THREE from 'three';
 import { Renderer } from 'expo-three';
 import { loadAsync as loadModelAsync } from 'expo-three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 import { useThemeColor } from '@/hooks/use-theme-color';
@@ -146,7 +147,17 @@ export function BartenderAvatar({
       console.log('[BartenderAvatar] resolved asset metadata', asset);
       await asset.downloadAsync();
 
-      const gltf = (await loadModelAsync(asset)) as GLTF;
+      let gltf: GLTF;
+      if (Platform.OS === 'web') {
+        const uri = asset.localUri ?? asset.uri;
+        if (!uri) {
+          throw new Error('Unable to resolve model URI');
+        }
+        const loader = new GLTFLoader();
+        gltf = (await loader.loadAsync(uri)) as GLTF;
+      } else {
+        gltf = (await loadModelAsync(asset)) as GLTF;
+      }
       if (!gltf) {
         throw new Error('GLTF result missing');
       }
@@ -350,9 +361,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   container: {
-    width: Platform.OS === 'web' ? '100%' : '85%', // Smaller on mobile to prevent cutoff
-    aspectRatio: 1, // Square container for circular appearance
-    maxWidth: Platform.OS === 'web' ? '100%' : 280, // Max size limit on mobile
+  width: Platform.OS === 'web' ? '70%' : '65%', // Reduce overall footprint for more chat space
+  aspectRatio: 1, // Square container for circular appearance
+  maxWidth: Platform.OS === 'web' ? 360 : 210, // Reduce max size for more vertical room
     backgroundColor: 'transparent',
     borderRadius: 9999, // Fully circular
     overflow: 'hidden',
