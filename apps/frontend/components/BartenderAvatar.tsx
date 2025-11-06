@@ -4,7 +4,7 @@ import { GLView } from 'expo-gl';
 import { Asset } from 'expo-asset';
 import * as THREE from 'three';
 import { Renderer } from 'expo-three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { loadAsync as loadModelAsync } from 'expo-three';
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 import { useThemeColor } from '@/hooks/use-theme-color';
@@ -18,7 +18,7 @@ type BartenderAvatarProps = {
   backgroundColor?: string;
 };
 
-const DEFAULT_MODEL = require('../assets/models/luiz-h-c-nobre/source/model (10).glb');
+const DEFAULT_MODEL = require('../assets/models/luiz-h-c-nobre/source/bartender.glb');
 
 /**
  * 3D Bartender Avatar Component
@@ -144,23 +144,12 @@ export function BartenderAvatar({
     try {
       const asset = Asset.fromModule(moduleRef);
       console.log('[BartenderAvatar] resolved asset metadata', asset);
-      if (Platform.OS !== 'web') {
-        await asset.downloadAsync();
-      }
-      const uri = asset.localUri ?? asset.uri;
-      if (!uri) {
-        throw new Error('Unable to resolve model URI');
-      }
-      console.log('[BartenderAvatar] asset uri', uri, 'local?', asset.localUri);
+      await asset.downloadAsync();
 
-      const loader = new GLTFLoader();
-      if (asset.localUri) {
-        const resourcePath = asset.localUri.replace(/[^/]*$/, '');
-        loader.setResourcePath(resourcePath);
-        loader.setPath(resourcePath);
+      const gltf = (await loadModelAsync(asset)) as GLTF;
+      if (!gltf) {
+        throw new Error('GLTF result missing');
       }
-
-      const gltf: GLTF = await loader.loadAsync(uri);
       if (!sceneRef.current || !gltf.scene) {
         throw new Error('Model scene missing');
       }
