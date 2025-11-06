@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { StyleSheet, ScrollView, TouchableOpacity, TextInput, View, Platform } from 'react-native';
+import { StyleSheet, ScrollView, TouchableOpacity, TextInput, View, Platform, Switch } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -18,10 +18,12 @@ export default function MenuScreen() {
   const insets = useSafeAreaInsets();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
-  const showFavoritesOnly = false;
+  const [hardwareOnly, setHardwareOnly] = useState(false);
   const { isFavorite, toggleFavorite } = useFavorites();
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [sortBy, setSortBy] = useState<SortOption>('difficulty');
+  const [prepTimeFilter, setPrepTimeFilter] = useState<'any' | 'under5' | 'under10' | 'under15'>('any');
+  const [ingredientCountFilter, setIngredientCountFilter] = useState<'any' | 'under4' | 'under6' | 'under8'>('any');
 
   // Theme colors
   const backgroundColor = useThemeColor({}, 'background');
@@ -51,6 +53,18 @@ export default function MenuScreen() {
     { key: 'name', label: 'A-Z' },
     { key: 'prepTime', label: 'Prep Time' },
   ];
+  const prepTimeOptions: { key: typeof prepTimeFilter; label: string; maxMinutes?: number }[] = [
+    { key: 'any', label: 'Any Time' },
+    { key: 'under5', label: '≤ 5 min', maxMinutes: 5 },
+    { key: 'under10', label: '≤ 10 min', maxMinutes: 10 },
+    { key: 'under15', label: '≤ 15 min', maxMinutes: 15 },
+  ];
+  const ingredientCountOptions: { key: typeof ingredientCountFilter; label: string; maxCount?: number }[] = [
+    { key: 'any', label: 'Any Ingredients' },
+    { key: 'under4', label: '≤ 4 items', maxCount: 4 },
+    { key: 'under6', label: '≤ 6 items', maxCount: 6 },
+    { key: 'under8', label: '≤ 8 items', maxCount: 8 },
+  ];
 
   const difficultyRank: Record<Drink['difficulty'], number> = {
     Hard: 0,
@@ -67,8 +81,21 @@ export default function MenuScreen() {
     const matchesSearch = drink.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          drink.ingredients.some(ing => ing.toLowerCase().includes(searchQuery.toLowerCase()));
     const matchesCategory = selectedCategory === 'All' || drink.category === selectedCategory;
-    const matchesFavorite = !showFavoritesOnly || isFavorite(drink.id);
-    return matchesSearch && matchesCategory && matchesFavorite;
+    const matchesHardware = !hardwareOnly || (drink.hardwareSteps && drink.hardwareSteps.length > 0);
+    const prepMinutes = parsePrepMinutes(drink.prepTime);
+    const matchesPrepTime =
+      prepTimeFilter === 'any' ||
+      (prepTimeFilter === 'under5' && prepMinutes <= 5) ||
+      (prepTimeFilter === 'under10' && prepMinutes <= 10) ||
+      (prepTimeFilter === 'under15' && prepMinutes <= 15);
+    const ingredientCount = drink.ingredients.length;
+    const matchesIngredientCount =
+      ingredientCountFilter === 'any' ||
+      (ingredientCountFilter === 'under4' && ingredientCount <= 4) ||
+      (ingredientCountFilter === 'under6' && ingredientCount <= 6) ||
+      (ingredientCountFilter === 'under8' && ingredientCount <= 8);
+
+    return matchesSearch && matchesCategory && matchesHardware && matchesPrepTime && matchesIngredientCount;
   });
 
   const sortedDrinks = useMemo(() => {
@@ -145,6 +172,84 @@ export default function MenuScreen() {
                   style={[styles.categoryText, isActive && styles.categoryTextActive, { color: textColorValue }]}
                 >
                   {category}
+                </ThemedText>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      </ThemedView>
+
+      <ThemedView style={styles.filterSection}>
+        <View style={styles.toggleRow}>
+          <ThemedText style={styles.filterLabel} colorName="mutedForeground">
+            Automation ready only
+          </ThemedText>
+          <Switch
+            value={hardwareOnly}
+            onValueChange={setHardwareOnly}
+            thumbColor={hardwareOnly ? accent : '#ffffff'}
+            trackColor={{ false: chipBorder, true: accent }}
+          />
+        </View>
+
+        <ThemedText style={styles.filterLabel} colorName="mutedForeground">
+          Prep time
+        </ThemedText>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.sortContent}
+          style={styles.filterScroll}
+        >
+          {prepTimeOptions.map((option) => {
+            const isActive = prepTimeFilter === option.key;
+            return (
+              <TouchableOpacity
+                key={option.key}
+                style={[
+                  styles.sortButton,
+                  { backgroundColor: chipBg, borderColor: chipBorder },
+                  isActive && { backgroundColor: accent, borderColor: accent },
+                ]}
+                onPress={() => setPrepTimeFilter(option.key)}
+              >
+                <ThemedText
+                  style={styles.sortText}
+                  colorName={isActive ? 'onTint' : 'mutedForeground'}
+                >
+                  {option.label}
+                </ThemedText>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+
+        <ThemedText style={styles.filterLabel} colorName="mutedForeground">
+          Ingredient count
+        </ThemedText>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.sortContent}
+          style={styles.filterScroll}
+        >
+          {ingredientCountOptions.map((option) => {
+            const isActive = ingredientCountFilter === option.key;
+            return (
+              <TouchableOpacity
+                key={option.key}
+                style={[
+                  styles.sortButton,
+                  { backgroundColor: chipBg, borderColor: chipBorder },
+                  isActive && { backgroundColor: accent, borderColor: accent },
+                ]}
+                onPress={() => setIngredientCountFilter(option.key)}
+              >
+                <ThemedText
+                  style={styles.sortText}
+                  colorName={isActive ? 'onTint' : 'mutedForeground'}
+                >
+                  {option.label}
                 </ThemedText>
               </TouchableOpacity>
             );
@@ -296,6 +401,25 @@ const styles = StyleSheet.create({
     width: '100%',
     marginBottom: 8,
     paddingHorizontal: 12,
+  },
+  filterSection: {
+    width: '100%',
+    paddingHorizontal: 12,
+    gap: 12,
+    marginBottom: 12,
+  },
+  filterLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  filterScroll: {
+    marginBottom: 4,
+  },
+  toggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   sortContent: {
     gap: 8,
