@@ -1,0 +1,64 @@
+{
+  "pumps": {
+    "tequila": 17,
+    "triple_sec": 27,
+    "lime": 22,
+    "white_rum": 5,
+    "bourbon": 6,
+    "simple_syrup": 13,
+    "bitters": 19,
+    "dark_rum": 26,
+    "gin": 12,
+    "vodka": 16,
+    "agave": 20,
+    "grenadine": 21,
+    "pineapple": 4,
+    "orange_juice": 18,
+    "soda": 23,
+    "tonic": 24,
+    "sparkling_water": 25
+  },
+  "flow_rates_ml_per_second": {
+    "tequila": 12.0,
+    "triple_sec": 11.5,
+    "lime": 10.0,
+    "white_rum": 12.5,
+    "bourbon": 12.0,
+    "simple_syrup": 9.5,
+    "bitters": 3.0,
+    "dark_rum": 12.0,
+    "gin": 12.0,
+    "vodka": 12.0,
+    "agave": 8.5,
+    "grenadine": 7.5,
+    "pineapple": 11.0,
+    "orange_juice": 10.5,
+    "soda": 9.0,
+    "tonic": 9.0,
+    "sparkling_water": 9.0
+  },
+  "defaults": {
+    "prime_time_seconds": 1.5,
+    "post_dispense_delay_seconds": 0.5,
+    "max_run_seconds": 15,
+    "cooldown_seconds": 2
+  },
+  "calibration": {
+    "tequila": {
+      "last_calibrated": "2025-10-12",
+      "correction_factor": 1.0
+    },
+    "simple_syrup": {
+      "last_calibrated": "2025-10-12",
+      "correction_factor": 1.08
+    },
+    "bitters": {
+      "last_calibrated": "2025-10-12",
+      "correction_factor": 0.95
+    },
+    "pineapple": {
+      "last_calibrated": "2025-10-20",
+      "correction_factor": 1.03
+    }
+  }
+}
