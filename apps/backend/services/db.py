@@ -28,7 +28,7 @@ async def ensure_indexes(db: AsyncIOMotorDatabase) -> None:
         await users.create_index(
             "driversLicenseNumber",
             unique=True,
-            partialFilterExpression={"driversLicenseNumber": {"$exists": True, "$ne": None}},
+            partialFilterExpression={"driversLicenseNumber": {"$type": "string"}},
         )
         logger.info("Ensured partial unique index on users.driversLicenseNumber")
     except Exception as e:

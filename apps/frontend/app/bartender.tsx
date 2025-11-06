@@ -11,20 +11,39 @@ import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system/legacy';
 
 type LiveAudioStreamModule = {
-  init: (options: {
-    sampleRate: number;
-    channels: number;
-    bitsPerSample: number;
-    bufferSize: number;
-    audioSource?: number;
-    wavFile?: string;
-  }) => void;
+  init: (options: Record<string, unknown>) => void;
   start: () => void;
   stop: () => void;
-  on: (event: 'data', callback: (data: string) => void) => void;
-  off?: (event: 'data', callback: (data: string) => void) => void;
-  removeAllListeners?: (event?: 'data') => void;
+  on: (event: string, handler: (data: string) => void) => void;
+  removeAllListeners?: (event?: string) => void;
 };
+
+const createLiveAudioStreamStub = (): LiveAudioStreamModule => ({
+  init: () => console.warn('[bartender] Live audio module unavailable; init skipped.'),
+  start: () => console.warn('[bartender] Live audio module unavailable; start skipped.'),
+  stop: () => {},
+  on: () => {},
+  removeAllListeners: () => {},
+});
+
+const liveAudio = (() => {
+  if (Platform.OS === 'web') {
+    return { module: createLiveAudioStreamStub(), available: false };
+  }
+  try {
+    const module = require('react-native-live-audio-stream') as LiveAudioStreamModule;
+    return { module, available: true };
+  } catch (error) {
+    console.warn(
+      '[bartender] react-native-live-audio-stream native module not found. Voice capture is disabled. Use a custom dev build compiled with this module.',
+      error,
+    );
+    return { module: createLiveAudioStreamStub(), available: false };
+  }
+})();
+
+const LiveAudioStream = liveAudio.module;
+const isLiveAudioAvailable = liveAudio.available;
 
 export default function BartenderScreen() {
   const router = useRouter();
@@ -302,88 +321,37 @@ export default function BartenderScreen() {
 
   // Load the native streaming module lazily to avoid crashing Expo Go
   useEffect(() => {
-    if (Platform.OS === 'web') {
-      return;
-    }
-
-    let isMounted = true;
-
-    (async () => {
+    if (Platform.OS !== 'web' && isLiveAudioAvailable && !audioStreamInitialized.current) {
       try {
-        const module = await import('react-native-live-audio-stream');
-        if (!isMounted) {
-          return;
-        }
-        const resolvedModule = ((module as any).default ?? module) as LiveAudioStreamModule;
-        liveAudioStreamRef.current = resolvedModule;
-        setLiveAudioStreamError(null);
-        setLiveAudioStreamReady(true);
-        console.log('[bartender] Live audio stream module loaded');
+        const options = {
+          sampleRate: 24000,
+          channels: 1,
+          bitsPerSample: 16,
+          bufferSize: 4096,
+          audioSource: 6, // Android: VOICE_RECOGNITION
+          wavFile: '', // Required by library but not used for streaming
+        };
+        LiveAudioStream.init(options);
+        audioStreamInitialized.current = true;
+        console.log('[bartender] Audio stream initialized (native)');
       } catch (error) {
-        if (!isMounted) {
-          return;
-        }
-        const message = error instanceof Error ? error.message : String(error);
-        console.warn('[bartender] Native audio streaming module unavailable:', message);
-        setLiveAudioStreamError(message);
-        setLiveAudioStreamReady(false);
+        console.error('[bartender] Error initializing audio stream:', error);
       }
-    })();
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
-
-  // Initialize native audio stream when the module becomes available
-  useEffect(() => {
-    if (Platform.OS === 'web') {
-      return;
-    }
-
-    const liveAudioStream = liveAudioStreamRef.current;
-    if (!liveAudioStream || !liveAudioStreamReady || audioStreamInitialized.current) {
-      return;
-    }
-
-    try {
-      const options = {
-        sampleRate: 24000,
-        channels: 1,
-        bitsPerSample: 16,
-        bufferSize: 4096,
-        audioSource: 6, // Android: VOICE_RECOGNITION
-        wavFile: '', // Required by library but not used for streaming
-      };
-      liveAudioStream.init(options);
-      audioStreamInitialized.current = true;
-      console.log('[bartender] Audio stream initialized (native)');
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.error('[bartender] Error initializing audio stream:', message);
-      setLiveAudioStreamError(message);
-      setLiveAudioStreamReady(false);
     }
 
     return () => {
-      if (!liveAudioStreamRef.current) {
-        return;
-      }
-      try {
-        if (isRecordingRef.current) {
-          liveAudioStreamRef.current.stop();
+      // Cleanup audio stream on unmount
+      if (Platform.OS !== 'web' && audioStreamInitialized.current && isLiveAudioAvailable) {
+        try {
+          if (isRecording) {
+            LiveAudioStream.stop();
+          }
+          audioStreamInitialized.current = false;
+        } catch (error) {
+          console.error('[bartender] Error cleaning up audio stream:', error);
         }
-        liveAudioStreamRef.current.removeAllListeners?.('data');
-      } catch (error) {
-        console.error('[bartender] Error cleaning up audio stream listeners:', error);
       }
-      audioStreamInitialized.current = false;
     };
-  }, [liveAudioStreamReady]);
-
-  // Keep the ref in sync with the latest recording state for cleanup
-  useEffect(() => {
-    isRecordingRef.current = isRecording;
   }, [isRecording]);
 
   // Notify the user if the native module is missing (e.g., running in Expo Go)
@@ -500,14 +468,10 @@ export default function BartenderScreen() {
 
   // Native: Start recording with react-native-live-audio-stream
   const startRecordingNative = useCallback(() => {
-    const liveAudioStream = liveAudioStreamRef.current;
-
-    if (!liveAudioStream || !liveAudioStreamReady) {
+    if (!isLiveAudioAvailable) {
       Alert.alert(
-        'Voice recording unavailable',
-        liveAudioStreamError
-          ? `${liveAudioStreamError}\n\nCreate a development build that includes react-native-live-audio-stream to enable live voice capture.`
-          : 'The native audio streaming module is still loading. Please try again in a moment.'
+        'Voice Capture Unavailable',
+        'The live audio streaming module is not available in this build. Install a custom dev client that includes react-native-live-audio-stream.',
       );
       return;
     }
@@ -591,11 +555,7 @@ export default function BartenderScreen() {
         mediaStreamRef.current = null;
       }
       mediaRecorderRef.current = null;
-    } else {
-      const liveAudioStream = liveAudioStreamRef.current;
-      if (!liveAudioStream) {
-        return;
-      }
+    } else if (isLiveAudioAvailable) {
       // Native: Stop recording
       try {
         liveAudioStream.stop();

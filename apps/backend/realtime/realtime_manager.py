@@ -117,7 +117,7 @@ class OpenAIRealtimeManager:
                     message="Connected to OpenAI Realtime API" if openai_connected else "Connected, but OpenAI connection failed",
                     openai_connected=openai_connected
                 )
-                success = await websocket_manager.send_json(connected_client_id, connection_msg.dict())
+                success = await websocket_manager.send_json(connected_client_id, connection_msg.model_dump())
                 if success:
                     logger.info(f"Sent connection confirmation to {connected_client_id}")
                 else:
@@ -186,9 +186,9 @@ class OpenAIRealtimeManager:
         if message_type == "get_token":
             await self._handle_get_token(client_id)
         elif message_type == "conversation.item.create":
-            await self.send_message_to_openai(message.dict())
+            await self.send_message_to_openai(message.model_dump())
         elif message_type == "response.create":
-            await self.send_message_to_openai(message.dict())
+            await self.send_message_to_openai(message.model_dump())
         elif message_type == "function_call":
             await self._handle_function_call(message, client_id)
         else:
@@ -197,7 +197,7 @@ class OpenAIRealtimeManager:
             if isinstance(message, dict):
                 await self.send_message_to_openai(message)
             else:
-                await self.send_message_to_openai(message.dict())
+                await self.send_message_to_openai(message.model_dump())
     
     async def _handle_get_token(self, client_id: str):
         """Handle get token request"""
@@ -209,7 +209,7 @@ class OpenAIRealtimeManager:
                 model=session_data["model"],
                 voice=session_data["voice"]
             )
-            await websocket_manager.send_json(client_id, token_response.dict())
+            await websocket_manager.send_json(client_id, token_response.model_dump())
         except Exception as e:
             await self.send_error_to_client(f"Failed to get session: {str(e)}", client_id=client_id)
     
@@ -269,7 +269,7 @@ class OpenAIRealtimeManager:
             client_id: Optional specific client ID. If None, sends to all active clients.
         """
         if isinstance(message, BaseModel):
-            message_dict = message.dict()
+            message_dict = message.model_dump()
         else:
             message_dict = message
         

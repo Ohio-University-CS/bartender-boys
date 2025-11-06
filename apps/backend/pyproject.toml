@@ -26,3 +26,6 @@ dev = [
     "httpx>=0.25.0",
     "ruff>=0.1.0",
 ]
+
+[tool.pytest.ini_options]
+asyncio_default_fixture_loop_scope = "function"

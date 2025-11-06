@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { StyleSheet, ScrollView, View, TouchableOpacity } from 'react-native';
+import { StyleSheet, ScrollView, View, TouchableOpacity, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Ionicons } from '@expo/vector-icons';
@@ -78,11 +78,12 @@ export default function FavoritesScreen() {
         <ThemedText type="title" colorName="tint" style={styles.title}>Favorites</ThemedText>
       </ThemedView>
 
-      <ThemedView style={styles.sortContainer}>
+      <ThemedView style={[styles.sortContainer, Platform.OS === 'web' && styles.sortContainerWeb]}>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.sortContent}
+          contentContainerStyle={[styles.sortContent, Platform.OS === 'web' && styles.sortContentWeb]}
+          style={Platform.OS === 'web' ? styles.sortScrollWeb : undefined}
         >
           {sortOptions.map((option) => {
             const isActive = sortBy === option.key;
@@ -148,15 +149,26 @@ const styles = StyleSheet.create({
   header: {
     padding: 16,
     borderBottomWidth: 1,
+    alignItems: 'center',
   },
-  title: { fontSize: 20, fontWeight: '700' },
+  title: { fontSize: 20, fontWeight: '700', textAlign: 'center' },
   sortContainer: {
     paddingHorizontal: 12,
     paddingTop: 12,
   },
+  sortContainerWeb: {
+    alignItems: 'center',
+  },
+  sortScrollWeb: {
+    alignSelf: 'center',
+  },
   sortContent: {
     gap: 8,
     paddingHorizontal: 4,
+  },
+  sortContentWeb: {
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   sortButton: {
     paddingHorizontal: 12,
