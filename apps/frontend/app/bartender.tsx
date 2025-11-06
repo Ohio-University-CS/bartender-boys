@@ -6,15 +6,31 @@ import { Ionicons } from '@expo/vector-icons';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { BartenderAvatar } from '@/components/BartenderAvatar';
 import { ThemedText } from '@/components/themed-text';
-import LiveAudioStream from 'react-native-live-audio-stream';
 import { useWebSocket } from '@/hooks/use-websocket';
 import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system/legacy';
+
+type LiveAudioStreamModule = {
+  init: (options: {
+    sampleRate: number;
+    channels: number;
+    bitsPerSample: number;
+    bufferSize: number;
+    audioSource?: number;
+    wavFile?: string;
+  }) => void;
+  start: () => void;
+  stop: () => void;
+  on: (event: 'data', callback: (data: string) => void) => void;
+  off?: (event: 'data', callback: (data: string) => void) => void;
+  removeAllListeners?: (event?: 'data') => void;
+};
 
 export default function BartenderScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [isRecording, setIsRecording] = useState(false);
+  const isRecordingRef = useRef<boolean>(false);
   const [isTalking] = useState(false);
   
   // Generate a client ID for this session
@@ -210,6 +226,11 @@ export default function BartenderScreen() {
   
   // Native-specific refs
   const audioStreamInitialized = useRef<boolean>(false);
+  const liveAudioStreamRef = useRef<LiveAudioStreamModule | null>(null);
+  const liveAudioStreamListenerRef = useRef<((data: string) => void) | null>(null);
+  const [liveAudioStreamReady, setLiveAudioStreamReady] = useState<boolean>(Platform.OS === 'web');
+  const [liveAudioStreamError, setLiveAudioStreamError] = useState<string | null>(null);
+  const nativeModuleAlertShownRef = useRef<boolean>(false);
   
   // Audio item ID for tracking the conversation item
   const audioItemIdRef = useRef<string>(`audio-item-${Date.now()}`);
@@ -279,40 +300,108 @@ export default function BartenderScreen() {
   const accent = useThemeColor({}, 'tint');
   const onAccent = useThemeColor({}, 'onTint');
 
-  // Initialize audio stream on mount (native only)
+  // Load the native streaming module lazily to avoid crashing Expo Go
   useEffect(() => {
-    if (Platform.OS !== 'web' && !audioStreamInitialized.current) {
+    if (Platform.OS === 'web') {
+      return;
+    }
+
+    let isMounted = true;
+
+    (async () => {
       try {
-        const options = {
-          sampleRate: 24000,
-          channels: 1,
-          bitsPerSample: 16,
-          bufferSize: 4096,
-          audioSource: 6, // Android: VOICE_RECOGNITION
-          wavFile: '', // Required by library but not used for streaming
-        };
-        LiveAudioStream.init(options);
-        audioStreamInitialized.current = true;
-        console.log('[bartender] Audio stream initialized (native)');
+        const module = await import('react-native-live-audio-stream');
+        if (!isMounted) {
+          return;
+        }
+        const resolvedModule = ((module as any).default ?? module) as LiveAudioStreamModule;
+        liveAudioStreamRef.current = resolvedModule;
+        setLiveAudioStreamError(null);
+        setLiveAudioStreamReady(true);
+        console.log('[bartender] Live audio stream module loaded');
       } catch (error) {
-        console.error('[bartender] Error initializing audio stream:', error);
+        if (!isMounted) {
+          return;
+        }
+        const message = error instanceof Error ? error.message : String(error);
+        console.warn('[bartender] Native audio streaming module unavailable:', message);
+        setLiveAudioStreamError(message);
+        setLiveAudioStreamReady(false);
       }
+    })();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // Initialize native audio stream when the module becomes available
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      return;
+    }
+
+    const liveAudioStream = liveAudioStreamRef.current;
+    if (!liveAudioStream || !liveAudioStreamReady || audioStreamInitialized.current) {
+      return;
+    }
+
+    try {
+      const options = {
+        sampleRate: 24000,
+        channels: 1,
+        bitsPerSample: 16,
+        bufferSize: 4096,
+        audioSource: 6, // Android: VOICE_RECOGNITION
+        wavFile: '', // Required by library but not used for streaming
+      };
+      liveAudioStream.init(options);
+      audioStreamInitialized.current = true;
+      console.log('[bartender] Audio stream initialized (native)');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error('[bartender] Error initializing audio stream:', message);
+      setLiveAudioStreamError(message);
+      setLiveAudioStreamReady(false);
     }
 
     return () => {
-      // Cleanup audio stream on unmount
-      if (Platform.OS !== 'web' && audioStreamInitialized.current) {
-        try {
-          if (isRecording) {
-            LiveAudioStream.stop();
-          }
-          audioStreamInitialized.current = false;
-        } catch (error) {
-          console.error('[bartender] Error cleaning up audio stream:', error);
-        }
+      if (!liveAudioStreamRef.current) {
+        return;
       }
+      try {
+        if (isRecordingRef.current) {
+          liveAudioStreamRef.current.stop();
+        }
+        liveAudioStreamRef.current.removeAllListeners?.('data');
+      } catch (error) {
+        console.error('[bartender] Error cleaning up audio stream listeners:', error);
+      }
+      audioStreamInitialized.current = false;
     };
+  }, [liveAudioStreamReady]);
+
+  // Keep the ref in sync with the latest recording state for cleanup
+  useEffect(() => {
+    isRecordingRef.current = isRecording;
   }, [isRecording]);
+
+  // Notify the user if the native module is missing (e.g., running in Expo Go)
+  useEffect(() => {
+    if (
+      Platform.OS === 'web' ||
+      !liveAudioStreamError ||
+      nativeModuleAlertShownRef.current
+    ) {
+      return;
+    }
+
+    Alert.alert(
+      'Voice streaming unavailable in Expo Go',
+      'Native audio streaming requires a development build because react-native-live-audio-stream is not bundled with Expo Go. Build with "expo run" or install Expo Dev Client to enable live audio on native.'
+    );
+    nativeModuleAlertShownRef.current = true;
+  }, [liveAudioStreamError]);
 
   // Cleanup audio on unmount
   useEffect(() => {
@@ -411,6 +500,18 @@ export default function BartenderScreen() {
 
   // Native: Start recording with react-native-live-audio-stream
   const startRecordingNative = useCallback(() => {
+    const liveAudioStream = liveAudioStreamRef.current;
+
+    if (!liveAudioStream || !liveAudioStreamReady) {
+      Alert.alert(
+        'Voice recording unavailable',
+        liveAudioStreamError
+          ? `${liveAudioStreamError}\n\nCreate a development build that includes react-native-live-audio-stream to enable live voice capture.`
+          : 'The native audio streaming module is still loading. Please try again in a moment.'
+      );
+      return;
+    }
+
     try {
       // Ensure audio stream is initialized
       if (!audioStreamInitialized.current) {
@@ -422,7 +523,7 @@ export default function BartenderScreen() {
           audioSource: 6, // Android: VOICE_RECOGNITION
           wavFile: '', // Required by library but not used for streaming
         };
-        LiveAudioStream.init(options);
+        liveAudioStream.init(options);
         audioStreamInitialized.current = true;
       }
 
@@ -437,10 +538,12 @@ export default function BartenderScreen() {
         sendAudioChunk(base64Data);
       };
 
-      LiveAudioStream.on('data', handleAudioData);
+      liveAudioStream.removeAllListeners?.('data');
+      liveAudioStream.on('data', handleAudioData);
+      liveAudioStreamListenerRef.current = handleAudioData;
 
       // Start recording
-      LiveAudioStream.start();
+      liveAudioStream.start();
       setIsRecording(true);
       console.log('[bartender] Recording started (native)');
     } catch (error: any) {
@@ -450,7 +553,7 @@ export default function BartenderScreen() {
         error.message || 'Failed to start recording. Please try again.'
       );
     }
-  }, [sendAudioChunk]);
+  }, [sendAudioChunk, liveAudioStreamError, liveAudioStreamReady]);
 
   const startRecording = useCallback(() => {
     if (Platform.OS === 'web') {
@@ -489,9 +592,18 @@ export default function BartenderScreen() {
       }
       mediaRecorderRef.current = null;
     } else {
+      const liveAudioStream = liveAudioStreamRef.current;
+      if (!liveAudioStream) {
+        return;
+      }
       // Native: Stop recording
       try {
-        LiveAudioStream.stop();
+        liveAudioStream.stop();
+        if (liveAudioStreamListenerRef.current) {
+          liveAudioStream.off?.('data', liveAudioStreamListenerRef.current);
+          liveAudioStream.removeAllListeners?.('data');
+          liveAudioStreamListenerRef.current = null;
+        }
         console.log('[bartender] Recording stopped (native)');
       } catch (error) {
         console.error('[bartender] Error stopping recording (native):', error);
