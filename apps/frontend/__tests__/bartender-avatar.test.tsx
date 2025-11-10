@@ -24,6 +24,12 @@ jest.mock('expo-three', () => ({
   Renderer: jest.fn(),
 }));
 
+jest.mock('three/examples/jsm/loaders/GLTFLoader.js', () => ({
+  GLTFLoader: jest.fn(),
+}));
+
+jest.mock('../assets/models/luiz-h-c-nobre/source/model (10).glb', () => ({}), { virtual: true });
+
 jest.mock('@/hooks/use-theme-color', () => ({
   useThemeColor: jest.fn(() => '#FFA500'),
 }));
