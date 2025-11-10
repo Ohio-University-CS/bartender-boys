@@ -18,6 +18,8 @@ jest.mock('three', () => ({
   CylinderGeometry: jest.fn(),
   TorusGeometry: jest.fn(),
   Group: jest.fn(),
+  WebGLRenderer: jest.fn(),
+  TextureLoader: jest.fn(),
 }));
 
 jest.mock('expo-three', () => ({

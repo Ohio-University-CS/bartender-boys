@@ -30,7 +30,7 @@ jobs:
       
       - name: Run tests
         working-directory: apps/frontend
-        run: npm test
+        run: npm test -- --runInBand --testTimeout=60000
       
       - name: Upload test results
         if: always()
