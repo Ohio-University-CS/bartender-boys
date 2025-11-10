@@ -19,11 +19,11 @@ export const Colors = {
     muted: '#6B7280',
     mutedForeground: '#7C818F',
     placeholder: '#9CA3AF',
-    tint: tintColorLight,
+    tint: '#FFA500',
     onTint: '#1F1F1F',
     icon: '#687076',
     tabIconDefault: '#687076',
-    tabIconSelected: tintColorLight,
+    tabIconSelected: '#FFA500',
     chipBackground: '#ECECEC',
     chipBorder: '#D7D7D7',
     inputBackground: '#FFFFFF',
@@ -45,7 +45,7 @@ export const Colors = {
     muted: '#9BA1A6',
     mutedForeground: '#A7ADB2',
     placeholder: '#666666',
-    tint: tintColorDark,
+    tint: '#FFA500',
     onTint: '#141414',
     icon: '#9BA1A6',
     tabIconDefault: '#9BA1A6',
@@ -61,7 +61,101 @@ export const Colors = {
     warning: '#FBBF24',
     onWarning: '#111111',
   },
-};
+} as const;
+
+const ACCENT_PRESETS = {
+  sunset: {
+    label: 'Sunset Citrus',
+    preview: '#FFA500',
+    light: {
+      tint: '#FFA500',
+      onTint: '#1F1F1F',
+      tabIconSelected: '#FFA500',
+    },
+    dark: {
+      tint: '#FFB347',
+      onTint: '#141414',
+      tabIconSelected: '#FFB347',
+    },
+  },
+  ocean: {
+    label: 'Ocean Breeze',
+    preview: '#0EA5E9',
+    light: {
+      tint: '#0EA5E9',
+      onTint: '#02233A',
+      tabIconSelected: '#0EA5E9',
+    },
+    dark: {
+      tint: '#38BDF8',
+      onTint: '#01121E',
+      tabIconSelected: '#38BDF8',
+    },
+  },
+  orchid: {
+    label: 'Orchid Bloom',
+    preview: '#A855F7',
+    light: {
+      tint: '#A855F7',
+      onTint: '#23093C',
+      tabIconSelected: '#A855F7',
+    },
+    dark: {
+      tint: '#C084FC',
+      onTint: '#150725',
+      tabIconSelected: '#C084FC',
+    },
+  },
+  forest: {
+    label: 'Forest Dew',
+    preview: '#22C55E',
+    light: {
+      tint: '#22C55E',
+      onTint: '#062412',
+      tabIconSelected: '#22C55E',
+    },
+    dark: {
+      tint: '#4ADE80',
+      onTint: '#021508',
+      tabIconSelected: '#4ADE80',
+    },
+  },
+} as const;
+
+export type AccentOption = keyof typeof ACCENT_PRESETS;
+
+export const DEFAULT_ACCENT: AccentOption = 'sunset';
+
+export const ACCENT_OPTIONS = (Object.entries(ACCENT_PRESETS) as Array<[
+  AccentOption,
+  (typeof ACCENT_PRESETS)[AccentOption]
+]>).map(([key, value]) => ({
+  key,
+  label: value.label,
+  preview: value.preview,
+}));
+
+export const Colors = createThemeColors(DEFAULT_ACCENT);
+
+export function createThemeColors(accent: AccentOption) {
+  const preset = ACCENT_PRESETS[accent];
+  return {
+    light: { ...BASE_COLORS.light, ...preset.light },
+    dark: { ...BASE_COLORS.dark, ...preset.dark },
+  };
+}
+
+export function resolveColorValue<T extends keyof typeof BASE_COLORS.light>(
+  mode: 'light' | 'dark',
+  accent: AccentOption,
+  token: T
+) {
+  return createThemeColors(accent)[mode][token];
+}
+
+export function isAccentOption(value: string): value is AccentOption {
+  return value in ACCENT_PRESETS;
+}
 
 export const Fonts = Platform.select({
   ios: {

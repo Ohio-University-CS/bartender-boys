@@ -1,0 +1,32 @@
+{
+  "pumps": {
+    "pineapple_juice": 17,
+    "orange_juice": 27,
+    "soda_water": 22
+  },
+  "flow_rates_ml_per_second": {
+    "pineapple_juice": 11.0,
+    "orange_juice": 10.5,
+    "soda_water": 9.0
+  },
+  "defaults": {
+    "prime_time_seconds": 1.5,
+    "post_dispense_delay_seconds": 0.5,
+    "max_run_seconds": 15,
+    "cooldown_seconds": 2
+  },
+  "calibration": {
+    "pineapple_juice": {
+      "last_calibrated": "2025-10-20",
+      "correction_factor": 1.0
+    },
+    "orange_juice": {
+      "last_calibrated": "2025-10-20",
+      "correction_factor": 1.0
+    },
+    "soda_water": {
+      "last_calibrated": "2025-10-20",
+      "correction_factor": 1.0
+    }
+  }
+}

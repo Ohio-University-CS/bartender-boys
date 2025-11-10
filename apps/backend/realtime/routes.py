@@ -9,8 +9,13 @@ router = APIRouter(prefix="/openai", tags=["openai-realtime"])
 
 @router.websocket("/realtime/{client_id}")
 async def openai_realtime_websocket(websocket: WebSocket, client_id: str):
-    """WebSocket endpoint for OpenAI Realtime API connection"""
-    await openai_manager.connect_client(websocket, client_id)
+    """
+    WebSocket endpoint for OpenAI Realtime API connection.
+    
+    Uses the WebSocket service for proper connection lifecycle management.
+    The service handles connection acceptance, state tracking, and cleanup.
+    """
+    await openai_manager.handle_client_connection(websocket, client_id)
 
 @router.post("/token")
 async def get_openai_token():
