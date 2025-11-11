@@ -49,7 +49,6 @@ export default function MenuScreen() {
   const categories = ['All', 'Cocktail', 'Whiskey', 'Rum', 'Gin', 'Vodka', 'Tequila', 'Brandy'];
   const sortOptions: { key: SortOption; label: string }[] = [
     { key: 'difficulty', label: 'Difficulty' },
-    { key: 'alcohol', label: 'Alcohol Type' },
     { key: 'name', label: 'A-Z' },
     { key: 'prepTime', label: 'Prep Time' },
   ];
