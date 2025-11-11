@@ -18,7 +18,7 @@ export default function MenuScreen() {
   const insets = useSafeAreaInsets();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
-  const [hardwareOnly, setHardwareOnly] = useState(false);
+  // Removed hardwareOnly filter
   const { isFavorite, toggleFavorite } = useFavorites();
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [sortBy, setSortBy] = useState<SortOption>('difficulty');
@@ -86,7 +86,7 @@ export default function MenuScreen() {
     const matchesSearch = drink.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          drink.ingredients.some(ing => ing.toLowerCase().includes(searchQuery.toLowerCase()));
     const matchesCategory = selectedCategory === 'All' || drink.category === selectedCategory;
-    const matchesHardware = !hardwareOnly || (drink.hardwareSteps && drink.hardwareSteps.length > 0);
+  // Removed matchesHardware
     const prepMinutes = parsePrepMinutes(drink.prepTime);
     const matchesPrepTime =
       prepTimeFilter === 'any' ||
@@ -100,7 +100,7 @@ export default function MenuScreen() {
       (ingredientCountFilter === 'under6' && ingredientCount <= 6) ||
       (ingredientCountFilter === 'under8' && ingredientCount <= 8);
 
-    return matchesSearch && matchesCategory && matchesHardware && matchesPrepTime && matchesIngredientCount;
+  return matchesSearch && matchesCategory && matchesPrepTime && matchesIngredientCount;
   });
 
   const sortedDrinks = useMemo(() => {
@@ -185,21 +185,6 @@ export default function MenuScreen() {
       </ThemedView>
 
       <ThemedView style={[styles.filterSection, Platform.OS === 'web' && styles.filterSectionWeb]}>
-        <View style={[styles.toggleRow, Platform.OS === 'web' && styles.toggleRowWeb]}>
-          <ThemedText
-            style={[styles.filterLabel, Platform.OS === 'web' && styles.filterLabelWeb]}
-            colorName="mutedForeground"
-          >
-            Automation ready only
-          </ThemedText>
-          <Switch
-            value={hardwareOnly}
-            onValueChange={setHardwareOnly}
-            thumbColor={hardwareOnly ? accent : '#ffffff'}
-            trackColor={{ false: chipBorder, true: accent }}
-            style={Platform.OS === 'web' ? styles.switchWeb : undefined}
-          />
-        </View>
 
         <ThemedText
           style={[styles.filterLabel, Platform.OS === 'web' && styles.filterLabelWeb]}
