@@ -186,12 +186,7 @@ export default function MenuScreen() {
 
       <ThemedView style={[styles.filterSection, Platform.OS === 'web' && styles.filterSectionWeb]}>
 
-        <ThemedText
-          style={[styles.filterLabel, Platform.OS === 'web' && styles.filterLabelWeb]}
-          colorName="mutedForeground"
-        >
-          Prep time
-        </ThemedText>
+        {/* Removed 'Prep time' label */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -221,12 +216,7 @@ export default function MenuScreen() {
           })}
         </ScrollView>
 
-        <ThemedText
-          style={[styles.filterLabel, Platform.OS === 'web' && styles.filterLabelWeb]}
-          colorName="mutedForeground"
-        >
-          Ingredient count
-        </ThemedText>
+        {/* Removed 'Ingredient count' label */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
