@@ -20,36 +20,12 @@ export default function SettingsScreen() {
     setTheme,
     apiBaseUrl,
     setApiBaseUrl,
-    displayName,
-    setDisplayName,
-    profilePronouns,
-    setProfilePronouns,
-    favoriteSpirit,
-    setFavoriteSpirit,
-    homeBarName,
-    setHomeBarName,
-    bartenderBio,
-    setBartenderBio,
     accentColor,
     setAccentColor,
-  animationsEnabled,
-  setAnimationsEnabled,
-  autoSaveFavorites,
-  setAutoSaveFavorites,
-    pushNotifications,
-    setPushNotifications,
-    emailNotifications,
-    setEmailNotifications,
-    notificationSound,
-    setNotificationSound,
-    notificationVibration,
-    setNotificationVibration,
-    quietHoursEnabled,
-    setQuietHoursEnabled,
-    quietHoursStart,
-    setQuietHoursStart,
-    quietHoursEnd,
-    setQuietHoursEnd,
+    animationsEnabled,
+    setAnimationsEnabled,
+    autoSaveFavorites,
+    setAutoSaveFavorites,
   } = useSettings();
 
   // Theme colors
@@ -69,45 +45,10 @@ export default function SettingsScreen() {
   const danger = useThemeColor({}, 'danger');
   const onDanger = useThemeColor({}, 'onDanger');
 
-  const [nameInput, setNameInput] = useState(displayName);
-  const [pronounsInput, setPronounsInput] = useState(profilePronouns);
-  const [spiritInput, setSpiritInput] = useState(favoriteSpirit);
-  const [homeBarInput, setHomeBarInput] = useState(homeBarName);
-  const [bioInput, setBioInput] = useState(bartenderBio);
-  const [quietStartInput, setQuietStartInput] = useState(quietHoursStart);
-  const [quietEndInput, setQuietEndInput] = useState(quietHoursEnd);
   const [apiUrlInput, setApiUrlInput] = useState(apiBaseUrl || API_BASE_URL);
 
-  useEffect(() => setNameInput(displayName), [displayName]);
-  useEffect(() => setPronounsInput(profilePronouns), [profilePronouns]);
-  useEffect(() => setSpiritInput(favoriteSpirit), [favoriteSpirit]);
-  useEffect(() => setHomeBarInput(homeBarName), [homeBarName]);
-  useEffect(() => setBioInput(bartenderBio), [bartenderBio]);
-  useEffect(() => setQuietStartInput(quietHoursStart), [quietHoursStart]);
-  useEffect(() => setQuietEndInput(quietHoursEnd), [quietHoursEnd]);
   useEffect(() => setApiUrlInput(apiBaseUrl || API_BASE_URL), [apiBaseUrl]);
 
-  const handleSaveProfile = () => {
-    setDisplayName(nameInput.trim());
-    setProfilePronouns(pronounsInput.trim());
-    setFavoriteSpirit(spiritInput.trim());
-    setHomeBarName(homeBarInput.trim());
-    setBartenderBio(bioInput.trim());
-    Alert.alert('Saved', 'Profile details updated');
-  };
-
-  const handleClearProfile = () => {
-    setNameInput('');
-    setPronounsInput('');
-    setSpiritInput('');
-    setHomeBarInput('');
-    setBioInput('');
-    setDisplayName('');
-    setProfilePronouns('');
-    setFavoriteSpirit('');
-    setHomeBarName('');
-    setBartenderBio('');
-  };
 
   const handleLogout = async () => {
     Alert.alert(
@@ -132,31 +73,6 @@ export default function SettingsScreen() {
     );
   };
 
-  const isTimeValid = (value: string) => {
-    if (!/^\d{2}:\d{2}$/.test(value)) return false;
-    const [hours, minutes] = value.split(':').map(Number);
-    return hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59;
-  };
-
-  const handleQuietStartBlur = () => {
-    const normalized = quietStartInput.trim();
-    if (isTimeValid(normalized)) {
-      setQuietHoursStart(normalized);
-    } else {
-      Alert.alert('Invalid time', 'Quiet hours start must use HH:MM (24-hour) format.');
-      setQuietStartInput(quietHoursStart);
-    }
-  };
-
-  const handleQuietEndBlur = () => {
-    const normalized = quietEndInput.trim();
-    if (isTimeValid(normalized)) {
-      setQuietHoursEnd(normalized);
-    } else {
-      Alert.alert('Invalid time', 'Quiet hours end must use HH:MM (24-hour) format.');
-      setQuietEndInput(quietHoursEnd);
-    }
-  };
 
   const handleExportLogs = () => {
     Alert.alert(
@@ -189,157 +105,6 @@ export default function SettingsScreen() {
   return (
     <View style={[styles.container, { backgroundColor, paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
       <ScrollView contentContainerStyle={styles.containerContent}>
-      <ThemedView colorName="surfaceElevated" style={[styles.section, { borderColor }]}> 
-        <ThemedText type="subtitle" colorName="tint" style={styles.sectionTitle}>Profile</ThemedText>
-        <ThemedText style={styles.help} colorName="muted">Personalize how the bartender greets you</ThemedText>
-        <TextInput
-          placeholder="Your name"
-          value={nameInput}
-          onChangeText={setNameInput}
-          style={[styles.input, { backgroundColor: inputBg, borderColor: inputBorder, color: textColor }]}
-          placeholderTextColor={placeholderColor}
-          autoCapitalize="words"
-        />
-        <TextInput
-          placeholder="Pronouns (e.g., she/her)"
-          value={pronounsInput}
-          onChangeText={setPronounsInput}
-          style={[styles.input, { backgroundColor: inputBg, borderColor: inputBorder, color: textColor }]}
-          placeholderTextColor={placeholderColor}
-          autoCapitalize="none"
-        />
-        <TextInput
-          placeholder="Favorite spirit"
-          value={spiritInput}
-          onChangeText={setSpiritInput}
-          style={[styles.input, { backgroundColor: inputBg, borderColor: inputBorder, color: textColor }]}
-          placeholderTextColor={placeholderColor}
-          autoCapitalize="words"
-        />
-        <TextInput
-          placeholder="Home bar name"
-          value={homeBarInput}
-          onChangeText={setHomeBarInput}
-          style={[styles.input, { backgroundColor: inputBg, borderColor: inputBorder, color: textColor }]}
-          placeholderTextColor={placeholderColor}
-          autoCapitalize="words"
-        />
-        <TextInput
-          placeholder="Add a short bio or preferences"
-          value={bioInput}
-          onChangeText={setBioInput}
-          style={[styles.textArea, { backgroundColor: inputBg, borderColor: inputBorder, color: textColor }]}
-          placeholderTextColor={placeholderColor}
-          multiline
-          numberOfLines={3}
-          textAlignVertical="top"
-        />
-        <View style={styles.rowGap}>
-          <TouchableOpacity
-            style={[styles.button, { backgroundColor: accent }]}
-            onPress={handleSaveProfile}
-          >
-            <ThemedText style={styles.buttonText} colorName="onTint">Save Profile</ThemedText>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.button, styles.secondary, { backgroundColor: surface, borderColor: inputBorder }]}
-            onPress={handleClearProfile}
-          >
-            <ThemedText style={styles.secondaryText} colorName="tint">Clear</ThemedText>
-          </TouchableOpacity>
-        </View>
-      </ThemedView>
-
-      <ThemedView colorName="surfaceElevated" style={[styles.section, { borderColor }]}> 
-        <ThemedText type="subtitle" colorName="tint" style={styles.sectionTitle}>Notifications</ThemedText>
-        <ThemedText style={styles.help} colorName="muted">Choose how and when we alert you</ThemedText>
-
-        <View style={styles.row}>
-          <ThemedText>Push notifications</ThemedText>
-          <Switch
-            value={pushNotifications}
-            onValueChange={setPushNotifications}
-            trackColor={{ false: mutedForeground, true: accent }}
-            thumbColor={Platform.OS === 'android' ? onAccent : undefined}
-          />
-        </View>
-        <ThemedText style={[styles.help, styles.helpInset]} colorName="muted">Enable real-time alerts on this device.</ThemedText>
-
-        <View style={styles.row}>
-          <ThemedText>Email updates</ThemedText>
-          <Switch
-            value={emailNotifications}
-            onValueChange={setEmailNotifications}
-            trackColor={{ false: mutedForeground, true: accent }}
-            thumbColor={Platform.OS === 'android' ? onAccent : undefined}
-          />
-        </View>
-        <ThemedText style={[styles.help, styles.helpInset]} colorName="muted">Send a summary if you miss in-app alerts.</ThemedText>
-
-        <View style={styles.row}>
-          <ThemedText>Play sounds</ThemedText>
-          <Switch
-            value={notificationSound}
-            onValueChange={setNotificationSound}
-            trackColor={{ false: mutedForeground, true: accent }}
-            thumbColor={Platform.OS === 'android' ? onAccent : undefined}
-          />
-        </View>
-        <ThemedText style={[styles.help, styles.helpInset]} colorName="muted">Audible chimes for incoming requests.</ThemedText>
-
-        <View style={styles.row}>
-          <ThemedText>Vibrate device</ThemedText>
-          <Switch
-            value={notificationVibration}
-            onValueChange={setNotificationVibration}
-            trackColor={{ false: mutedForeground, true: accent }}
-            thumbColor={Platform.OS === 'android' ? onAccent : undefined}
-          />
-        </View>
-        <ThemedText style={[styles.help, styles.helpInset]} colorName="muted">Use haptics for discreet alerts.</ThemedText>
-
-        <View style={styles.row}>
-          <ThemedText>Quiet hours</ThemedText>
-          <Switch
-            value={quietHoursEnabled}
-            onValueChange={setQuietHoursEnabled}
-            trackColor={{ false: mutedForeground, true: accent }}
-            thumbColor={Platform.OS === 'android' ? onAccent : undefined}
-          />
-        </View>
-        <ThemedText style={[styles.help, styles.helpInset]} colorName="muted">Pause push alerts during downtime.</ThemedText>
-
-        {quietHoursEnabled && (
-          <View style={styles.quietHoursRow}>
-            <View style={styles.quietField}>
-              <ThemedText style={styles.quietLabel}>Start</ThemedText>
-              <TextInput
-                value={quietStartInput}
-                onChangeText={setQuietStartInput}
-                onBlur={handleQuietStartBlur}
-                keyboardType={Platform.OS === 'ios' ? 'numbers-and-punctuation' : 'numeric'}
-                style={[styles.quietInput, { backgroundColor: inputBg, borderColor: inputBorder, color: textColor }]}
-                placeholderTextColor={placeholderColor}
-                placeholder="22:00"
-                maxLength={5}
-              />
-            </View>
-            <View style={styles.quietField}>
-              <ThemedText style={styles.quietLabel}>End</ThemedText>
-              <TextInput
-                value={quietEndInput}
-                onChangeText={setQuietEndInput}
-                onBlur={handleQuietEndBlur}
-                keyboardType={Platform.OS === 'ios' ? 'numbers-and-punctuation' : 'numeric'}
-                style={[styles.quietInput, { backgroundColor: inputBg, borderColor: inputBorder, color: textColor }]}
-                placeholderTextColor={placeholderColor}
-                placeholder="06:00"
-                maxLength={5}
-              />
-            </View>
-          </View>
-        )}
-      </ThemedView>
 
       <ThemedView colorName="surfaceElevated" style={[styles.section, { borderColor }]}> 
         <ThemedText type="subtitle" colorName="tint" style={styles.sectionTitle}>Appearance</ThemedText>
