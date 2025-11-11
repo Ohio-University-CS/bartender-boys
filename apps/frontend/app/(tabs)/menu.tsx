@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { StyleSheet, ScrollView, TouchableOpacity, TextInput, View, Platform } from 'react-native';
+import { useMemo, useState } from 'react';
+import { StyleSheet, ScrollView, TouchableOpacity, TextInput, View, Platform, Switch } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -8,19 +8,22 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { DRINKS, type Drink } from '@/constants/drinks';
 import { useFavorites } from '../../contexts/favorites';
-import { useSettings } from '@/contexts/settings';
 import { CATEGORY_COLORS, DIFFICULTY_COLORS } from '@/constants/ui-palette';
 import { useThemeColor } from '@/hooks/use-theme-color';
+
+type SortOption = 'difficulty' | 'alcohol' | 'name' | 'prepTime';
 
 export default function MenuScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { defaultMenuCategory, defaultShowFavorites } = useSettings();
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState(defaultMenuCategory || 'All');
-  const [showFavoritesOnly, setShowFavoritesOnly] = useState<boolean>(!!defaultShowFavorites);
+  const [selectedCategory, setSelectedCategory] = useState('All');
+  const [hardwareOnly, setHardwareOnly] = useState(false);
   const { isFavorite, toggleFavorite } = useFavorites();
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [sortBy, setSortBy] = useState<SortOption>('difficulty');
+  const [prepTimeFilter, setPrepTimeFilter] = useState<'any' | 'under5' | 'under10' | 'under15'>('any');
+  const [ingredientCountFilter, setIngredientCountFilter] = useState<'any' | 'under4' | 'under6' | 'under8'>('any');
 
   // Theme colors
   const backgroundColor = useThemeColor({}, 'background');
@@ -37,27 +40,76 @@ export default function MenuScreen() {
   const onAccent = useThemeColor({}, 'onTint');
   const mutedForeground = useThemeColor({}, 'mutedForeground');
   const danger = useThemeColor({}, 'danger');
-
-  // Reflect settings changes if updated while on this screen
-  useEffect(() => {
-    setSelectedCategory(defaultMenuCategory || 'All');
-  }, [defaultMenuCategory]);
-  useEffect(() => {
-    setShowFavoritesOnly(!!defaultShowFavorites);
-  }, [defaultShowFavorites]);
+  const chipBg = useThemeColor({}, 'chipBackground');
+  const chipBorder = useThemeColor({}, 'chipBorder');
 
   const toggleExpanded = (id: string) =>
     setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
 
   const categories = ['All', 'Cocktail', 'Whiskey', 'Rum', 'Gin', 'Vodka', 'Tequila', 'Brandy', 'Non-Alcoholic'];
+  const sortOptions: { key: SortOption; label: string }[] = [
+    { key: 'difficulty', label: 'Difficulty' },
+    { key: 'alcohol', label: 'Alcohol Type' },
+    { key: 'name', label: 'A-Z' },
+    { key: 'prepTime', label: 'Prep Time' },
+  ];
+  const prepTimeOptions: { key: typeof prepTimeFilter; label: string; maxMinutes?: number }[] = [
+    { key: 'any', label: 'Any Time' },
+    { key: 'under5', label: '≤ 5 min', maxMinutes: 5 },
+    { key: 'under10', label: '≤ 10 min', maxMinutes: 10 },
+    { key: 'under15', label: '≤ 15 min', maxMinutes: 15 },
+  ];
+  const ingredientCountOptions: { key: typeof ingredientCountFilter; label: string; maxCount?: number }[] = [
+    { key: 'any', label: 'Any Ingredients' },
+    { key: 'under4', label: '≤ 4 items', maxCount: 4 },
+    { key: 'under6', label: '≤ 6 items', maxCount: 6 },
+    { key: 'under8', label: '≤ 8 items', maxCount: 8 },
+  ];
+
+  const difficultyRank: Record<Drink['difficulty'], number> = {
+    Hard: 0,
+    Medium: 1,
+    Easy: 2,
+  };
+
+  const parsePrepMinutes = (prepTime: string) => {
+    const parsed = parseInt(prepTime, 10);
+    return Number.isNaN(parsed) ? Number.MAX_SAFE_INTEGER : parsed;
+  };
 
   const filteredDrinks = DRINKS.filter(drink => {
     const matchesSearch = drink.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          drink.ingredients.some(ing => ing.toLowerCase().includes(searchQuery.toLowerCase()));
     const matchesCategory = selectedCategory === 'All' || drink.category === selectedCategory;
-    const matchesFavorite = !showFavoritesOnly || isFavorite(drink.id);
-    return matchesSearch && matchesCategory && matchesFavorite;
+    const matchesHardware = !hardwareOnly || (drink.hardwareSteps && drink.hardwareSteps.length > 0);
+    const prepMinutes = parsePrepMinutes(drink.prepTime);
+    const matchesPrepTime =
+      prepTimeFilter === 'any' ||
+      (prepTimeFilter === 'under5' && prepMinutes <= 5) ||
+      (prepTimeFilter === 'under10' && prepMinutes <= 10) ||
+      (prepTimeFilter === 'under15' && prepMinutes <= 15);
+    const ingredientCount = drink.ingredients.length;
+    const matchesIngredientCount =
+      ingredientCountFilter === 'any' ||
+      (ingredientCountFilter === 'under4' && ingredientCount <= 4) ||
+      (ingredientCountFilter === 'under6' && ingredientCount <= 6) ||
+      (ingredientCountFilter === 'under8' && ingredientCount <= 8);
+
+    return matchesSearch && matchesCategory && matchesHardware && matchesPrepTime && matchesIngredientCount;
   });
+
+  const sortedDrinks = useMemo(() => {
+    const data = [...filteredDrinks];
+    const sorter = {
+      difficulty: (a: Drink, b: Drink) => difficultyRank[a.difficulty] - difficultyRank[b.difficulty] || a.name.localeCompare(b.name),
+      alcohol: (a: Drink, b: Drink) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name),
+      name: (a: Drink, b: Drink) => a.name.localeCompare(b.name),
+      prepTime: (a: Drink, b: Drink) => parsePrepMinutes(a.prepTime) - parsePrepMinutes(b.prepTime) || a.name.localeCompare(b.name),
+    } satisfies Record<SortOption, (a: Drink, b: Drink) => number>;
+
+    data.sort(sorter[sortBy]);
+    return data;
+  }, [filteredDrinks, sortBy]);
 
   const showDrinkDetails = (drink: Drink) => {
     router.push(`/drink/${drink.id}` as any);
@@ -127,8 +179,126 @@ export default function MenuScreen() {
         </ScrollView>
       </ThemedView>
 
+      <ThemedView style={[styles.filterSection, Platform.OS === 'web' && styles.filterSectionWeb]}>
+        <View style={[styles.toggleRow, Platform.OS === 'web' && styles.toggleRowWeb]}>
+          <ThemedText
+            style={[styles.filterLabel, Platform.OS === 'web' && styles.filterLabelWeb]}
+            colorName="mutedForeground"
+          >
+            Automation ready only
+          </ThemedText>
+          <Switch
+            value={hardwareOnly}
+            onValueChange={setHardwareOnly}
+            thumbColor={hardwareOnly ? accent : '#ffffff'}
+            trackColor={{ false: chipBorder, true: accent }}
+            style={Platform.OS === 'web' ? styles.switchWeb : undefined}
+          />
+        </View>
+
+        <ThemedText
+          style={[styles.filterLabel, Platform.OS === 'web' && styles.filterLabelWeb]}
+          colorName="mutedForeground"
+        >
+          Prep time
+        </ThemedText>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={[styles.sortContent, Platform.OS === 'web' && styles.sortContentWeb]}
+          style={[styles.filterScroll, Platform.OS === 'web' && styles.filterScrollWeb]}
+        >
+          {prepTimeOptions.map((option) => {
+            const isActive = prepTimeFilter === option.key;
+            return (
+              <TouchableOpacity
+                key={option.key}
+                style={[
+                  styles.sortButton,
+                  { backgroundColor: chipBg, borderColor: chipBorder },
+                  isActive && { backgroundColor: accent, borderColor: accent },
+                ]}
+                onPress={() => setPrepTimeFilter(option.key)}
+              >
+                <ThemedText
+                  style={styles.sortText}
+                  colorName={isActive ? 'onTint' : 'mutedForeground'}
+                >
+                  {option.label}
+                </ThemedText>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+
+        <ThemedText
+          style={[styles.filterLabel, Platform.OS === 'web' && styles.filterLabelWeb]}
+          colorName="mutedForeground"
+        >
+          Ingredient count
+        </ThemedText>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={[styles.sortContent, Platform.OS === 'web' && styles.sortContentWeb]}
+          style={[styles.filterScroll, Platform.OS === 'web' && styles.filterScrollWeb]}
+        >
+          {ingredientCountOptions.map((option) => {
+            const isActive = ingredientCountFilter === option.key;
+            return (
+              <TouchableOpacity
+                key={option.key}
+                style={[
+                  styles.sortButton,
+                  { backgroundColor: chipBg, borderColor: chipBorder },
+                  isActive && { backgroundColor: accent, borderColor: accent },
+                ]}
+                onPress={() => setIngredientCountFilter(option.key)}
+              >
+                <ThemedText
+                  style={styles.sortText}
+                  colorName={isActive ? 'onTint' : 'mutedForeground'}
+                >
+                  {option.label}
+                </ThemedText>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      </ThemedView>
+
+      <ThemedView style={[styles.sortContainer, Platform.OS === 'web' && styles.sortContainerWeb]}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={[styles.sortContent, Platform.OS === 'web' && styles.sortContentWeb]}
+        >
+          {sortOptions.map((option) => {
+            const isActive = sortBy === option.key;
+            return (
+              <TouchableOpacity
+                key={option.key}
+                style={[
+                  styles.sortButton,
+                  { backgroundColor: chipBg, borderColor: chipBorder },
+                  isActive && { backgroundColor: accent, borderColor: accent },
+                ]}
+                onPress={() => setSortBy(option.key)}
+              >
+                <ThemedText
+                  style={styles.sortText}
+                  colorName={isActive ? 'onTint' : 'mutedForeground'}
+                >
+                  {option.label}
+                </ThemedText>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      </ThemedView>
+
       <ThemedView style={styles.drinksContainer}>
-        {filteredDrinks.map((drink) => {
+        {sortedDrinks.map((drink) => {
           const isExpanded = !!expanded[drink.id];
           const shownIngredients = isExpanded ? drink.ingredients : drink.ingredients.slice(0, 3);
           const remaining = drink.ingredients.length - shownIngredients.length;
@@ -180,7 +350,7 @@ export default function MenuScreen() {
           </TouchableOpacity>
         );})}
         
-        {filteredDrinks.length === 0 && (
+        {sortedDrinks.length === 0 && (
           <ThemedView style={styles.emptyState}>
             <ThemedText style={styles.emptyText} colorName="muted">No drinks found</ThemedText>
           </ThemedView>
@@ -236,6 +406,70 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     width: '100%',
+  },
+  sortContainer: {
+    width: '100%',
+    marginBottom: 8,
+    paddingHorizontal: 12,
+  },
+  sortContainerWeb: {
+    alignItems: 'center',
+  },
+  filterSection: {
+    width: '100%',
+    paddingHorizontal: 12,
+    gap: 12,
+    marginBottom: 12,
+  },
+  filterSectionWeb: {
+    alignItems: 'center',
+  },
+  filterLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  filterLabelWeb: {
+    textAlign: 'center',
+    alignSelf: 'center',
+  },
+  filterScroll: {
+    marginBottom: 4,
+  },
+  filterScrollWeb: {
+    alignSelf: 'center',
+  },
+  toggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  toggleRowWeb: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    alignSelf: 'center',
+  },
+  switchWeb: {
+    marginLeft: 12,
+  },
+  sortContent: {
+    gap: 8,
+    paddingHorizontal: 4,
+  },
+  sortContentWeb: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  sortButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  sortText: {
+    fontSize: 14,
+    fontWeight: '600',
   },
   categoryButton: {
     paddingHorizontal: 12,
