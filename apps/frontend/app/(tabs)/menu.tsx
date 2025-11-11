@@ -22,7 +22,7 @@ export default function MenuScreen() {
   const { isFavorite, toggleFavorite } = useFavorites();
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [sortBy, setSortBy] = useState<SortOption>('difficulty');
-  const [prepTimeFilter, setPrepTimeFilter] = useState<'any' | 'under5' | 'under10' | 'under15'>('any');
+  const [prepTimeFilter, setPrepTimeFilter] = useState<'any' | 'under2' | 'under3' | 'under4'>('any');
   const [ingredientCountFilter, setIngredientCountFilter] = useState<'any' | 'under4' | 'under6' | 'under8'>('any');
 
   // Theme colors
@@ -55,9 +55,9 @@ export default function MenuScreen() {
   ];
   const prepTimeOptions: { key: typeof prepTimeFilter; label: string; maxMinutes?: number }[] = [
     { key: 'any', label: 'Any Time' },
-    { key: 'under5', label: '≤ 5 min', maxMinutes: 5 },
-    { key: 'under10', label: '≤ 10 min', maxMinutes: 10 },
-    { key: 'under15', label: '≤ 15 min', maxMinutes: 15 },
+    { key: 'under2', label: '≤ 2 min', maxMinutes: 2 },
+    { key: 'under3', label: '≤ 3 min', maxMinutes: 3 },
+    { key: 'under4', label: '≤ 4 min', maxMinutes: 4 },
   ];
   const ingredientCountOptions: { key: typeof ingredientCountFilter; label: string; maxCount?: number }[] = [
     { key: 'any', label: 'Any Ingredients' },
@@ -72,9 +72,14 @@ export default function MenuScreen() {
     Easy: 2,
   };
 
+  // Extracts the first number found in the prepTime string (e.g., '5 min', '10 minutes')
   const parsePrepMinutes = (prepTime: string) => {
-    const parsed = parseInt(prepTime, 10);
-    return Number.isNaN(parsed) ? Number.MAX_SAFE_INTEGER : parsed;
+    if (!prepTime) return Number.MAX_SAFE_INTEGER;
+    const match = prepTime.match(/\d+/);
+    if (match) {
+      return parseInt(match[0], 10);
+    }
+    return Number.MAX_SAFE_INTEGER;
   };
 
   const filteredDrinks = DRINKS.filter(drink => {
@@ -85,9 +90,9 @@ export default function MenuScreen() {
     const prepMinutes = parsePrepMinutes(drink.prepTime);
     const matchesPrepTime =
       prepTimeFilter === 'any' ||
-      (prepTimeFilter === 'under5' && prepMinutes <= 5) ||
-      (prepTimeFilter === 'under10' && prepMinutes <= 10) ||
-      (prepTimeFilter === 'under15' && prepMinutes <= 15);
+      (prepTimeFilter === 'under2' && prepMinutes <= 2) ||
+      (prepTimeFilter === 'under3' && prepMinutes <= 3) ||
+      (prepTimeFilter === 'under4' && prepMinutes <= 4);
     const ingredientCount = drink.ingredients.length;
     const matchesIngredientCount =
       ingredientCountFilter === 'any' ||
