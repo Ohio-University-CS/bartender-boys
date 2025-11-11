@@ -274,14 +274,8 @@ export default function ChatScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor, paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
+    <View style={[styles.container, { backgroundColor, paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}> 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-  <View style={[styles.avatarContainer, { borderBottomColor: avatarBorder, backgroundColor: avatarBackground }]}> 
-          <BartenderAvatar
-            isTalking={isTalking}
-            backgroundColor={avatarBackground}
-          />
-        </View>
         <FlatList
           data={messages}
           keyExtractor={(it) => it.id}
