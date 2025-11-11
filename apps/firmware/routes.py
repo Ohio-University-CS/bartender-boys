@@ -1,14 +1,28 @@
+"""IoT firmware routes for the bartender service.
+
+This module exposes a small FastAPI router used by the Pi firmware to
+receive drink dispense requests and execute hardware steps.
+"""
+
 import json
 import logging
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Optional
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+from hardware import get_pump_controller
+
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/iot", tags=["IoT"])
+
+
+class HardwareStep(BaseModel):
+    pump: str = Field(..., description="Pump identifier to activate")
+    seconds: float = Field(..., gt=0, le=15, description="Run time for the pump")
 
 
 class Drink(BaseModel):
@@ -18,8 +32,9 @@ class Drink(BaseModel):
     category: str
     ingredients: list[str]
     instructions: str
-    difficulty: Literal['Easy', 'Medium', 'Hard']
+    difficulty: Literal["Easy", "Medium", "Hard"]
     prepTime: str
+    hardwareSteps: Optional[list[HardwareStep]] = None
 
 
 class PourRequest(BaseModel):
@@ -61,31 +76,44 @@ def load_hardware_mapping() -> HardwareMapping | None:
 async def receive_drink_request(request: PourRequest) -> PourResponse:
     """
     Receive a drink request from the main backend.
-    For now, just logs the drink information.
-    
+    Logs the request and attempts to execute any provided hardware steps.
+
     Args:
         request: Drink request containing the drink object
-        
+
     Returns:
-        Response confirming receipt
+        PourResponse indicating success or error
     """
     drink = request.drink
-    logger.info(f"Received drink request: {drink.name} (ID: {drink.id})")
-    logger.info(f"Category: {drink.category}, Difficulty: {drink.difficulty}")
-    logger.info(f"Ingredients: {', '.join(drink.ingredients)}")
-    logger.info(f"Instructions: {drink.instructions}")
-    logger.info(f"Prep time: {drink.prepTime}")
-
-    mapping = load_hardware_mapping()
-    if mapping:
-        logger.info("Loaded hardware mapping for pumps: %s", mapping.pumps)
-        if mapping.defaults:
-            logger.info("Hardware defaults: %s", mapping.defaults)
-    else:
-        logger.warning("No hardware mapping configured; operating in logging-only mode")
-    
-    return PourResponse(
-        status="ok",
-        message=f"Drink request received: {drink.name}"
+    logger.info("Received drink request: %s (ID: %s)", drink.name, drink.id)
+    logger.info(
+        "Category: %s, Difficulty: %s, Prep time: %s",
+        drink.category,
+        drink.difficulty,
+        drink.prepTime,
     )
+
+    steps = drink.hardwareSteps or []
+    if not steps:
+        logger.warning("No hardware steps supplied for drink '%s'", drink.name)
+        return PourResponse(status="error", message="No hardware steps supplied")
+
+    controller = get_pump_controller()
+    paused_results: list[dict] = []
+
+    try:
+        paused_results = await controller.dispense_steps(
+            [step.model_dump() for step in steps]
+        )
+    except ValueError as exc:
+        logger.exception("Failed to dispense drink '%s'", drink.name)
+        return PourResponse(status="error", message=str(exc))
+    except Exception as exc:  # pragma: no cover - defensive guard for runtime faults.
+        logger.exception("Unexpected failure while dispensing drink '%s'", drink.name)
+        return PourResponse(status="error", message=f"Dispense failure: {exc}")
+
+    logger.info("Dispense complete with %d steps", len(paused_results))
+
+    mode = "hardware" if controller.hardware_available else "simulation"
+    return PourResponse(status="ok", message=f"Dispense complete ({mode})")
 
