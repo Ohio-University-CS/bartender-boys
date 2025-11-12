@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, Alert, ActivityIndicator, Image, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -31,6 +31,15 @@ export default function AuthScreen() {
   const [checkingBypass, setCheckingBypass] = useState(true);
   const { apiBaseUrl, idPhotoWidth, scanTimeoutMs } = useSettings();
 
+  const onSkip = useCallback(async () => {
+    try {
+      await AsyncStorage.setItem('isVerified', 'true');
+      // Set guest user for skipped verification
+      await AsyncStorage.setItem('user_id', 'guest');
+    } catch {}
+    router.replace('/(tabs)/menu');
+  }, [router]);
+
   useEffect(() => {
     // On mount, if user previously skipped or verified, go straight to app
     (async () => {
@@ -48,28 +57,43 @@ export default function AuthScreen() {
   }, [router]);
 
   // On web, automatically skip ID verification to avoid blank/permission issues
+  // But only if isVerified is not explicitly null (i.e., user hasn't logged out)
   useEffect(() => {
     if (!checkingBypass && typeof window !== 'undefined' && Platform.OS === 'web') {
-      // Small delay to let the screen mount smoothly
-      const t = setTimeout(() => {
-        onSkip();
-      }, 300);
-      return () => clearTimeout(t);
+      let timeoutId: NodeJS.Timeout | null = null;
+      
+      // Check if user explicitly logged out (isVerified is null)
+      (async () => {
+        try {
+          const isVerified = await AsyncStorage.getItem('isVerified');
+          // Only auto-skip if isVerified is not null (meaning it was never set or was explicitly removed)
+          // If it's null, user logged out, so don't auto-skip
+          if (isVerified === null) {
+            // User logged out, don't auto-skip
+            return;
+          }
+          // Small delay to let the screen mount smoothly
+          timeoutId = setTimeout(() => {
+            onSkip();
+          }, 300);
+        } catch {
+          // On error, don't auto-skip
+        }
+      })();
+      
+      return () => {
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
+      };
     }
-  }, [checkingBypass]);
+  }, [checkingBypass, onSkip]);
 
   useEffect(() => {
     if (!permission?.granted) {
       requestPermission();
     }
   }, [permission, requestPermission]);
-
-  const onSkip = async () => {
-    try {
-      await AsyncStorage.setItem('isVerified', 'true');
-    } catch {}
-    router.replace('/(tabs)/menu');
-  };
 
   const onCapture = async () => {
     if (!cameraRef.current) return;
@@ -121,6 +145,18 @@ export default function AuthScreen() {
 
         // If it looks valid, continue to app
         if (apiResponse.data?.is_valid) {
+          // Store user information in AsyncStorage
+          try {
+            await AsyncStorage.setItem('isVerified', 'true');
+            if (apiResponse.data.drivers_license_number) {
+              await AsyncStorage.setItem('user_id', apiResponse.data.drivers_license_number);
+            }
+            if (apiResponse.data.name) {
+              await AsyncStorage.setItem('user_name', apiResponse.data.name);
+            }
+          } catch (storageError) {
+            console.error('Failed to store user info:', storageError);
+          }
           router.replace('/(tabs)/menu');
         } else {
           Alert.alert('Invalid ID', 'The ID could not be verified. Please try again with a clear photo of a valid ID.');
@@ -243,7 +279,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   viewfinder: {
-    width: '90%',
+    ...Platform.select({
+      web: {
+        width: '60%',
+        maxWidth: 400,
+      },
+      default: {
+        width: '90%',
+      },
+    }),
     aspectRatio: 1.6,
     borderStyle: 'solid',
     borderWidth: 2,

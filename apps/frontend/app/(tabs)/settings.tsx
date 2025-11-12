@@ -8,12 +8,11 @@ import { ACCENT_OPTIONS } from '@/constants/theme';
 import { useSettings, REALTIME_VOICES, type RealtimeVoice } from '@/contexts/settings';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useThemeColor } from '@/hooks/use-theme-color';
-import { useRouter } from 'expo-router';
+import { router } from 'expo-router';
 import Constants from 'expo-constants';
 import { API_BASE_URL } from '@/environment';
 
 export default function SettingsScreen() {
-  const router = useRouter();
   const insets = useSafeAreaInsets();
   const {
     theme,
@@ -48,31 +47,62 @@ export default function SettingsScreen() {
   const onDanger = useThemeColor({}, 'onDanger');
 
   const [apiUrlInput, setApiUrlInput] = useState(apiBaseUrl || API_BASE_URL);
+  const [userName, setUserName] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
 
   useEffect(() => setApiUrlInput(apiBaseUrl || API_BASE_URL), [apiBaseUrl]);
 
+  // Load user information from AsyncStorage
+  useEffect(() => {
+    const loadUserInfo = async () => {
+      try {
+        const [name, id] = await Promise.all([
+          AsyncStorage.getItem('user_name'),
+          AsyncStorage.getItem('user_id'),
+        ]);
+        setUserName(name);
+        setUserId(id);
+      } catch (error) {
+        console.error('Failed to load user info:', error);
+      }
+    };
+    loadUserInfo();
+  }, []);
+
 
   const handleLogout = async () => {
-    Alert.alert(
-      'Log Out',
-      'Are you sure you want to log out?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Log Out',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await AsyncStorage.removeItem('isVerified');
-              router.replace('/auth');
-            } catch (error) {
-              console.error('Logout error:', error);
-              Alert.alert('Error', 'Failed to log out. Please try again.');
-            }
-          },
-        },
-      ]
-    );
+    console.log('[Settings] Logout button pressed, starting logout process');
+    try {
+      // Remove verification flag and user info
+      await AsyncStorage.removeItem('isVerified');
+      await AsyncStorage.removeItem('user_id');
+      await AsyncStorage.removeItem('user_name');
+      console.log('[Settings] Removed user info from AsyncStorage');
+      
+      // Clear state immediately
+      setUserName(null);
+      setUserId(null);
+      
+      // Verify it was removed
+      const stillVerified = await AsyncStorage.getItem('isVerified');
+      console.log('[Settings] Verification check after removal:', stillVerified);
+      
+      // Use setTimeout to ensure navigation happens after state updates
+      setTimeout(() => {
+        console.log('[Settings] Navigating to /auth');
+        try {
+          router.replace('/auth' as any);
+          console.log('[Settings] Navigation called successfully');
+        } catch (navError) {
+          console.error('[Settings] Navigation error:', navError);
+          // Fallback: try navigating to root
+          router.replace('/' as any);
+        }
+      }, 200);
+    } catch (error) {
+      console.error('[Settings] Logout error:', error);
+      Alert.alert('Error', 'Failed to log out. Please try again.');
+    }
   };
 
 
@@ -311,7 +341,33 @@ export default function SettingsScreen() {
 
       <ThemedView colorName="surfaceElevated" style={[styles.section, { borderColor }]}> 
         <ThemedText type="subtitle" colorName="tint" style={styles.sectionTitle}>Account</ThemedText>
-        <View style={styles.rowGap}>
+        
+        {userName || userId ? (
+          <View style={styles.rowGap}>
+            {userName && (
+              <View style={styles.accountRow}>
+                <ThemedText style={styles.accountLabel} colorName="mutedForeground">Name</ThemedText>
+                <ThemedText style={styles.accountValue} colorName="text">{userName}</ThemedText>
+              </View>
+            )}
+            {userId && userId !== 'guest' && (
+              <View style={styles.accountRow}>
+                <ThemedText style={styles.accountLabel} colorName="mutedForeground">Driver&apos;s License (User ID)</ThemedText>
+                <ThemedText style={styles.accountValue} colorName="text">{userId}</ThemedText>
+              </View>
+            )}
+            {userId === 'guest' && (
+              <View style={styles.accountRow}>
+                <ThemedText style={styles.accountLabel} colorName="mutedForeground">User ID</ThemedText>
+                <ThemedText style={styles.accountValue} colorName="text">Guest</ThemedText>
+              </View>
+            )}
+          </View>
+        ) : (
+          <ThemedText style={styles.help} colorName="muted">No account information available. Verify your ID to link your account.</ThemedText>
+        )}
+
+        <View style={[styles.rowGap, { marginTop: userName || userId ? 16 : 8 }]}>
           <TouchableOpacity
             style={[styles.button, { backgroundColor: danger }]}
             onPress={handleLogout}
@@ -356,11 +412,18 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   chipActive: {
-    shadowColor: '#000',
-    shadowOpacity: 0.18,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 3,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 3px 6px rgba(0, 0, 0, 0.18)',
+      },
+      default: {
+        shadowColor: '#000',
+        shadowOpacity: 0.18,
+        shadowRadius: 6,
+        shadowOffset: { width: 0, height: 3 },
+        elevation: 3,
+      },
+    }),
   },
   chipText: { fontWeight: '600' },
   accentRow: {
@@ -408,5 +471,23 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 12,
     fontVariant: ['tabular-nums'],
+  },
+  accountRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  accountLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  accountValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    flex: 1,
+    textAlign: 'right',
   },
 });

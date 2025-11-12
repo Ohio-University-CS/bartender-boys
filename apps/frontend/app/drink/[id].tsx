@@ -1,26 +1,53 @@
-import React, { useCallback, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Alert } from 'react-native';
+import React, { useCallback, useMemo, useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Alert, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { DRINKS } from '@/constants/drinks';
+import { type Drink } from '@/constants/drinks';
 import { useFavorites } from '@/contexts/favorites';
 import { CATEGORY_COLORS, DIFFICULTY_COLORS } from '@/constants/ui-palette';
 import { API_BASE_URL } from '@/environment';
+import { getDrinkById } from '@/utils/drinks-api';
+import { useSettings } from '@/contexts/settings';
 
 export default function DrinkDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { isFavorite, toggleFavorite } = useFavorites();
+  const { apiBaseUrl } = useSettings();
 
-  const drink = DRINKS.find(d => d.id === id);
+  const [drink, setDrink] = useState<Drink | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [pouring, setPouring] = useState(false);
+
+  // Fetch drink from API
+  useEffect(() => {
+    if (!id) return;
+    
+    const fetchDrink = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const drinkData = await getDrinkById(id, apiBaseUrl);
+        setDrink(drinkData);
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'Failed to load drink';
+        setError(errorMessage);
+        console.error('[DrinkDetailScreen] Error fetching drink:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDrink();
+  }, [id, apiBaseUrl]);
 
   const hardwareSteps = useMemo(() => drink?.hardwareSteps ?? null, [drink]);
 
   const handlePour = useCallback(async () => {
     if (!drink) return;
     if (!hardwareSteps || hardwareSteps.length === 0) {
-      Alert.alert('No dispenser recipe', 'This drink has no hardware mapping yet. Configure hardwareSteps in constants/drinks.ts.');
+      Alert.alert('No dispenser recipe', 'This drink has no hardware mapping yet.');
       return;
     }
 
@@ -52,7 +79,23 @@ export default function DrinkDetailScreen() {
     }
   }, [drink, hardwareSteps]);
 
-  if (!drink) {
+  if (loading) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+            <Ionicons name="arrow-back" size={24} color="#FFA500" />
+          </TouchableOpacity>
+        </View>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#FFA500" />
+          <Text style={styles.loadingText}>Loading drink...</Text>
+        </View>
+      </View>
+    );
+  }
+
+  if (error || !drink) {
     return (
       <View style={styles.container}>
         <View style={styles.header}>
@@ -61,14 +104,14 @@ export default function DrinkDetailScreen() {
           </TouchableOpacity>
         </View>
         <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>Drink not found</Text>
+          <Text style={styles.errorText}>{error || 'Drink not found'}</Text>
         </View>
       </View>
     );
   }
 
-  // Placeholder image URL - you can replace with actual drink images later
-  const drinkImageUrl = `https://via.placeholder.com/400x300/1a1a1a/FFA500?text=${encodeURIComponent(drink.name)}`;
+  // Use image_url from drink if available, otherwise use placeholder
+  const drinkImageUrl = drink.image_url || `https://via.placeholder.com/400x300/1a1a1a/FFA500?text=${encodeURIComponent(drink.name)}`;
 
   return (
     <View style={styles.container}>
@@ -138,7 +181,25 @@ export default function DrinkDetailScreen() {
               <Ionicons name="book-outline" size={22} color="#FFA500" />
               <Text style={styles.sectionTitle}>Instructions</Text>
             </View>
-            <Text style={styles.instructionsText}>{drink.instructions}</Text>
+            <View style={styles.instructionsContainer}>
+              {(() => {
+                // Handle various newline formats: \n, \\n, \r\n, etc.
+                const normalized = drink.instructions
+                  .replace(/\\n/g, '\n')
+                  .replace(/\\r\\n/g, '\n')
+                  .replace(/\\r/g, '\n');
+                const lines = normalized.split(/\r?\n/);
+                return lines.map((line, index) => {
+                  const trimmed = line.trim();
+                  // Render non-empty lines, or a spacer for empty lines
+                  return trimmed ? (
+                    <Text key={index} style={styles.instructionsText}>
+                      {trimmed}
+                    </Text>
+                  ) : null;
+                });
+              })()}
+            </View>
           </View>
 
           {/* Pour Button */}
@@ -287,12 +348,17 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     textAlign: 'left',
   },
+  instructionsContainer: {
+    width: '100%',
+    alignItems: 'center',
+    maxWidth: 600,
+  },
   instructionsText: {
     color: '#ccc',
     fontSize: 16,
     lineHeight: 24,
     textAlign: 'center',
-    maxWidth: 600,
+    marginBottom: 8,
   },
   pourButton: {
     backgroundColor: '#FFA500',
@@ -319,6 +385,16 @@ const styles = StyleSheet.create({
   },
   pourButtonDisabled: {
     opacity: 0.7,
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingText: {
+    color: '#888',
+    fontSize: 18,
+    marginTop: 12,
   },
   errorContainer: {
     flex: 1,

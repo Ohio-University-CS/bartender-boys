@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -12,6 +12,8 @@ class Drink(BaseModel):
     instructions: str
     difficulty: Literal['Easy', 'Medium', 'Hard']
     prepTime: str
+    user_id: Optional[str] = Field(None, description="User ID (foreign key) who created/saved this drink")
+    image_url: Optional[str] = Field(None, description="URL of the drink image")
 
 
 class GenerateImageRequest(BaseModel):
@@ -50,4 +52,29 @@ class DispenseResponse(BaseModel):
 
     status: Literal["ok"]
     results: list[dict]
+
+
+class GenerateDrinkRequest(BaseModel):
+    """Request model for generating a complete drink with image."""
+    name: str
+    category: str
+    ingredients: list[str]
+    instructions: str
+    difficulty: Literal['Easy', 'Medium', 'Hard']
+    prepTime: str
+    user_id: str = Field(..., description="User ID (foreign key) who is creating this drink")
+
+
+class GenerateDrinkResponse(BaseModel):
+    """Response model for generated drink."""
+    drink: Drink
+
+
+class DrinksListResponse(BaseModel):
+    """Response model for paginated drinks list."""
+    drinks: list[Drink]
+    total: int
+    skip: int
+    limit: int
+    has_more: bool
 
