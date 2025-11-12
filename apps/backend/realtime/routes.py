@@ -1,70 +1,93 @@
-from fastapi import WebSocket, HTTPException
-from fastapi.routing import APIRouter
-from fastapi.responses import FileResponse
+import logging
+import httpx
+from fastapi import APIRouter, HTTPException
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel
+from settings import settings
 import os
-from .realtime_manager import openai_manager
 
-# Create router for OpenAI Realtime endpoints
-router = APIRouter(prefix="/openai", tags=["openai-realtime"])
+logger = logging.getLogger(__name__)
 
-@router.websocket("/realtime/{client_id}")
-async def openai_realtime_websocket(websocket: WebSocket, client_id: str):
-    """
-    WebSocket endpoint for OpenAI Realtime API connection.
-    
-    Uses the WebSocket service for proper connection lifecycle management.
-    The service handles connection acceptance, state tracking, and cleanup.
-    """
-    await openai_manager.handle_client_connection(websocket, client_id)
+router = APIRouter(prefix="/realtime", tags=["Realtime"])
+
+VALID_VOICES = ['alloy', 'ash', 'ballad', 'coral', 'echo', 'sage', 'shimmer', 'verse', 'marin', 'cedar']
+
+
+class TokenRequest(BaseModel):
+    voice: str = 'alloy'
+
 
 @router.post("/token")
-async def get_openai_token():
-    """Get an ephemeral session for OpenAI Realtime API"""
+async def get_realtime_token(request: TokenRequest = TokenRequest()):
+    """
+    Get an ephemeral token for OpenAI Realtime API.
+    This endpoint creates a session with OpenAI and returns the client_secret
+    that can be used to establish a WebRTC connection.
+    
+    Args:
+        request: Token request containing voice option (defaults to 'alloy')
+    """
+    openai_api_key = os.getenv("OPENAI_API_KEY") or settings.OPENAI_API_KEY
+    
+    if not openai_api_key:
+        logger.error("OpenAI API key not configured")
+        raise HTTPException(
+            status_code=500,
+            detail="OpenAI API key not configured"
+        )
+    
+    # Validate voice option
+    voice = request.voice if request.voice in VALID_VOICES else 'alloy'
+
     try:
-        session_data = await openai_manager.get_ephemeral_token()
-        return {
-            "session_id": session_data["session_id"],
-            "expires_in": session_data["expires_in"],
-            "model": session_data["model"],
-            "voice": session_data["voice"],
-            "instructions": session_data["instructions"]
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                "https://api.openai.com/v1/realtime/sessions",
+                headers={
+                    "Authorization": f"Bearer {openai_api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": "gpt-4o-realtime-preview-2024-12-17",
+                    "voice": voice,
+                },
+                timeout=30.0
+            )
+            response.raise_for_status()
+            session_data = response.json()
+            
+            logger.info("Successfully created OpenAI Realtime session")
+            return JSONResponse(
+                content=session_data,
+                headers={
+                    "Access-Control-Allow-Origin": "*",
+                    "Access-Control-Allow-Methods": "POST, OPTIONS",
+                    "Access-Control-Allow-Headers": "Content-Type",
+                }
+            )
+    except httpx.HTTPStatusError as e:
+        logger.error(f"Failed to create OpenAI session: {e.response.status_code} - {e.response.text}")
+        raise HTTPException(
+            status_code=e.response.status_code,
+            detail=f"Failed to create OpenAI session: {e.response.text}"
+        )
+    except Exception as e:
+        logger.error(f"Error creating OpenAI session: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal server error: {str(e)}"
+        )
+
+
+@router.options("/token")
+async def options_token():
+    """Handle CORS preflight requests"""
+    return JSONResponse(
+        content={},
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "POST, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type",
         }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    )
 
-@router.get("/status")
-async def get_openai_status():
-    """Get current status of OpenAI Realtime connection"""
-    status = openai_manager.get_status()
-    
-    # Add more detailed connection info
-    if openai_manager.openai_websocket:
-        try:
-            status["websocket_state"] = str(openai_manager.openai_websocket.state)
-            status["websocket_local_address"] = str(openai_manager.openai_websocket.local_address)
-            status["websocket_remote_address"] = str(openai_manager.openai_websocket.remote_address)
-        except Exception as e:
-            status["websocket_error"] = str(e)
-    
-    return status
-
-@router.post("/connect/{client_id}")
-async def connect_to_openai(client_id: str):
-    """Test connection to OpenAI Realtime API"""
-    try:
-        result = await openai_manager.connect_to_openai_realtime(client_id)
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.get("/client")
-async def openai_client():
-    """Serve the OpenAI Realtime client HTML page"""
-    client_path = os.path.join(os.path.dirname(__file__), "openai_client.html")
-    return FileResponse(client_path)
-
-@router.get("/")
-async def openai_client_root():
-    """Serve the OpenAI Realtime client HTML page (root endpoint)"""
-    client_path = os.path.join(os.path.dirname(__file__), "openai_client.html")
-    return FileResponse(client_path)
