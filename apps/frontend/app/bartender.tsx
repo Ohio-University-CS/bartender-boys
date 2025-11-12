@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { StyleSheet, View, TouchableOpacity, Platform, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { BartenderAvatar } from '@/components/BartenderAvatar';
@@ -61,12 +61,24 @@ export default function BartenderScreen() {
       if (event.type === 'response.audio_transcript.delta' || event.type === 'response.audio.delta') {
         setIsTalking(true);
       }
+    },
+    onToolCall: async (toolName, args) => {
+      console.log('[bartender] Tool call received:', toolName, args);
       
-      // Handle function calls if needed
-      if (event.type === 'response.function_call_arguments.done') {
-        // Handle function calls here if needed
-        console.log('[bartender] Function call:', event.name, event.arguments);
+      if (toolName === 'kick_user_out') {
+        // Stop the session first
+        stopSession();
+        setTranscript('');
+        setIsTalking(false);
+        
+        // Navigate back to chat page
+        router.push('/(tabs)/chat' as never);
+        
+        return { success: true, message: 'User has been removed from the conversation' };
       }
+      
+      // Unknown tool
+      return { success: false, error: `Unknown tool: ${toolName}` };
     },
     onError: (error) => {
       console.error('[bartender] WebRTC error:', error);
@@ -82,10 +94,32 @@ export default function BartenderScreen() {
     } else {
       try {
         await startSession();
-    } catch (error) {
+      } catch (error) {
         console.error('[bartender] Failed to start session:', error);
       }
     }
+  };
+
+  // Cleanup session when navigating away or unmounting
+  useFocusEffect(
+    React.useCallback(() => {
+      return () => {
+        // Cleanup when screen loses focus (user navigates away)
+        stopSession();
+        setTranscript('');
+        setIsTalking(false);
+      };
+    }, [stopSession])
+  );
+
+  // Handle back button press with cleanup
+  const handleBackPress = () => {
+    stopSession();
+    setTranscript('');
+    setIsTalking(false);
+    // Navigate to chat page instead of using router.back()
+    // This ensures we always have a valid destination
+    router.push('/(tabs)/chat' as never);
   };
 
   // Theme colors
@@ -99,7 +133,7 @@ export default function BartenderScreen() {
     <View style={[styles.container, { backgroundColor, paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
       <View style={[styles.avatarContainer, { borderBottomColor: avatarBorder, backgroundColor: avatarBackground }]}>
         <TouchableOpacity 
-          onPress={() => router.back()} 
+          onPress={handleBackPress} 
           style={styles.backButton}
           accessibilityLabel="Go back"
           accessibilityRole="button"

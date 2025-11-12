@@ -2,6 +2,7 @@ import logging
 import httpx
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 from settings import settings
 import os
 
@@ -9,13 +10,22 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/realtime", tags=["Realtime"])
 
+VALID_VOICES = ['alloy', 'ash', 'ballad', 'coral', 'echo', 'sage', 'shimmer', 'verse', 'marin', 'cedar']
+
+
+class TokenRequest(BaseModel):
+    voice: str = 'alloy'
+
 
 @router.post("/token")
-async def get_realtime_token():
+async def get_realtime_token(request: TokenRequest = TokenRequest()):
     """
     Get an ephemeral token for OpenAI Realtime API.
     This endpoint creates a session with OpenAI and returns the client_secret
     that can be used to establish a WebRTC connection.
+    
+    Args:
+        request: Token request containing voice option (defaults to 'alloy')
     """
     openai_api_key = os.getenv("OPENAI_API_KEY") or settings.OPENAI_API_KEY
     
@@ -26,6 +36,9 @@ async def get_realtime_token():
             detail="OpenAI API key not configured"
         )
     
+    # Validate voice option
+    voice = request.voice if request.voice in VALID_VOICES else 'alloy'
+
     try:
         async with httpx.AsyncClient() as client:
             response = await client.post(
@@ -36,7 +49,7 @@ async def get_realtime_token():
                 },
                 json={
                     "model": "gpt-4o-realtime-preview-2024-12-17",
-                    "voice": "alloy",
+                    "voice": voice,
                 },
                 timeout=30.0
             )

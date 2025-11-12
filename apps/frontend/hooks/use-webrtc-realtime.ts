@@ -8,11 +8,13 @@ import {
   MediaStream,
 } from 'react-native-webrtc-web-shim';
 import { getRealtimeToken } from '@/utils/realtime';
+import { useSettings } from '@/contexts/settings';
 
 export interface UseWebRTCRealtimeOptions {
   onTranscript?: (transcript: string) => void;
   onEvent?: (event: any) => void;
   onError?: (error: Error) => void;
+  onToolCall?: (toolName: string, args: any) => Promise<any>;
 }
 
 export interface UseWebRTCRealtimeReturn {
@@ -28,7 +30,8 @@ export interface UseWebRTCRealtimeReturn {
 export function useWebRTCRealtime(
   options: UseWebRTCRealtimeOptions = {}
 ): UseWebRTCRealtimeReturn {
-  const { onTranscript, onEvent, onError } = options;
+  const { onTranscript, onEvent, onError, onToolCall } = options;
+  const { realtimeVoice } = useSettings();
   
   const [isSessionActive, setIsSessionActive] = useState(false);
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
@@ -49,10 +52,10 @@ export function useWebRTCRealtime(
 
   const startSession = useCallback(async () => {
     try {
-      // Get ephemeral token from backend
-      const tokenData = await getRealtimeToken();
+      // Get ephemeral token from backend with selected voice
+      const tokenData = await getRealtimeToken(realtimeVoice);
       const ephemeralKey = tokenData.client_secret.value;
-      console.log('[useWebRTCRealtime] Got ephemeral token');
+      console.log('[useWebRTCRealtime] Got ephemeral token with voice:', realtimeVoice);
 
       // Enable audio
       await Audio.setAudioModeAsync({ playsInSilentModeIOS: true });
@@ -257,15 +260,24 @@ export function useWebRTCRealtime(
           });
         }
         
-        // Configure session with instructions
+        // Configure session with instructions and tools
+        const toolsSchema = [
+          {
+            type: 'function',
+            name: 'kick_user_out',
+            description: 'Call this function when the user is being mean, rude, abusive, or disrespectful to the bartender. This will end the conversation and return the user to the chat page.',
+          },
+        ];
+
         const sessionUpdateEvent = {
           type: 'session.update',
           session: {
             modalities: ['text', 'audio'],
-            instructions: 'You are a helpful bartender assistant. Help customers with drink orders and provide friendly service.',
+            instructions: 'You are a helpful bartender assistant. Help customers with drink orders and provide friendly service. If a user is being mean, rude, abusive, or disrespectful to you, use the kick_user_out tool to end the conversation.',
+            tools: toolsSchema,
           },
         };
-        console.log('[useWebRTCRealtime] Sending session.update with audio modality');
+        console.log('[useWebRTCRealtime] Sending session.update with audio modality and tools');
         dc.send(JSON.stringify(sessionUpdateEvent));
         
         // After a short delay, verify audio is working by checking track state
@@ -323,7 +335,7 @@ export function useWebRTCRealtime(
         }, 1000);
       });
 
-      dc.addEventListener('message', (e: any) => {
+      dc.addEventListener('message', async (e: any) => {
         try {
           const data = JSON.parse(e.data);
           console.log('[useWebRTCRealtime] Data channel message:', data);
@@ -345,6 +357,53 @@ export function useWebRTCRealtime(
           // Handle partial transcripts
           if (data.type === 'response.audio_transcript.delta') {
             console.log('[useWebRTCRealtime] 📝 Partial transcript:', data.delta);
+          }
+          
+          // Handle function calls
+          if (data.type === 'response.function_call_arguments.done') {
+            const functionName = data.name;
+            const functionArgs = data.arguments ? JSON.parse(data.arguments) : {};
+            const callId = data.call_id;
+            
+            console.log('[useWebRTCRealtime] 🔧 Function call received:', functionName, functionArgs);
+            
+            // Call the tool handler if provided
+            if (onToolCall) {
+              try {
+                const result = await onToolCall(functionName, functionArgs);
+                
+                // Send function call output back to OpenAI
+                const outputEvent = {
+                  type: 'conversation.item.create',
+                  item: {
+                    type: 'function_call_output',
+                    call_id: callId,
+                    output: JSON.stringify(result),
+                  },
+                };
+                dc.send(JSON.stringify(outputEvent));
+                console.log('[useWebRTCRealtime] ✅ Function call output sent:', result);
+                
+                // Force a response to the user
+                dc.send(JSON.stringify({
+                  type: 'response.create',
+                }));
+              } catch (error) {
+                console.error('[useWebRTCRealtime] Error executing tool:', error);
+                // Send error back to OpenAI
+                const errorEvent = {
+                  type: 'conversation.item.create',
+                  item: {
+                    type: 'function_call_output',
+                    call_id: callId,
+                    output: JSON.stringify({ error: error instanceof Error ? error.message : String(error) }),
+                  },
+                };
+                dc.send(JSON.stringify(errorEvent));
+              }
+            } else {
+              console.warn('[useWebRTCRealtime] Function call received but no onToolCall handler provided');
+            }
           }
         } catch (error) {
           console.error('[useWebRTCRealtime] Error parsing data channel message:', error);
@@ -412,7 +471,7 @@ export function useWebRTCRealtime(
       }
       setIsSessionActive(false);
     }
-  }, [onTranscript, onEvent, onError]);
+  }, [onTranscript, onEvent, onError, onToolCall, realtimeVoice]);
 
   const stopSession = useCallback(() => {
     console.log('[useWebRTCRealtime] Stopping session');

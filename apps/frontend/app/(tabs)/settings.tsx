@@ -5,7 +5,7 @@ import SegmentedControl from '@react-native-segmented-control/segmented-control'
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { ACCENT_OPTIONS } from '@/constants/theme';
-import { useSettings } from '@/contexts/settings';
+import { useSettings, REALTIME_VOICES, type RealtimeVoice } from '@/contexts/settings';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { useRouter } from 'expo-router';
@@ -26,6 +26,8 @@ export default function SettingsScreen() {
     setAnimationsEnabled,
     autoSaveFavorites,
     setAutoSaveFavorites,
+    realtimeVoice,
+    setRealtimeVoice,
   } = useSettings();
 
   // Theme colors
@@ -204,6 +206,35 @@ export default function SettingsScreen() {
           />
         </View>
         <ThemedText style={[styles.help, styles.helpInset]} colorName="muted">Automatically sync favorites across sessions</ThemedText>
+
+        <ThemedText style={[styles.help, { marginTop: 16 }]} colorName="muted">Realtime Voice</ThemedText>
+        <ThemedText style={[styles.help, styles.helpInset]} colorName="muted">Choose the voice for AI conversations</ThemedText>
+        <View style={styles.accentRow}>
+          {REALTIME_VOICES.map((voice) => {
+            const isActive = realtimeVoice === voice;
+            return (
+              <TouchableOpacity
+                key={voice}
+                style={[
+                  styles.chip,
+                  { backgroundColor: chipBg, borderColor: chipBorder },
+                  isActive && [
+                    styles.chipActive,
+                    { backgroundColor: accent, borderColor: accent },
+                  ]
+                ]}
+                onPress={() => setRealtimeVoice(voice)}
+              >
+                <ThemedText
+                  style={styles.chipText}
+                  colorName={isActive ? 'onTint' : 'mutedForeground'}
+                >
+                  {voice.charAt(0).toUpperCase() + voice.slice(1)}
+                </ThemedText>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
       </ThemedView>
 
       <ThemedView colorName="surfaceElevated" style={[styles.section, { borderColor }]}> 
