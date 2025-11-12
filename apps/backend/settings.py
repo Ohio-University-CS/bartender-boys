@@ -37,8 +37,8 @@ class Settings:
     OPENAI_MAX_TOKENS: int = int(os.getenv("OPENAI_MAX_TOKENS", "500"))
     OPENAI_TEMPERATURE: float = float(os.getenv("OPENAI_TEMPERATURE", "0.1"))
     
-    # Firmware API Configuration
-    FIRMWARE_API_URL: str = os.getenv("FIRMWARE_API_URL", "")
+    # Firmware API Configuration (fallback to legacy PI_CONTROLLER_URL)
+    FIRMWARE_API_URL: str = os.getenv("FIRMWARE_API_URL") or os.getenv("PI_CONTROLLER_URL", "")
     
     def validate(self) -> None:
         """Validate required settings"""

@@ -42,50 +42,8 @@ export const DRINKS: Drink[] = [
     id: '3',
     name: 'Mojito',
     category: 'Rum',
-    ingredients: ['2 oz White Rum', '1 oz Lime Juice', '2 tsp Sugar', '6-8 Mint leaves', 'Soda water'],
-    instructions: '1. Muddle mint and sugar\n2. Add lime juice and rum\n3. Fill with ice\n4. Top with soda water\n5. Garnish with mint',
-    difficulty: 'Easy',
-    prepTime: '5 min',
-    hardwareSteps: [
-      { pump: 'white_rum', seconds: 3.0 },
-      { pump: 'lime', seconds: 1.5 },
-      { pump: 'simple_syrup', seconds: 1.0 }
-    ]
-  },
-  {
-    id: '4',
-    name: 'Negroni',
-    category: 'Gin',
-    ingredients: ['1 oz Gin', '1 oz Campari', '1 oz Sweet Vermouth', 'Orange peel'],
-    instructions: '1. Add all ingredients to mixing glass\n2. Add ice and stir\n3. Strain into glass\n4. Express orange peel',
-    difficulty: 'Easy',
-    prepTime: '2 min'
-  },
-  // Cocktail (General)
-  {
-    id: '5',
-    name: 'Cosmopolitan',
-    category: 'Cocktail',
-    ingredients: ['1.5 oz Vodka', '1 oz Cranberry Juice', '0.5 oz Triple Sec', '0.5 oz Lime Juice', 'Orange peel (optional)'],
-    instructions: '1. Shake all ingredients with ice\n2. Strain into a chilled coupe\n3. Garnish with orange peel',
-    difficulty: 'Easy',
-    prepTime: '3 min'
-  },
-  {
-    id: '26',
-    name: 'Sidecar',
-    category: 'Cocktail',
-    ingredients: ['2 oz Cognac', '1 oz Triple Sec', '0.75 oz Lemon Juice', 'Sugar rim (optional)'],
-    instructions: '1. Shake with ice\n2. Strain into coupe (sugar rim optional)\n3. Garnish with lemon twist',
-    difficulty: 'Medium',
-    prepTime: '3 min'
-  },
-  {
-    id: '27',
-    name: 'Paloma',
-    category: 'Cocktail',
-    ingredients: ['2 oz Tequila', '0.5 oz Lime Juice', 'Grapefruit Soda', 'Salt rim (optional)'],
-    instructions: '1. Build in a highball over ice\n2. Add tequila and lime\n3. Top with grapefruit soda\n4. Salt rim optional',
+    ingredients: ['2 oz White Rum', '0.75 oz Lime Juice', '0.5 oz Simple Syrup', '6-8 Mint Leaves', 'Soda Water'],
+    instructions: '1. Muddle mint with syrup\n2. Add rum, lime, ice\n3. Top with soda\n4. Garnish with mint',
     difficulty: 'Easy',
     prepTime: '2 min'
   },

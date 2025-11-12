@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { StyleSheet, ScrollView, TouchableOpacity, TextInput, View, Platform } from 'react-native';
+import { StyleSheet, ScrollView, TouchableOpacity, TextInput, View, Platform, Switch } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -18,10 +18,12 @@ export default function MenuScreen() {
   const insets = useSafeAreaInsets();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
-  const showFavoritesOnly = false;
+  // Removed hardwareOnly filter
   const { isFavorite, toggleFavorite } = useFavorites();
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [sortBy, setSortBy] = useState<SortOption>('difficulty');
+  const [prepTimeFilter, setPrepTimeFilter] = useState<'any' | 'under2' | 'under3' | 'under4'>('any');
+  const [ingredientCountFilter, setIngredientCountFilter] = useState<'any' | 'under4' | 'under6' | 'under8'>('any');
 
   // Theme colors
   const backgroundColor = useThemeColor({}, 'background');
@@ -44,12 +46,23 @@ export default function MenuScreen() {
   const toggleExpanded = (id: string) =>
     setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
 
-  const categories = ['All', 'Cocktail', 'Whiskey', 'Rum', 'Gin', 'Vodka', 'Tequila', 'Brandy', 'Non-Alcoholic'];
+  const categories = ['All', 'Cocktail', 'Whiskey', 'Rum', 'Gin', 'Vodka', 'Tequila', 'Brandy'];
   const sortOptions: { key: SortOption; label: string }[] = [
     { key: 'difficulty', label: 'Difficulty' },
-    { key: 'alcohol', label: 'Alcohol Type' },
     { key: 'name', label: 'A-Z' },
     { key: 'prepTime', label: 'Prep Time' },
+  ];
+  const prepTimeOptions: { key: typeof prepTimeFilter; label: string; maxMinutes?: number }[] = [
+    { key: 'any', label: 'Any Time' },
+    { key: 'under2', label: '≤ 2 min', maxMinutes: 2 },
+    { key: 'under3', label: '≤ 3 min', maxMinutes: 3 },
+    { key: 'under4', label: '≤ 4 min', maxMinutes: 4 },
+  ];
+  const ingredientCountOptions: { key: typeof ingredientCountFilter; label: string; maxCount?: number }[] = [
+    { key: 'any', label: 'Any Ingredients' },
+    { key: 'under4', label: '≤ 4 items', maxCount: 4 },
+    { key: 'under6', label: '≤ 6 items', maxCount: 6 },
+    { key: 'under8', label: '≤ 8 items', maxCount: 8 },
   ];
 
   const difficultyRank: Record<Drink['difficulty'], number> = {
@@ -58,17 +71,35 @@ export default function MenuScreen() {
     Easy: 2,
   };
 
+  // Extracts the first number found in the prepTime string (e.g., '5 min', '10 minutes')
   const parsePrepMinutes = (prepTime: string) => {
-    const parsed = parseInt(prepTime, 10);
-    return Number.isNaN(parsed) ? Number.MAX_SAFE_INTEGER : parsed;
+    if (!prepTime) return Number.MAX_SAFE_INTEGER;
+    const match = prepTime.match(/\d+/);
+    if (match) {
+      return parseInt(match[0], 10);
+    }
+    return Number.MAX_SAFE_INTEGER;
   };
 
   const filteredDrinks = DRINKS.filter(drink => {
     const matchesSearch = drink.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          drink.ingredients.some(ing => ing.toLowerCase().includes(searchQuery.toLowerCase()));
     const matchesCategory = selectedCategory === 'All' || drink.category === selectedCategory;
-    const matchesFavorite = !showFavoritesOnly || isFavorite(drink.id);
-    return matchesSearch && matchesCategory && matchesFavorite;
+  // Removed matchesHardware
+    const prepMinutes = parsePrepMinutes(drink.prepTime);
+    const matchesPrepTime =
+      prepTimeFilter === 'any' ||
+      (prepTimeFilter === 'under2' && prepMinutes <= 2) ||
+      (prepTimeFilter === 'under3' && prepMinutes <= 3) ||
+      (prepTimeFilter === 'under4' && prepMinutes <= 4);
+    const ingredientCount = drink.ingredients.length;
+    const matchesIngredientCount =
+      ingredientCountFilter === 'any' ||
+      (ingredientCountFilter === 'under4' && ingredientCount <= 4) ||
+      (ingredientCountFilter === 'under6' && ingredientCount <= 6) ||
+      (ingredientCountFilter === 'under8' && ingredientCount <= 8);
+
+  return matchesSearch && matchesCategory && matchesPrepTime && matchesIngredientCount;
   });
 
   const sortedDrinks = useMemo(() => {
@@ -152,11 +183,74 @@ export default function MenuScreen() {
         </ScrollView>
       </ThemedView>
 
-      <ThemedView style={styles.sortContainer}>
+      <ThemedView style={[styles.filterSection, Platform.OS === 'web' && styles.filterSectionWeb]}>
+
+        {/* Removed 'Prep time' label */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.sortContent}
+          contentContainerStyle={[styles.sortContent, Platform.OS === 'web' && styles.sortContentWeb]}
+          style={[styles.filterScroll, Platform.OS === 'web' && styles.filterScrollWeb]}
+        >
+          {prepTimeOptions.map((option) => {
+            const isActive = prepTimeFilter === option.key;
+            return (
+              <TouchableOpacity
+                key={option.key}
+                style={[
+                  styles.sortButton,
+                  { backgroundColor: chipBg, borderColor: chipBorder },
+                  isActive && { backgroundColor: accent, borderColor: accent },
+                ]}
+                onPress={() => setPrepTimeFilter(option.key)}
+              >
+                <ThemedText
+                  style={styles.sortText}
+                  colorName={isActive ? 'onTint' : 'mutedForeground'}
+                >
+                  {option.label}
+                </ThemedText>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+
+        {/* Removed 'Ingredient count' label */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={[styles.sortContent, Platform.OS === 'web' && styles.sortContentWeb]}
+          style={[styles.filterScroll, Platform.OS === 'web' && styles.filterScrollWeb]}
+        >
+          {ingredientCountOptions.map((option) => {
+            const isActive = ingredientCountFilter === option.key;
+            return (
+              <TouchableOpacity
+                key={option.key}
+                style={[
+                  styles.sortButton,
+                  { backgroundColor: chipBg, borderColor: chipBorder },
+                  isActive && { backgroundColor: accent, borderColor: accent },
+                ]}
+                onPress={() => setIngredientCountFilter(option.key)}
+              >
+                <ThemedText
+                  style={styles.sortText}
+                  colorName={isActive ? 'onTint' : 'mutedForeground'}
+                >
+                  {option.label}
+                </ThemedText>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      </ThemedView>
+
+      <ThemedView style={[styles.sortContainer, Platform.OS === 'web' && styles.sortContainerWeb]}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={[styles.sortContent, Platform.OS === 'web' && styles.sortContentWeb]}
         >
           {sortOptions.map((option) => {
             const isActive = sortBy === option.key;
@@ -297,9 +391,54 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     paddingHorizontal: 12,
   },
+  sortContainerWeb: {
+    alignItems: 'center',
+  },
+  filterSection: {
+    width: '100%',
+    paddingHorizontal: 12,
+    gap: 12,
+    marginBottom: 12,
+  },
+  filterSectionWeb: {
+    alignItems: 'center',
+  },
+  filterLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  filterLabelWeb: {
+    textAlign: 'center',
+    alignSelf: 'center',
+  },
+  filterScroll: {
+    marginBottom: 4,
+  },
+  filterScrollWeb: {
+    alignSelf: 'center',
+  },
+  toggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  toggleRowWeb: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    alignSelf: 'center',
+  },
+  switchWeb: {
+    marginLeft: 12,
+  },
   sortContent: {
     gap: 8,
     paddingHorizontal: 4,
+  },
+  sortContentWeb: {
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   sortButton: {
     paddingHorizontal: 12,

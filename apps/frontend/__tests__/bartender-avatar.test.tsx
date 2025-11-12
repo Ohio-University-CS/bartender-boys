@@ -18,10 +18,16 @@ jest.mock('three', () => ({
   CylinderGeometry: jest.fn(),
   TorusGeometry: jest.fn(),
   Group: jest.fn(),
+  WebGLRenderer: jest.fn(),
+  TextureLoader: jest.fn(),
 }));
 
 jest.mock('expo-three', () => ({
   Renderer: jest.fn(),
+}));
+
+jest.mock('three/examples/jsm/loaders/GLTFLoader.js', () => ({
+  GLTFLoader: jest.fn(),
 }));
 
 jest.mock('@/hooks/use-theme-color', () => ({
