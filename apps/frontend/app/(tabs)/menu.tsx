@@ -1,29 +1,40 @@
-import { useMemo, useState } from 'react';
-import { StyleSheet, ScrollView, TouchableOpacity, TextInput, View, Platform, Switch } from 'react-native';
+import { useMemo, useState, useEffect, useCallback } from 'react';
+import { StyleSheet, FlatList, ScrollView, TouchableOpacity, TextInput, View, Platform, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { DRINKS, type Drink } from '@/constants/drinks';
+import { type Drink } from '@/constants/drinks';
 import { useFavorites } from '../../contexts/favorites';
 import { CATEGORY_COLORS, DIFFICULTY_COLORS } from '@/constants/ui-palette';
 import { useThemeColor } from '@/hooks/use-theme-color';
+import { getDrinks } from '@/utils/drinks-api';
+import { useSettings } from '@/contexts/settings';
 
 type SortOption = 'difficulty' | 'alcohol' | 'name' | 'prepTime';
+
+const PAGE_SIZE = 20;
 
 export default function MenuScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { apiBaseUrl } = useSettings();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
-  // Removed hardwareOnly filter
   const { isFavorite, toggleFavorite } = useFavorites();
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [sortBy, setSortBy] = useState<SortOption>('difficulty');
   const [prepTimeFilter, setPrepTimeFilter] = useState<'any' | 'under2' | 'under3' | 'under4'>('any');
   const [ingredientCountFilter, setIngredientCountFilter] = useState<'any' | 'under4' | 'under6' | 'under8'>('any');
+  
+  // API state
+  const [allDrinks, setAllDrinks] = useState<Drink[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   // Theme colors
   const backgroundColor = useThemeColor({}, 'background');
@@ -71,6 +82,48 @@ export default function MenuScreen() {
     Easy: 2,
   };
 
+  // Fetch drinks from API
+  const fetchDrinks = useCallback(async (skip: number = 0, reset: boolean = false) => {
+    try {
+      if (reset) {
+        setLoading(true);
+        setError(null);
+      } else {
+        setLoadingMore(true);
+      }
+      
+      const category = selectedCategory === 'All' ? undefined : selectedCategory;
+      const response = await getDrinks(
+        {
+          skip,
+          limit: PAGE_SIZE,
+          category,
+        },
+        apiBaseUrl
+      );
+      
+      if (reset) {
+        setAllDrinks(response.drinks);
+      } else {
+        setAllDrinks(prev => [...prev, ...response.drinks]);
+      }
+      
+      setHasMore(response.has_more);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch drinks';
+      setError(errorMessage);
+      console.error('[MenuScreen] Error fetching drinks:', err);
+    } finally {
+      setLoading(false);
+      setLoadingMore(false);
+    }
+  }, [selectedCategory, apiBaseUrl]);
+
+  // Initial load and when category changes
+  useEffect(() => {
+    fetchDrinks(0, true);
+  }, [fetchDrinks]);
+
   // Extracts the first number found in the prepTime string (e.g., '5 min', '10 minutes')
   const parsePrepMinutes = (prepTime: string) => {
     if (!prepTime) return Number.MAX_SAFE_INTEGER;
@@ -81,26 +134,30 @@ export default function MenuScreen() {
     return Number.MAX_SAFE_INTEGER;
   };
 
-  const filteredDrinks = DRINKS.filter(drink => {
-    const matchesSearch = drink.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         drink.ingredients.some(ing => ing.toLowerCase().includes(searchQuery.toLowerCase()));
-    const matchesCategory = selectedCategory === 'All' || drink.category === selectedCategory;
-  // Removed matchesHardware
-    const prepMinutes = parsePrepMinutes(drink.prepTime);
-    const matchesPrepTime =
-      prepTimeFilter === 'any' ||
-      (prepTimeFilter === 'under2' && prepMinutes <= 2) ||
-      (prepTimeFilter === 'under3' && prepMinutes <= 3) ||
-      (prepTimeFilter === 'under4' && prepMinutes <= 4);
-    const ingredientCount = drink.ingredients.length;
-    const matchesIngredientCount =
-      ingredientCountFilter === 'any' ||
-      (ingredientCountFilter === 'under4' && ingredientCount <= 4) ||
-      (ingredientCountFilter === 'under6' && ingredientCount <= 6) ||
-      (ingredientCountFilter === 'under8' && ingredientCount <= 8);
+  // Client-side filtering for search, prep time, and ingredient count
+  const filteredDrinks = useMemo(() => {
+    return allDrinks.filter(drink => {
+      const matchesSearch = searchQuery === '' || 
+        drink.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        drink.ingredients.some(ing => ing.toLowerCase().includes(searchQuery.toLowerCase()));
+      
+      const prepMinutes = parsePrepMinutes(drink.prepTime);
+      const matchesPrepTime =
+        prepTimeFilter === 'any' ||
+        (prepTimeFilter === 'under2' && prepMinutes <= 2) ||
+        (prepTimeFilter === 'under3' && prepMinutes <= 3) ||
+        (prepTimeFilter === 'under4' && prepMinutes <= 4);
+      
+      const ingredientCount = drink.ingredients.length;
+      const matchesIngredientCount =
+        ingredientCountFilter === 'any' ||
+        (ingredientCountFilter === 'under4' && ingredientCount <= 4) ||
+        (ingredientCountFilter === 'under6' && ingredientCount <= 6) ||
+        (ingredientCountFilter === 'under8' && ingredientCount <= 8);
 
-  return matchesSearch && matchesCategory && matchesPrepTime && matchesIngredientCount;
-  });
+      return matchesSearch && matchesPrepTime && matchesIngredientCount;
+    });
+  }, [allDrinks, searchQuery, prepTimeFilter, ingredientCountFilter]);
 
   const sortedDrinks = useMemo(() => {
     const data = [...filteredDrinks];
@@ -119,9 +176,77 @@ export default function MenuScreen() {
     router.push(`/drink/${drink.id}` as any);
   };
 
+  const loadMore = useCallback(() => {
+    if (!loadingMore && hasMore && !loading) {
+      fetchDrinks(allDrinks.length, false);
+    }
+  }, [loadingMore, hasMore, loading, allDrinks.length, fetchDrinks]);
+
+  const renderDrinkItem = useCallback(({ item: drink }: { item: Drink }) => {
+    const isExpanded = !!expanded[drink.id];
+    const shownIngredients = isExpanded ? drink.ingredients : drink.ingredients.slice(0, 3);
+    const remaining = drink.ingredients.length - shownIngredients.length;
+    
+    return (
+      <TouchableOpacity
+        style={[styles.drinkCard, { backgroundColor: cardBg, borderColor }]}
+        onPress={() => showDrinkDetails(drink)}
+      >
+        <View style={[styles.accentBar, { backgroundColor: CATEGORY_COLORS[drink.category] || accent }]} />
+        <View style={styles.drinkTopRow}>
+          <ThemedText type="defaultSemiBold" style={styles.drinkName}>
+            {drink.name}
+          </ThemedText>
+          <TouchableOpacity onPress={() => toggleFavorite(drink.id)}>
+            <Ionicons
+              name={isFavorite(drink.id) ? 'heart' : 'heart-outline'}
+              size={20}
+              color={isFavorite(drink.id) ? danger : mutedForeground}
+            />
+          </TouchableOpacity>
+        </View>
+        <ThemedText style={styles.category} colorName="tint">{drink.category}</ThemedText>
+
+        <View style={styles.badgeRow}>
+          {shownIngredients.map((ing, idx) => (
+            <View key={idx} style={[styles.badge, { backgroundColor: badgeBg }]}>
+              <ThemedText style={[styles.badgeText, { color: badgeText }]}>{ing}</ThemedText>
+            </View>
+          ))}
+          {remaining > 0 && !isExpanded && (
+            <TouchableOpacity onPress={() => toggleExpanded(drink.id)}>
+              <ThemedText style={styles.moreText} colorName="tint">+{remaining} more</ThemedText>
+            </TouchableOpacity>
+          )}
+          {isExpanded && (
+            <TouchableOpacity onPress={() => toggleExpanded(drink.id)}>
+              <ThemedText style={styles.moreText} colorName="tint">Show less</ThemedText>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        <View style={styles.metaRow}>
+          <ThemedText style={[styles.metaText, { color: metaText }]}>{drink.prepTime}</ThemedText>
+          <ThemedText style={[styles.metaText, { color: DIFFICULTY_COLORS[drink.difficulty] || accent, fontWeight: '700' }]}>
+            {drink.difficulty}
+          </ThemedText>
+        </View>
+      </TouchableOpacity>
+    );
+  }, [expanded, cardBg, borderColor, accent, danger, mutedForeground, badgeBg, badgeText, metaText, toggleFavorite, isFavorite, showDrinkDetails, toggleExpanded]);
+
+  const renderFooter = useCallback(() => {
+    if (!loadingMore) return null;
+    return (
+      <View style={styles.loadingFooter}>
+        <ActivityIndicator size="small" color={accent} />
+      </View>
+    );
+  }, [loadingMore, accent]);
+
   return (
     <View style={[styles.container, { backgroundColor, paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
-      <ScrollView contentContainerStyle={styles.containerContent}>
+      <View style={styles.containerContent}>
         <ThemedView colorName="surface" style={[styles.header, { borderBottomColor: borderColor }]}>
           <ThemedText type="title" colorName="tint" style={styles.title}>Full Menu</ThemedText>
         </ThemedView>
@@ -276,66 +401,36 @@ export default function MenuScreen() {
         </ScrollView>
       </ThemedView>
 
-      <ThemedView style={styles.drinksContainer}>
-        {sortedDrinks.map((drink) => {
-          const isExpanded = !!expanded[drink.id];
-          const shownIngredients = isExpanded ? drink.ingredients : drink.ingredients.slice(0, 3);
-          const remaining = drink.ingredients.length - shownIngredients.length;
-          return (
-          <TouchableOpacity
-            key={drink.id}
-            style={[styles.drinkCard, { backgroundColor: cardBg, borderColor }]}
-            onPress={() => showDrinkDetails(drink)}
-          >
-            <View style={[styles.accentBar, { backgroundColor: CATEGORY_COLORS[drink.category] || accent }]} />
-            <View style={styles.drinkTopRow}>
-              <ThemedText type="defaultSemiBold" style={styles.drinkName}>
-                {drink.name}
-              </ThemedText>
-              <TouchableOpacity onPress={() => toggleFavorite(drink.id)}>
-                <Ionicons
-                  name={isFavorite(drink.id) ? 'heart' : 'heart-outline'}
-                  size={20}
-                  color={isFavorite(drink.id) ? danger : mutedForeground}
-                />
-              </TouchableOpacity>
-            </View>
-            <ThemedText style={styles.category} colorName="tint">{drink.category}</ThemedText>
-
-            <View style={styles.badgeRow}>
-              {shownIngredients.map((ing, idx) => (
-                <View key={idx} style={[styles.badge, { backgroundColor: badgeBg }]}>
-                  <ThemedText style={[styles.badgeText, { color: badgeText }]}>{ing}</ThemedText>
-                </View>
-              ))}
-              {remaining > 0 && !isExpanded && (
-                <TouchableOpacity onPress={() => toggleExpanded(drink.id)}>
-                  <ThemedText style={styles.moreText} colorName="tint">+{remaining} more</ThemedText>
-                </TouchableOpacity>
-              )}
-              {isExpanded && (
-                <TouchableOpacity onPress={() => toggleExpanded(drink.id)}>
-                  <ThemedText style={styles.moreText} colorName="tint">Show less</ThemedText>
-                </TouchableOpacity>
-              )}
-            </View>
-
-            <View style={styles.metaRow}>
-              <ThemedText style={[styles.metaText, { color: metaText }]}>{drink.prepTime}</ThemedText>
-              <ThemedText style={[styles.metaText, { color: DIFFICULTY_COLORS[drink.difficulty] || accent, fontWeight: '700' }]}>
-                {drink.difficulty}
-              </ThemedText>
-            </View>
-          </TouchableOpacity>
-        );})}
-        
-        {sortedDrinks.length === 0 && (
+        {loading && allDrinks.length === 0 ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={accent} />
+            <ThemedText style={styles.loadingText} colorName="muted">Loading drinks...</ThemedText>
+          </View>
+        ) : error ? (
           <ThemedView style={styles.emptyState}>
-            <ThemedText style={styles.emptyText} colorName="muted">No drinks found</ThemedText>
+            <ThemedText style={styles.emptyText} colorName="danger">{error}</ThemedText>
+            <TouchableOpacity onPress={() => fetchDrinks(0, true)} style={styles.retryButton}>
+              <ThemedText colorName="tint">Retry</ThemedText>
+            </TouchableOpacity>
           </ThemedView>
+        ) : (
+          <FlatList
+            data={sortedDrinks}
+            renderItem={renderDrinkItem}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.drinksContainer}
+            onEndReached={loadMore}
+            onEndReachedThreshold={0.5}
+            ListFooterComponent={renderFooter}
+            ListEmptyComponent={
+              <ThemedView style={styles.emptyState}>
+                <ThemedText style={styles.emptyText} colorName="muted">No drinks found</ThemedText>
+              </ThemedView>
+            }
+            scrollEnabled={true}
+          />
         )}
-      </ThemedView>
-      </ScrollView>
+      </View>
     </View>
   );
 }
@@ -345,7 +440,27 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   containerContent: {
+    flex: 1,
     alignItems: 'center',
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+  },
+  loadingFooter: {
+    paddingVertical: 20,
+    alignItems: 'center',
+  },
+  retryButton: {
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 8,
   },
   header: {
     padding: 16,

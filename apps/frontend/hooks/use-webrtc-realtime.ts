@@ -267,13 +267,54 @@ export function useWebRTCRealtime(
             name: 'kick_user_out',
             description: 'Call this function when the user is being mean, rude, abusive, or disrespectful to the bartender. This will end the conversation and return the user to the chat page.',
           },
+          {
+            type: 'function',
+            name: 'generate_drink',
+            description: 'Generate a new drink with an AI-generated image. Use this when the user wants to create a custom drink. You should extract the drink name, category, ingredients list, instructions, difficulty level (Easy, Medium, or Hard), and prep time from the conversation.',
+            parameters: {
+              type: 'object',
+              properties: {
+                name: {
+                  type: 'string',
+                  description: 'The name of the drink',
+                },
+                category: {
+                  type: 'string',
+                  description: 'The category of the drink (e.g., Cocktail, Mocktail, Shot, etc.)',
+                },
+                ingredients: {
+                  type: 'array',
+                  items: { type: 'string' },
+                  description: 'List of ingredients needed for the drink',
+                },
+                instructions: {
+                  type: 'string',
+                  description: 'Step-by-step instructions for making the drink',
+                },
+                difficulty: {
+                  type: 'string',
+                  enum: ['Easy', 'Medium', 'Hard'],
+                  description: 'The difficulty level of making this drink',
+                },
+                prepTime: {
+                  type: 'string',
+                  description: 'The preparation time (e.g., "5 minutes", "10-15 minutes")',
+                },
+                user_id: {
+                  type: 'string',
+                  description: 'The user ID who is creating this drink (optional, defaults to "guest")',
+                },
+              },
+              required: ['name', 'category', 'ingredients', 'instructions', 'difficulty', 'prepTime'],
+            },
+          },
         ];
 
         const sessionUpdateEvent = {
           type: 'session.update',
           session: {
             modalities: ['text', 'audio'],
-            instructions: 'You are a helpful bartender assistant. Help customers with drink orders and provide friendly service. If a user is being mean, rude, abusive, or disrespectful to you, use the kick_user_out tool to end the conversation.',
+            instructions: 'You are a helpful bartender assistant. Help customers with drink orders and provide friendly service. If a user wants to create a custom drink, use the generate_drink tool to create it with an AI-generated image. If a user is being mean, rude, abusive, or disrespectful to you, use the kick_user_out tool to end the conversation.',
             tools: toolsSchema,
           },
         };

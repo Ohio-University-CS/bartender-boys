@@ -7,6 +7,9 @@ import { useThemeColor } from '@/hooks/use-theme-color';
 import { BartenderAvatar } from '@/components/BartenderAvatar';
 import { ThemedText } from '@/components/themed-text';
 import { useWebRTCRealtime } from '@/hooks/use-webrtc-realtime';
+import { API_BASE_URL } from '@/environment';
+import { useSettings } from '@/contexts/settings';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type LiveAudioStreamModule = {
   init: (options: Record<string, unknown>) => void;
@@ -48,6 +51,7 @@ export default function BartenderScreen() {
   const insets = useSafeAreaInsets();
   const [transcript, setTranscript] = useState('');
   const [isTalking, setIsTalking] = useState(false);
+  const { apiBaseUrl } = useSettings();
 
   const { isSessionActive, startSession, stopSession } = useWebRTCRealtime({
     onTranscript: (text) => {
@@ -75,6 +79,66 @@ export default function BartenderScreen() {
         router.push('/(tabs)/chat' as never);
         
         return { success: true, message: 'User has been removed from the conversation' };
+      }
+      
+      if (toolName === 'generate_drink') {
+        try {
+          const baseUrl = apiBaseUrl || API_BASE_URL;
+          console.log('[bartender] Generating drink:', args);
+          
+          // Get user_id from AsyncStorage, default to "guest" if not provided
+          let userId = args.user_id || 'guest';
+          try {
+            const storedUserId = await AsyncStorage.getItem('user_id');
+            if (storedUserId) {
+              userId = storedUserId;
+            }
+          } catch (error) {
+            console.error('[bartender] Failed to get user_id from AsyncStorage:', error);
+          }
+          
+          const requestBody = {
+            name: args.name,
+            category: args.category,
+            ingredients: args.ingredients || [],
+            instructions: args.instructions,
+            difficulty: args.difficulty,
+            prepTime: args.prepTime,
+            user_id: userId,
+          };
+          
+          const response = await fetch(`${baseUrl}/drinks/generate-drink`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(requestBody),
+          });
+          
+          if (!response.ok) {
+            const errorText = await response.text();
+            console.error('[bartender] Failed to generate drink:', response.status, errorText);
+            return {
+              success: false,
+              error: `Failed to generate drink: ${response.status} - ${errorText}`,
+            };
+          }
+          
+          const data = await response.json();
+          console.log('[bartender] Drink generated successfully:', data);
+          
+          return {
+            success: true,
+            message: `Successfully created drink "${data.drink.name}" with an AI-generated image!`,
+            drink: data.drink,
+          };
+        } catch (error) {
+          console.error('[bartender] Error generating drink:', error);
+          return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Failed to generate drink',
+          };
+        }
       }
       
       // Unknown tool
