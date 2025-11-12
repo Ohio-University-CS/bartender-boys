@@ -18,7 +18,6 @@ export default function MenuScreen() {
   const insets = useSafeAreaInsets();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
-  // Removed hardwareOnly filter
   const { isFavorite, toggleFavorite } = useFavorites();
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [sortBy, setSortBy] = useState<SortOption>('difficulty');
@@ -71,7 +70,6 @@ export default function MenuScreen() {
     Easy: 2,
   };
 
-  // Extracts the first number found in the prepTime string (e.g., '5 min', '10 minutes')
   const parsePrepMinutes = (prepTime: string) => {
     if (!prepTime) return Number.MAX_SAFE_INTEGER;
     const match = prepTime.match(/\d+/);
@@ -85,7 +83,6 @@ export default function MenuScreen() {
     const matchesSearch = drink.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          drink.ingredients.some(ing => ing.toLowerCase().includes(searchQuery.toLowerCase()));
     const matchesCategory = selectedCategory === 'All' || drink.category === selectedCategory;
-  // Removed matchesHardware
     const prepMinutes = parsePrepMinutes(drink.prepTime);
     const matchesPrepTime =
       prepTimeFilter === 'any' ||
@@ -99,10 +96,10 @@ export default function MenuScreen() {
       (ingredientCountFilter === 'under6' && ingredientCount <= 6) ||
       (ingredientCountFilter === 'under8' && ingredientCount <= 8);
 
-  return matchesSearch && matchesCategory && matchesPrepTime && matchesIngredientCount;
+    return matchesSearch && matchesCategory && matchesPrepTime && matchesIngredientCount;
   });
 
-  const sortedDrinks = useMemo(() => {
+  const sortedItems = useMemo(() => {
     const data = [...filteredDrinks];
     const sorter = {
       difficulty: (a: Drink, b: Drink) => difficultyRank[a.difficulty] - difficultyRank[b.difficulty] || a.name.localeCompare(b.name),
@@ -277,7 +274,7 @@ export default function MenuScreen() {
       </ThemedView>
 
       <ThemedView style={styles.drinksContainer}>
-        {sortedDrinks.map((drink) => {
+  {sortedItems.map((drink) => {
           const isExpanded = !!expanded[drink.id];
           const shownIngredients = isExpanded ? drink.ingredients : drink.ingredients.slice(0, 3);
           const remaining = drink.ingredients.length - shownIngredients.length;
@@ -329,7 +326,7 @@ export default function MenuScreen() {
           </TouchableOpacity>
         );})}
         
-        {sortedDrinks.length === 0 && (
+  {sortedItems.length === 0 && (
           <ThemedView style={styles.emptyState}>
             <ThemedText style={styles.emptyText} colorName="muted">No drinks found</ThemedText>
           </ThemedView>

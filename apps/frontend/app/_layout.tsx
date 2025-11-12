@@ -1,23 +1,30 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { Stack } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
-import 'react-native-reanimated';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useFonts } from 'expo-font';
+import { StyleSheet } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { SettingsProvider, useSettings } from '@/contexts/settings';
 import { FavoritesProvider } from '@/contexts/favorites';
+import { Stack } from 'expo-router';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+import { Colors } from '@/constants/theme';
 
 function ThemedContainer({ children }: { children: React.ReactNode }) {
   const colorScheme = useColorScheme();
   const { theme } = useSettings();
   const scheme = (theme === 'system' ? colorScheme : theme) ?? 'light';
   const statusBarStyle = scheme === 'dark' ? 'light' : 'dark';
+  const [fontsLoaded] = useFonts({
+    'Montserrat-Regular': require('@/assets/fonts/Montserrat-Regular.ttf'),
+    'Montserrat-Bold': require('@/assets/fonts/Montserrat-Bold.ttf'),
+  });
+  if (!fontsLoaded) return null;
   return (
-    <ThemeProvider value={scheme === 'dark' ? DarkTheme : DefaultTheme}>
+    <>
+      {/* Removed background image due to missing file */}
       {children}
       <StatusBar style={statusBarStyle} />
-    </ThemeProvider>
+    </>
   );
 }
 
@@ -40,3 +47,11 @@ export default function RootLayout() {
     </SafeAreaProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  bg: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+  },
+});
