@@ -159,7 +159,7 @@ export default function MenuScreen() {
     });
   }, [allDrinks, searchQuery, prepTimeFilter, ingredientCountFilter]);
 
-  const sortedDrinks = useMemo(() => {
+  const sortedItems = useMemo(() => {
     const data = [...filteredDrinks];
     const sorter = {
       difficulty: (a: Drink, b: Drink) => difficultyRank[a.difficulty] - difficultyRank[b.difficulty] || a.name.localeCompare(b.name),
@@ -247,7 +247,7 @@ export default function MenuScreen() {
   return (
     <View style={[styles.container, { backgroundColor, paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
       <View style={styles.containerContent}>
-        <ThemedView colorName="surface" style={[styles.header, { borderBottomColor: borderColor }]}>
+        <ThemedView colorName="surface" style={[styles.header, { borderBottomColor: borderColor, alignItems: 'center', flexDirection: 'column' }]}>
           <ThemedText type="title" colorName="tint" style={styles.title}>Full Menu</ThemedText>
         </ThemedView>
 
@@ -415,7 +415,7 @@ export default function MenuScreen() {
           </ThemedView>
         ) : (
           <FlatList
-            data={sortedDrinks}
+            data={sortedItems}
             renderItem={renderDrinkItem}
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.drinksContainer}

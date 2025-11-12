@@ -78,6 +78,14 @@ export default function ChatScreen() {
     setBusy(true);
     stopTalkingImmediately();
     try {
+
+      // Add emoji header
+      const header = (
+        <View style={{ alignItems: 'center', flexDirection: 'column', marginBottom: 8 }}>
+          <ThemedText style={{ fontSize: 56, marginBottom: 8 }}>💬</ThemedText>
+          <ThemedText type="title" colorName="tint" style={{ fontSize: 24 }}>Chat</ThemedText>
+        </View>
+      );
       const payload = {
         messages: [
           { role: 'system', content: 'You are a helpful bartender assistant. Provide concise cocktail advice, recipes, and substitutions. Keep answers short.' },

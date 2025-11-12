@@ -114,7 +114,7 @@ export default function FavoritesScreen() {
   return (
     <View style={[styles.container, { backgroundColor, paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}> 
       <ScrollView>
-        <ThemedView colorName="surface" style={[styles.header, { borderBottomColor: borderColor }]}> 
+        <ThemedView colorName="surface" style={[styles.header, { borderBottomColor: borderColor, alignItems: 'center', flexDirection: 'column' }]}> 
           <ThemedText type="title" colorName="tint" style={styles.title}>Favorites</ThemedText>
         </ThemedView>
 
@@ -287,12 +287,18 @@ export default function FavoritesScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: {
-    padding: 16,
-    borderBottomWidth: 1,
-    alignItems: 'center',
+  card: {
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 18,
+    borderWidth: 1,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
+    backgroundColor: undefined, // use themed color
   },
-  title: { fontSize: 20, fontWeight: '700', textAlign: 'center' },
   // Category and filter styles (copied from menu.tsx for consistency)
   categoriesContainer: {
     paddingHorizontal: 12,
@@ -351,22 +357,39 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   sortButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 18,
     borderWidth: 1,
+    marginHorizontal: 2,
+    marginVertical: 2,
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
   },
   sortText: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '600',
+    letterSpacing: 0.2,
   },
-  list: { padding: 12, paddingBottom: 24 },
-  card: {
-    borderRadius: 16,
+  list: { padding: 18, paddingBottom: 32 },
+  header: {
     padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
+    borderBottomWidth: 1,
+    alignItems: 'center',
+    backgroundColor: 'transparent',
+    marginBottom: 8,
   },
+  title: {
+    fontSize: 24,
+    fontWeight: '700',
+    textAlign: 'center',
+    fontFamily: 'Montserrat-Bold',
+    letterSpacing: 0.5,
+  },
+  // removed duplicate card style
   rowTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   name: { fontSize: 16, fontWeight: '600' },
   category: { fontSize: 13, marginTop: 2 },
