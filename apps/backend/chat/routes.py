@@ -187,18 +187,20 @@ async def list_conversations(user_id: str = Query(..., description="User ID")):
     """List all conversations for a user, ordered by most recent first."""
     db = get_db_handle()
     conversations_collection = db["conversations"]
-    
+
     cursor = conversations_collection.find({"user_id": user_id}).sort("updated_at", -1)
     conversations = []
     async for doc in cursor:
-        conversations.append(ConversationResponse(
-            id=str(doc["_id"]),
-            user_id=doc["user_id"],
-            title=doc.get("title"),
-            created_at=doc["created_at"],
-            updated_at=doc["updated_at"],
-        ))
-    
+        conversations.append(
+            ConversationResponse(
+                id=str(doc["_id"]),
+                user_id=doc["user_id"],
+                title=doc.get("title"),
+                created_at=doc["created_at"],
+                updated_at=doc["updated_at"],
+            )
+        )
+
     return conversations
 
 
@@ -207,17 +209,17 @@ async def create_conversation(conversation: ConversationCreate):
     """Create a new conversation for a user."""
     db = get_db_handle()
     conversations_collection = db["conversations"]
-    
+
     now = datetime.utcnow()
     conversation_doc = {
         "user_id": conversation.user_id,
         "created_at": now,
         "updated_at": now,
     }
-    
+
     result = await conversations_collection.insert_one(conversation_doc)
     conversation_doc["_id"] = result.inserted_id
-    
+
     return ConversationResponse(
         id=str(conversation_doc["_id"]),
         user_id=conversation_doc["user_id"],
@@ -227,34 +229,40 @@ async def create_conversation(conversation: ConversationCreate):
     )
 
 
-@router.get("/conversations/{conversation_id}/chats", response_model=List[ChatMessageResponse])
+@router.get(
+    "/conversations/{conversation_id}/chats", response_model=List[ChatMessageResponse]
+)
 async def get_conversation_chats(conversation_id: str):
     """Get all chats for a conversation, ordered by creation time."""
     db = get_db_handle()
     chats_collection = db["chats"]
-    
+
     try:
         conv_object_id = ObjectId(conversation_id)
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid conversation ID format")
-    
+
     # Verify conversation exists
     conversations_collection = db["conversations"]
     conversation = await conversations_collection.find_one({"_id": conv_object_id})
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversation not found")
-    
-    cursor = chats_collection.find({"conversation_id": conversation_id}).sort("created_at", 1)
+
+    cursor = chats_collection.find({"conversation_id": conversation_id}).sort(
+        "created_at", 1
+    )
     chats = []
     async for doc in cursor:
-        chats.append(ChatMessageResponse(
-            id=str(doc["_id"]),
-            conversation_id=doc["conversation_id"],
-            role=doc["role"],
-            content=doc["content"],
-            created_at=doc["created_at"],
-        ))
-    
+        chats.append(
+            ChatMessageResponse(
+                id=str(doc["_id"]),
+                conversation_id=doc["conversation_id"],
+                role=doc["role"],
+                content=doc["content"],
+                created_at=doc["created_at"],
+            )
+        )
+
     return chats
 
 
@@ -265,19 +273,16 @@ async def generate_conversation_title(first_message: str) -> str:
         # Fallback: use first few words of the message
         words = first_message.split()[:5]
         return " ".join(words) + ("..." if len(first_message.split()) > 5 else "")
-    
+
     try:
         completion = service.client.chat.completions.create(
             model="gpt-4o",
             messages=[
                 {
                     "role": "system",
-                    "content": "Generate a short, concise title (3-6 words) for a conversation based on the first message. Return only the title, no quotes or extra text."
+                    "content": "Generate a short, concise title (3-6 words) for a conversation based on the first message. Return only the title, no quotes or extra text.",
                 },
-                {
-                    "role": "user",
-                    "content": f"First message: {first_message}"
-                }
+                {"role": "user", "content": f"First message: {first_message}"},
             ],
             temperature=0.7,
             max_tokens=20,
@@ -297,84 +302,84 @@ async def generate_conversation_title(first_message: str) -> str:
 
 
 async def generate_and_update_title_background(
-    conversation_id: str,
-    first_message: str
+    conversation_id: str, first_message: str
 ):
     """Background task to generate conversation title and update the database."""
     try:
         db = get_db_handle()
         conversations_collection = db["conversations"]
-        
+
         # Generate title
         title = await generate_conversation_title(first_message)
-        
+
         # Update conversation with the generated title
         try:
             conv_object_id = ObjectId(conversation_id)
             await conversations_collection.update_one(
-                {"_id": conv_object_id},
-                {"$set": {"title": title}}
+                {"_id": conv_object_id}, {"$set": {"title": title}}
             )
-            logger.info(f"Generated and updated title for conversation {conversation_id}: {title}")
+            logger.info(
+                f"Generated and updated title for conversation {conversation_id}: {title}"
+            )
         except Exception as e:
             logger.error(f"Failed to update conversation title: {str(e)}")
     except Exception as e:
         logger.error(f"Background title generation failed: {str(e)}")
 
 
-@router.post("/conversations/{conversation_id}/chats", response_model=ChatMessageResponse)
+@router.post(
+    "/conversations/{conversation_id}/chats", response_model=ChatMessageResponse
+)
 async def create_chat(conversation_id: str, chat: ChatCreate):
     """Add a chat message to a conversation."""
     db = get_db_handle()
     chats_collection = db["chats"]
     conversations_collection = db["conversations"]
-    
+
     try:
         conv_object_id = ObjectId(conversation_id)
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid conversation ID format")
-    
+
     # Verify conversation exists
     conversation = await conversations_collection.find_one({"_id": conv_object_id})
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversation not found")
-    
+
     now = datetime.utcnow()
-    
+
     # Check if this is the first user message and schedule title generation
     should_generate_title = False
     if chat.role == "user" and not conversation.get("title"):
         # Count existing user messages BEFORE inserting
-        existing_user_chats = await chats_collection.count_documents({
-            "conversation_id": conversation_id,
-            "role": "user"
-        })
+        existing_user_chats = await chats_collection.count_documents(
+            {"conversation_id": conversation_id, "role": "user"}
+        )
         # If this is the first user message, schedule title generation
         if existing_user_chats == 0:
             should_generate_title = True
-    
+
     chat_doc = {
         "conversation_id": conversation_id,
         "role": chat.role,
         "content": chat.content,
         "created_at": now,
     }
-    
+
     result = await chats_collection.insert_one(chat_doc)
     chat_doc["_id"] = result.inserted_id
-    
+
     # Update conversation's updated_at timestamp immediately
     await conversations_collection.update_one(
-        {"_id": conv_object_id},
-        {"$set": {"updated_at": now}}
+        {"_id": conv_object_id}, {"$set": {"updated_at": now}}
     )
-    
+
     # Schedule title generation in background if needed (non-blocking)
     if should_generate_title:
         asyncio.create_task(
             generate_and_update_title_background(conversation_id, chat.content)
         )
-    
+
     return ChatMessageResponse(
         id=str(chat_doc["_id"]),
         conversation_id=chat_doc["conversation_id"],

@@ -45,7 +45,9 @@ async def get_drinks(
     ),
     user_id: str | None = Query(None, description="Filter drinks by user ID"),
     category: str | None = Query(None, description="Filter drinks by category"),
-    favorited: bool | None = Query(None, description="Filter drinks by favorited status"),
+    favorited: bool | None = Query(
+        None, description="Filter drinks by favorited status"
+    ),
 ) -> DrinksListResponse:
     """
     Get drinks with pagination.
@@ -287,4 +289,6 @@ async def toggle_favorite(drink_id: str) -> Drink:
         raise
     except Exception as e:
         logger.exception("Failed to toggle favorite")
-        raise HTTPException(status_code=500, detail=f"Error toggling favorite: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error toggling favorite: {str(e)}"
+        )

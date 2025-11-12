@@ -113,7 +113,10 @@ async def get_drinks_paginated(
         if favorited:
             query_filter["favorited"] = True
         else:
-            query_filter["$or"] = [{"favorited": False}, {"favorited": {"$exists": False}}]
+            query_filter["$or"] = [
+                {"favorited": False},
+                {"favorited": {"$exists": False}},
+            ]
 
     # Get total count
     total_count = await db["drinks"].count_documents(query_filter)
