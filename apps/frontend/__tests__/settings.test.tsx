@@ -94,6 +94,7 @@ describe('Settings Context', () => {
       await new Promise(resolve => setTimeout(resolve, 10));
       settingsState?.setTheme('light');
       settingsState?.setAccentColor('ocean');
+      settingsState?.setApiBaseUrl('http://custom-url.com');
       await new Promise(resolve => setTimeout(resolve, 10));
       settingsState?.reset();
       await new Promise(resolve => setTimeout(resolve, 10));
@@ -101,5 +102,88 @@ describe('Settings Context', () => {
     
     expect(settingsState?.theme).toBe('dark');
     expect(settingsState?.accentColor).toBe('sunset');
+    expect(settingsState?.apiBaseUrl).toBe('');
+  });
+
+  /**
+   * Test 4: Normal case - Setting API base URL
+   * Verifies that setApiBaseUrl() updates the API base URL
+   */
+  test('should update API base URL', async () => {
+    render(
+      <SettingsProvider>
+        <TestComponent onSettings={(s) => { settingsState = s; }} />
+      </SettingsProvider>
+    );
+    
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 10));
+      settingsState?.setApiBaseUrl('http://localhost:8000');
+      await new Promise(resolve => setTimeout(resolve, 10));
+    });
+    
+    expect(settingsState?.apiBaseUrl).toBe('http://localhost:8000');
+  });
+
+  /**
+   * Test 5: Normal case - Setting haptics
+   * Verifies that haptics settings can be updated
+   */
+  test('should update haptics settings', async () => {
+    render(
+      <SettingsProvider>
+        <TestComponent onSettings={(s) => { settingsState = s; }} />
+      </SettingsProvider>
+    );
+    
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 10));
+      settingsState?.setHapticsEnabled(false);
+      settingsState?.setHapticStrength('heavy');
+      await new Promise(resolve => setTimeout(resolve, 10));
+    });
+    
+    expect(settingsState?.hapticsEnabled).toBe(false);
+    expect(settingsState?.hapticStrength).toBe('heavy');
+  });
+
+  /**
+   * Test 6: Normal case - Setting debug logs
+   * Verifies that debug logs setting can be updated
+   */
+  test('should update debug logs setting', async () => {
+    render(
+      <SettingsProvider>
+        <TestComponent onSettings={(s) => { settingsState = s; }} />
+      </SettingsProvider>
+    );
+    
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 10));
+      settingsState?.setDebugLogs(true);
+      await new Promise(resolve => setTimeout(resolve, 10));
+    });
+    
+    expect(settingsState?.debugLogs).toBe(true);
+  });
+
+  /**
+   * Test 7: Normal case - Setting realtime voice
+   * Verifies that realtime voice can be updated
+   */
+  test('should update realtime voice', async () => {
+    render(
+      <SettingsProvider>
+        <TestComponent onSettings={(s) => { settingsState = s; }} />
+      </SettingsProvider>
+    );
+    
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 10));
+      settingsState?.setRealtimeVoice('coral');
+      await new Promise(resolve => setTimeout(resolve, 10));
+    });
+    
+    expect(settingsState?.realtimeVoice).toBe('coral');
   });
 });

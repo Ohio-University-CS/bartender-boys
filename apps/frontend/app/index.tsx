@@ -1,8 +1,8 @@
 import { Redirect } from 'expo-router';
 
-// Defaults to the auth page when opening the app
+// Defaults to the menu page when opening the app
 export default function Index() {
-  return <Redirect href="/auth" />;
+  return <Redirect href="/(tabs)/menu" />;
 }
 
 

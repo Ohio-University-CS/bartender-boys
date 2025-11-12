@@ -18,6 +18,7 @@ type BartenderAvatarProps = {
   backgroundColor?: string;
 };
 
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const DEFAULT_MODEL = require('../assets/models/luiz-h-c-nobre/source/model (10).glb');
 
 /**

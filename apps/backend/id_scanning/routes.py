@@ -1,5 +1,4 @@
 import logging
-from datetime import datetime, time
 from fastapi import APIRouter, HTTPException
 
 from id_scanning.models import IDScanRequest, IDScanResponse

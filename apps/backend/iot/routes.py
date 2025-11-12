@@ -3,7 +3,6 @@ import httpx
 from fastapi import APIRouter, HTTPException
 from .models import PourRequest, PourResponse
 from .utils import FirmwareClient
-from settings import settings
 
 logger = logging.getLogger(__name__)
 

@@ -3,7 +3,6 @@ import json
 from urllib.parse import unquote
 from fastapi import APIRouter, HTTPException, Request, Query
 from fastapi.responses import StreamingResponse
-from typing import List
 
 from services.openai import OpenAIService
 from .models import ChatRequest, ChatResponse

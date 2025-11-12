@@ -8,7 +8,6 @@ import json
 import asyncio
 import logging
 from typing import Optional, Dict, Any, Callable, Awaitable
-from collections import defaultdict
 
 from fastapi import WebSocket, WebSocketDisconnect
 

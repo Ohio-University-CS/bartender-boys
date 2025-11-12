@@ -154,9 +154,9 @@ async def generate_drink(request: GenerateDrinkRequest) -> GenerateDrinkResponse
         logger.info("Generating image for drink: %s", request.name)
         prompt = f"A beautiful, professional cocktail photograph of a {request.name}. "
         prompt += f"Category: {request.category}. "
-        prompt += f"Show it in an elegant glass with proper garnishes and styling. "
-        prompt += f"The drink should look appetizing with good lighting, suitable for a cocktail menu. "
-        prompt += f"Background should be clean and elegant."
+        prompt += "Show it in an elegant glass with proper garnishes and styling. "
+        prompt += "The drink should look appetizing with good lighting, suitable for a cocktail menu. "
+        prompt += "Background should be clean and elegant."
         
         image_url = await service.generate_image(prompt)
         logger.info("Image generated successfully: %s", image_url)
