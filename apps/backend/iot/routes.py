@@ -36,16 +36,31 @@ async def send_drink_to_firmware(request: PourRequest) -> PourResponse:
     """
     client = get_firmware_client()
     if client is None:
-        logger.warning("Firmware API URL not configured. Request will succeed without hardware dispense.")
-        return PourResponse(status="ok", message="Firmware API not configured - request accepted but not dispensed")
+        logger.warning(
+            "Firmware API URL not configured. Request will succeed without hardware dispense."
+        )
+        return PourResponse(
+            status="ok",
+            message="Firmware API not configured - request accepted but not dispensed",
+        )
 
     try:
         drink_dict = request.drink.dict()
         result = await client.send_drink_request(drink_dict)
         return PourResponse(**result)
     except httpx.HTTPError as e:
-        logger.warning(f"Firmware API is unresponsive: {str(e)}. Request will succeed without hardware dispense.")
-        return PourResponse(status="ok", message="Firmware API unresponsive - request accepted but not dispensed")
+        logger.warning(
+            f"Firmware API is unresponsive: {str(e)}. Request will succeed without hardware dispense."
+        )
+        return PourResponse(
+            status="ok",
+            message="Firmware API unresponsive - request accepted but not dispensed",
+        )
     except Exception as e:
-        logger.warning(f"Unexpected error communicating with firmware: {str(e)}. Request will succeed without hardware dispense.")
-        return PourResponse(status="ok", message="Firmware communication error - request accepted but not dispensed")
+        logger.warning(
+            f"Unexpected error communicating with firmware: {str(e)}. Request will succeed without hardware dispense."
+        )
+        return PourResponse(
+            status="ok",
+            message="Firmware communication error - request accepted but not dispensed",
+        )
