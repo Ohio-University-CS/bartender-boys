@@ -114,7 +114,7 @@ export default function FavoritesScreen() {
   return (
     <View style={[styles.container, { backgroundColor, paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}> 
       <ScrollView>
-        <ThemedView colorName="surface" style={[styles.header, { borderBottomColor: borderColor }]}> 
+        <ThemedView colorName="surface" style={[styles.header, { borderBottomColor: borderColor, alignItems: 'center', flexDirection: 'column' }]}> 
           <ThemedText type="title" colorName="tint" style={styles.title}>Favorites</ThemedText>
         </ThemedView>
 

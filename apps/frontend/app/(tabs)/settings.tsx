@@ -105,8 +105,11 @@ export default function SettingsScreen() {
   }, []);
 
   return (
-    <View style={[styles.container, { backgroundColor, paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
-      <ScrollView contentContainerStyle={styles.containerContent}>
+    <View style={[styles.container, { backgroundColor, paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}> 
+      <ScrollView contentContainerStyle={styles.containerContent}> 
+        <View style={{ alignItems: 'center', flexDirection: 'column', marginBottom: 8 }}>
+          <ThemedText type="title" colorName="tint" style={{ fontSize: 24 }}>Settings</ThemedText>
+        </View>
 
       <ThemedView colorName="surfaceElevated" style={[styles.section, { borderColor }]}> 
         <ThemedText type="subtitle" colorName="tint" style={styles.sectionTitle}>Appearance</ThemedText>
