@@ -1,6 +1,5 @@
 
 import { useFonts } from 'expo-font';
-import { StyleSheet } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { SettingsProvider, useSettings } from '@/contexts/settings';
@@ -9,7 +8,6 @@ import { NotificationsProvider } from '@/contexts/notifications';
 import { NotificationContainer } from '@/components/NotificationContainer';
 import { Stack } from 'expo-router';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { Colors } from '@/constants/theme';
 
 function ThemedContainer({ children }: { children: React.ReactNode }) {
   const colorScheme = useColorScheme();
@@ -52,11 +50,3 @@ export default function RootLayout() {
     </SafeAreaProvider>
   );
 }
-
-const styles = StyleSheet.create({
-  bg: {
-    flex: 1,
-    width: '100%',
-    height: '100%',
-  },
-});

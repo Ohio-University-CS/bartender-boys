@@ -1,13 +1,14 @@
 // Fallback for using MaterialIcons on Android and web.
 
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { SymbolWeight, SymbolViewProps } from 'expo-symbols';
-import { ComponentProps } from 'react';
+import { SymbolWeight } from 'expo-symbols';
 import { OpaqueColorValue, type StyleProp, type TextStyle, Platform } from 'react-native';
 let Text: React.ComponentType<any>;
 if (Platform.OS === 'web') {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   Text = require('react-native-web').Text;
 } else {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   Text = require('react-native').Text;
 }
 

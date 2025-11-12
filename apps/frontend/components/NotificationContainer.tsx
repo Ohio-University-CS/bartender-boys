@@ -70,7 +70,8 @@ function NotificationItem({ notification, onDismiss }: NotificationItemProps) {
         useNativeDriver: true,
       }),
     ]).start();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // slideAnim and opacityAnim are refs, don't need to be in deps
 
   const handleDismiss = () => {
     // Slide out animation

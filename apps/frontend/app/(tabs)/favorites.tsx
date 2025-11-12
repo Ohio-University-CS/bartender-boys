@@ -26,6 +26,12 @@ const INGREDIENT_COUNT_OPTIONS = [
   { key: 'under8', label: '≤ 8 items', maxCount: 8 },
 ];
 
+const difficultyRank: Record<'Hard' | 'Medium' | 'Easy', number> = {
+  Hard: 0,
+  Medium: 1,
+  Easy: 2,
+};
+
 export default function FavoritesScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -34,12 +40,6 @@ export default function FavoritesScreen() {
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [prepTimeFilter, setPrepTimeFilter] = useState<'any' | 'under2' | 'under3' | 'under4'>('any');
   const [ingredientCountFilter, setIngredientCountFilter] = useState<'any' | 'under4' | 'under6' | 'under8'>('any');
-
-  const difficultyRank: Record<Drink['difficulty'], number> = {
-    Hard: 0,
-    Medium: 1,
-    Easy: 2,
-  };
 
   const sortOptions: { key: FavoritesSortOption; label: string }[] = [
     { key: 'difficulty', label: 'Difficulty' },

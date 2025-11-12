@@ -3,7 +3,6 @@ import json
 from urllib.parse import unquote
 from fastapi import APIRouter, HTTPException, Request, Query
 from fastapi.responses import StreamingResponse
-from typing import List
 
 from services.openai import OpenAIService
 from .models import ChatRequest, ChatResponse
@@ -14,6 +13,7 @@ router = APIRouter(prefix="/chat", tags=["Chat"])
 
 openai_service: OpenAIService | None = None
 
+
 def get_openai_service() -> OpenAIService | None:
     global openai_service
     if openai_service is None:
@@ -23,6 +23,7 @@ def get_openai_service() -> OpenAIService | None:
             logger.error(f"Failed to initialize OpenAI service: {str(e)}")
             openai_service = None
     return openai_service
+
 
 @router.post("/respond")
 async def respond(request: ChatRequest, fastapi_request: Request, stream: bool = False):
@@ -42,7 +43,9 @@ async def respond(request: ChatRequest, fastapi_request: Request, stream: bool =
         try:
             completion = service.client.chat.completions.create(
                 model="gpt-4o",
-                messages=[{"role": m.role, "content": m.content} for m in request.messages],
+                messages=[
+                    {"role": m.role, "content": m.content} for m in request.messages
+                ],
                 temperature=0.3,
                 max_tokens=400,
             )
@@ -59,7 +62,9 @@ async def respond(request: ChatRequest, fastapi_request: Request, stream: bool =
         try:
             stream_resp = service.client.chat.completions.create(
                 model="gpt-4o",
-                messages=[{"role": m.role, "content": m.content} for m in request.messages],
+                messages=[
+                    {"role": m.role, "content": m.content} for m in request.messages
+                ],
                 temperature=0.3,
                 max_tokens=400,
                 stream=True,
@@ -93,11 +98,15 @@ async def respond(request: ChatRequest, fastapi_request: Request, stream: bool =
         "X-Accel-Buffering": "no",  # for some proxies
     }
 
-    return StreamingResponse(event_generator(), media_type="text/event-stream", headers=headers)
+    return StreamingResponse(
+        event_generator(), media_type="text/event-stream", headers=headers
+    )
 
 
 @router.get("/respond_stream")
-async def respond_stream(q: str = Query(..., description="URL-encoded JSON with { messages: Message[] }")):
+async def respond_stream(
+    q: str = Query(..., description="URL-encoded JSON with { messages: Message[] }"),
+):
     """
     SSE endpoint that accepts a URL-encoded JSON object `q` with shape:
       { "messages": [{ "role": "system"|"user"|"assistant", "content": string }, ...] }
@@ -156,4 +165,6 @@ async def respond_stream(q: str = Query(..., description="URL-encoded JSON with 
         "X-Accel-Buffering": "no",
     }
 
-    return StreamingResponse(event_generator(), media_type="text/event-stream", headers=headers)
+    return StreamingResponse(
+        event_generator(), media_type="text/event-stream", headers=headers
+    )

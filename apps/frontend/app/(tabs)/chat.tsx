@@ -24,7 +24,6 @@ export default function ChatScreen() {
     { id: 'welcome', role: 'assistant', content: "Hey! I'm your Bartender AI. Ask me for recipes, swaps, or pairing ideas." },
   ]);
   const [busy, setBusy] = useState(false);
-  const [isTalking, setIsTalking] = useState(false);
   const talkingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const stopTalkingImmediately = useCallback(() => {
@@ -32,7 +31,6 @@ export default function ChatScreen() {
       clearTimeout(talkingTimeoutRef.current);
       talkingTimeoutRef.current = null;
     }
-    setIsTalking(false);
   }, []);
 
   const finalizeTalking = useCallback((text: string) => {
@@ -43,7 +41,6 @@ export default function ChatScreen() {
     const wordCount = text.trim() ? text.trim().split(/\s+/).length : 0;
     const talkingDuration = Math.max(2000, (wordCount / 150) * 60 * 1000);
     talkingTimeoutRef.current = setTimeout(() => {
-      setIsTalking(false);
       talkingTimeoutRef.current = null;
     }, talkingDuration);
   }, []);
@@ -78,14 +75,6 @@ export default function ChatScreen() {
     setBusy(true);
     stopTalkingImmediately();
     try {
-
-      // Add emoji header
-      const header = (
-        <View style={{ alignItems: 'center', flexDirection: 'column', marginBottom: 8 }}>
-          <ThemedText style={{ fontSize: 56, marginBottom: 8 }}>💬</ThemedText>
-          <ThemedText type="title" colorName="tint" style={{ fontSize: 24 }}>Chat</ThemedText>
-        </View>
-      );
       const payload = {
         messages: [
           { role: 'system', content: 'You are a helpful bartender assistant. Provide concise cocktail advice, recipes, and substitutions. Keep answers short.' },
@@ -97,7 +86,6 @@ export default function ChatScreen() {
       if (Platform.OS === 'web') {
         const aiId = `${Date.now()}-ai`;
         setMessages((m) => [...m, { id: aiId, role: 'assistant', content: '' }]);
-        setIsTalking(true);
 
         const url = new URL(`${baseUrl}/chat/respond_stream`);
         url.searchParams.set('q', JSON.stringify(payload));
@@ -169,7 +157,6 @@ export default function ChatScreen() {
         // Native: use react-native-sse dynamically
         const aiId = `${Date.now()}-ai`;
         setMessages((m) => [...m, { id: aiId, role: 'assistant', content: '' }]);
-        setIsTalking(true);
         const url = `${baseUrl}/chat/respond_stream?q=${encodeURIComponent(JSON.stringify(payload))}`;
         const { default: EventSourceRN } = await import('react-native-sse');
         let aiText = '';

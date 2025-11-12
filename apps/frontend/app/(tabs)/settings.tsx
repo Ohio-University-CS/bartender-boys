@@ -1,15 +1,14 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { StyleSheet, ScrollView, View, Switch, TouchableOpacity, Alert, Platform, TextInput } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import SegmentedControl from '@react-native-segmented-control/segmented-control';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { ACCENT_OPTIONS } from '@/constants/theme';
-import { useSettings, REALTIME_VOICES, type RealtimeVoice } from '@/contexts/settings';
+import { useSettings, REALTIME_VOICES } from '@/contexts/settings';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { router } from 'expo-router';
-import Constants from 'expo-constants';
 import { API_BASE_URL } from '@/environment';
 
 export default function SettingsScreen() {
@@ -23,8 +22,6 @@ export default function SettingsScreen() {
     setAccentColor,
     animationsEnabled,
     setAnimationsEnabled,
-    autoSaveFavorites,
-    setAutoSaveFavorites,
     realtimeVoice,
     setRealtimeVoice,
   } = useSettings();
@@ -44,7 +41,6 @@ export default function SettingsScreen() {
   const onAccent = useThemeColor({}, 'onTint');
   const mutedForeground = useThemeColor({}, 'mutedForeground');
   const danger = useThemeColor({}, 'danger');
-  const onDanger = useThemeColor({}, 'onDanger');
 
   const [apiUrlInput, setApiUrlInput] = useState(apiBaseUrl || API_BASE_URL);
   const [userName, setUserName] = useState<string | null>(null);
@@ -104,35 +100,6 @@ export default function SettingsScreen() {
       Alert.alert('Error', 'Failed to log out. Please try again.');
     }
   };
-
-
-  const handleExportLogs = () => {
-    Alert.alert(
-      'Log export',
-      'Connect the device to your development machine to pull the latest log bundle for support. Automated export is coming soon.'
-    );
-  };
-
-  const handleClearMenuCache = async () => {
-    try {
-      const keys = await AsyncStorage.getAllKeys();
-      const targets = keys.filter((key) => key.includes('menu') || key.includes('favorites'));
-      if (targets.length > 0) {
-        await AsyncStorage.multiRemove(targets);
-      }
-      Alert.alert('Cache cleared', targets.length > 0 ? 'Menu and favorites caches cleared.' : 'No cached menu data found.');
-    } catch (error) {
-      console.error('Cache clear error', error);
-      Alert.alert('Error', 'Unable to clear cached data. Try again.');
-    }
-  };
-
-  const diagnosticsSummary = useMemo(() => {
-    const version = Constants.expoConfig?.version ?? 'dev';
-    const easExtra = (Constants.expoConfig as { extra?: { eas?: { buildNumber?: string } } } | undefined)?.extra?.eas;
-    const build = easExtra?.buildNumber ?? Constants.nativeBuildVersion ?? 'dev';
-    return `Version ${version} (build ${build})`;
-  }, []);
 
   return (
     <View style={[styles.container, { backgroundColor, paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}> 
@@ -229,17 +196,6 @@ export default function SettingsScreen() {
         </View>
         <ThemedText style={[styles.help, styles.helpInset]} colorName="muted">Enable smooth animations throughout the app</ThemedText>
 
-        <View style={styles.row}>
-          <ThemedText>Auto-save Favorites</ThemedText>
-          <Switch
-            value={autoSaveFavorites}
-            onValueChange={setAutoSaveFavorites}
-            trackColor={{ false: mutedForeground, true: accent }}
-            thumbColor={Platform.OS === 'android' ? onAccent : undefined}
-          />
-        </View>
-        <ThemedText style={[styles.help, styles.helpInset]} colorName="muted">Automatically sync favorites across sessions</ThemedText>
-
         <ThemedText style={[styles.help, { marginTop: 16 }]} colorName="muted">Realtime Voice</ThemedText>
         <ThemedText style={[styles.help, styles.helpInset]} colorName="muted">Choose the voice for AI conversations</ThemedText>
         <View style={styles.accentRow}>
@@ -315,28 +271,6 @@ export default function SettingsScreen() {
             </TouchableOpacity>
           )}
         </View>
-      </ThemedView>
-
-      <ThemedView colorName="surfaceElevated" style={[styles.section, { borderColor }]}> 
-        <ThemedText type="subtitle" colorName="tint" style={styles.sectionTitle}>Data & Diagnostics</ThemedText>
-        <ThemedText style={styles.help} colorName="muted">Manage cache and share runtime info with support</ThemedText>
-
-        <View style={styles.rowGap}>
-          <TouchableOpacity
-            style={[styles.button, styles.secondary, { backgroundColor: surface, borderColor: inputBorder }]}
-            onPress={handleExportLogs}
-          >
-            <ThemedText style={styles.secondaryText} colorName="tint">Export latest logs</ThemedText>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.button, styles.secondary, { backgroundColor: surface, borderColor: inputBorder }]}
-            onPress={handleClearMenuCache}
-          >
-            <ThemedText style={styles.secondaryText} colorName="tint">Clear cached menu data</ThemedText>
-          </TouchableOpacity>
-        </View>
-
-        <ThemedText style={[styles.meta, { color: mutedForeground }]}>{diagnosticsSummary}</ThemedText>
       </ThemedView>
 
       <ThemedView colorName="surfaceElevated" style={[styles.section, { borderColor }]}> 

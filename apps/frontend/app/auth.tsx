@@ -8,24 +8,12 @@ import { API_BASE_URL } from '../environment';
 import { useSettings } from '@/contexts/settings';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-interface IDScanResult {
-  name?: string;
-  state?: string;
-  date_of_birth?: string;
-  sex?: string;
-  eye_color?: string;
-  is_valid?: boolean;
-  error?: string;
-  raw_response?: string;
-}
-
 
 export default function AuthScreen() {
   const router = useRouter();
   const [isCapturing, setIsCapturing] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
   const cameraRef = useRef<CameraView | null>(null);
-  const [scanResult, setScanResult] = useState<IDScanResult | null>(null);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [checkingBypass, setCheckingBypass] = useState(true);
@@ -133,7 +121,7 @@ export default function AuthScreen() {
           { timeout: scanTimeoutMs || 60000 } // timeout for OpenAI processing
         );
         console.log('Response received:', apiResponse.data);
-        setScanResult(apiResponse.data);
+        // Scan result stored in apiResponse.data but not used in UI
 
         // Check for errors in the response
         if (apiResponse.data?.error) {

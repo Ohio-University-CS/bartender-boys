@@ -17,6 +17,12 @@ type SortOption = 'difficulty' | 'alcohol' | 'name' | 'prepTime';
 
 const PAGE_SIZE = 20;
 
+const difficultyRank: Record<'Hard' | 'Medium' | 'Easy', number> = {
+  Hard: 0,
+  Medium: 1,
+  Easy: 2,
+};
+
 export default function MenuScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -54,8 +60,9 @@ export default function MenuScreen() {
   const chipBg = useThemeColor({}, 'chipBackground');
   const chipBorder = useThemeColor({}, 'chipBorder');
 
-  const toggleExpanded = (id: string) =>
+  const toggleExpanded = useCallback((id: string) => {
     setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
+  }, []);
 
   const categories = ['All', 'Cocktail', 'Whiskey', 'Rum', 'Gin', 'Vodka', 'Tequila', 'Brandy'];
   const sortOptions: { key: SortOption; label: string }[] = [
@@ -75,12 +82,6 @@ export default function MenuScreen() {
     { key: 'under6', label: '≤ 6 items', maxCount: 6 },
     { key: 'under8', label: '≤ 8 items', maxCount: 8 },
   ];
-
-  const difficultyRank: Record<Drink['difficulty'], number> = {
-    Hard: 0,
-    Medium: 1,
-    Easy: 2,
-  };
 
   // Fetch drinks from API
   const fetchDrinks = useCallback(async (skip: number = 0, reset: boolean = false) => {
@@ -172,9 +173,9 @@ export default function MenuScreen() {
     return data;
   }, [filteredDrinks, sortBy]);
 
-  const showDrinkDetails = (drink: Drink) => {
+  const showDrinkDetails = useCallback((drink: Drink) => {
     router.push(`/drink/${drink.id}` as any);
-  };
+  }, [router]);
 
   const loadMore = useCallback(() => {
     if (!loadingMore && hasMore && !loading) {

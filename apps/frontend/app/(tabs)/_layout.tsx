@@ -41,9 +41,6 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => <IconSymbol size={24} name="heart.fill" color={color} />,
         }}
       />
-      {/* Hide legacy routes if files still exist */}
-      <Tabs.Screen name="index" options={{ href: null }} />
-      <Tabs.Screen name="explore" options={{ href: null }} />
       <Tabs.Screen
         name="chat"
         options={{

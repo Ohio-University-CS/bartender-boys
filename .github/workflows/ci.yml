@@ -1,0 +1,83 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+jobs:
+  frontend:
+    name: Frontend Tests & Lint
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: apps/frontend/package-lock.json
+      
+      - name: Install dependencies
+        working-directory: apps/frontend
+        run: npm ci
+      
+      - name: Run linter
+        working-directory: apps/frontend
+        run: npm run lint
+      
+      - name: Run tests
+        working-directory: apps/frontend
+        run: npm test -- --runInBand --testTimeout=60000
+      
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-test-results
+          path: apps/frontend/coverage
+          if-no-files-found: ignore
+
+  backend:
+    name: Backend Tests & Lint
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: apps/backend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Upgrade pip
+        run: python -m pip install --upgrade pip
+
+      - name: Install backend (dev extras)
+        run: pip install -e '.[dev]'
+
+      - name: Run linter (ruff check)
+        run: ruff check .
+
+      - name: Run formatter check (ruff format)
+        run: ruff format --check .
+
+      - name: Run pytest when tests are present
+        run: |
+          if [ -d tests ] && find tests -name "test_*.py" -print -quit | grep -q .; then
+            pytest
+          else
+            echo "No backend tests found; skipping pytest."
+          fi
+

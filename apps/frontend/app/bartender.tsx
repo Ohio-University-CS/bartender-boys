@@ -12,40 +12,7 @@ import { useSettings } from '@/contexts/settings';
 import { useNotifications } from '@/contexts/notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-type LiveAudioStreamModule = {
-  init: (options: Record<string, unknown>) => void;
-  start: () => void;
-  stop: () => void;
-  on: (event: string, handler: (data: string) => void) => void;
-  removeAllListeners?: (event?: string) => void;
-};
-
-const createLiveAudioStreamStub = (): LiveAudioStreamModule => ({
-  init: () => console.warn('[bartender] Live audio module unavailable; init skipped.'),
-  start: () => console.warn('[bartender] Live audio module unavailable; start skipped.'),
-  stop: () => {},
-  on: () => {},
-  removeAllListeners: () => {},
-});
-
-const liveAudio = (() => {
-  if (Platform.OS === 'web') {
-    return { module: createLiveAudioStreamStub(), available: false };
-  }
-  try {
-    const module = require('react-native-live-audio-stream') as LiveAudioStreamModule;
-    return { module, available: true };
-  } catch (error) {
-    console.warn(
-      '[bartender] react-native-live-audio-stream native module not found. Voice capture is disabled. Use a custom dev build compiled with this module.',
-      error,
-    );
-    return { module: createLiveAudioStreamStub(), available: false };
-  }
-})();
-
-const LiveAudioStream = liveAudio.module;
-const isLiveAudioAvailable = liveAudio.available;
+// Live audio stream module removed - using WebRTC realtime instead
 
 export default function BartenderScreen() {
   const router = useRouter();
