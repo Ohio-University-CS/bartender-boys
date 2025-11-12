@@ -10,11 +10,22 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/realtime", tags=["Realtime"])
 
-VALID_VOICES = ['alloy', 'ash', 'ballad', 'coral', 'echo', 'sage', 'shimmer', 'verse', 'marin', 'cedar']
+VALID_VOICES = [
+    "alloy",
+    "ash",
+    "ballad",
+    "coral",
+    "echo",
+    "sage",
+    "shimmer",
+    "verse",
+    "marin",
+    "cedar",
+]
 
 
 class TokenRequest(BaseModel):
-    voice: str = 'alloy'
+    voice: str = "alloy"
 
 
 @router.post("/token")
@@ -23,21 +34,18 @@ async def get_realtime_token(request: TokenRequest = TokenRequest()):
     Get an ephemeral token for OpenAI Realtime API.
     This endpoint creates a session with OpenAI and returns the client_secret
     that can be used to establish a WebRTC connection.
-    
+
     Args:
         request: Token request containing voice option (defaults to 'alloy')
     """
     openai_api_key = os.getenv("OPENAI_API_KEY") or settings.OPENAI_API_KEY
-    
+
     if not openai_api_key:
         logger.error("OpenAI API key not configured")
-        raise HTTPException(
-            status_code=500,
-            detail="OpenAI API key not configured"
-        )
-    
+        raise HTTPException(status_code=500, detail="OpenAI API key not configured")
+
     # Validate voice option
-    voice = request.voice if request.voice in VALID_VOICES else 'alloy'
+    voice = request.voice if request.voice in VALID_VOICES else "alloy"
 
     try:
         async with httpx.AsyncClient() as client:
@@ -51,11 +59,11 @@ async def get_realtime_token(request: TokenRequest = TokenRequest()):
                     "model": settings.OPENAI_REALTIME_MODEL,
                     "voice": voice,
                 },
-                timeout=30.0
+                timeout=30.0,
             )
             response.raise_for_status()
             session_data = response.json()
-            
+
             logger.info("Successfully created OpenAI Realtime session")
             return JSONResponse(
                 content=session_data,
@@ -63,20 +71,19 @@ async def get_realtime_token(request: TokenRequest = TokenRequest()):
                     "Access-Control-Allow-Origin": "*",
                     "Access-Control-Allow-Methods": "POST, OPTIONS",
                     "Access-Control-Allow-Headers": "Content-Type",
-                }
+                },
             )
     except httpx.HTTPStatusError as e:
-        logger.error(f"Failed to create OpenAI session: {e.response.status_code} - {e.response.text}")
+        logger.error(
+            f"Failed to create OpenAI session: {e.response.status_code} - {e.response.text}"
+        )
         raise HTTPException(
             status_code=e.response.status_code,
-            detail=f"Failed to create OpenAI session: {e.response.text}"
+            detail=f"Failed to create OpenAI session: {e.response.text}",
         )
     except Exception as e:
         logger.error(f"Error creating OpenAI session: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Internal server error: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 
 @router.options("/token")
@@ -88,6 +95,5 @@ async def options_token():
             "Access-Control-Allow-Origin": "*",
             "Access-Control-Allow-Methods": "POST, OPTIONS",
             "Access-Control-Allow-Headers": "Content-Type",
-        }
+        },
     )
-

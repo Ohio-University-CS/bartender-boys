@@ -9,6 +9,7 @@ from realtime.routes import router as realtime_router
 from settings import settings
 from services.db import connect_to_mongo, close_mongo_connection
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await connect_to_mongo()
@@ -16,6 +17,7 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         await close_mongo_connection()
+
 
 app = FastAPI(
     title="Bartender Boys API",
@@ -43,14 +45,18 @@ app.include_router(drinks_router)
 app.include_router(iot_router)
 app.include_router(realtime_router)
 
+
 @app.get("/")
 async def root():
     return {"message": "Hello from Bartender Boys API!"}
+
 
 @app.get("/health")
 async def health_check():
     return {"status": "healthy"}
 
+
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)
