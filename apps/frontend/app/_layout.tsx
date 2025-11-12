@@ -42,6 +42,7 @@ export default function RootLayout() {
                 <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
                 <Stack.Screen name="bartender" options={{ headerShown: false }} />
                 <Stack.Screen name="drink/[id]" options={{ headerShown: false }} />
+                <Stack.Screen name="conversation/[id]" options={{ headerShown: false }} />
               </Stack>
             </ThemedContainer>
           </NotificationsProvider>

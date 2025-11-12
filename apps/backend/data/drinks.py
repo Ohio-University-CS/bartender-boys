@@ -82,6 +82,7 @@ async def get_drinks_paginated(
     limit: int = 20,
     user_id: Optional[str] = None,
     category: Optional[str] = None,
+    favorited: Optional[bool] = None,
     db: Optional[AsyncIOMotorDatabase] = None,
 ) -> tuple[List[Dict[str, Any]], int]:
     """Get drinks with pagination.
@@ -91,6 +92,7 @@ async def get_drinks_paginated(
         limit: Maximum number of documents to return
         user_id: Optional user ID to filter by
         category: Optional category to filter by
+        favorited: Optional boolean to filter by favorited status
         db: Optional database handle (will get default if not provided)
 
     Returns:
@@ -105,6 +107,16 @@ async def get_drinks_paginated(
         query_filter["user_id"] = user_id
     if category:
         query_filter["category"] = category
+    if favorited is not None:
+        # If favorited is True, only get drinks where favorited is True
+        # If favorited is False, get drinks where favorited is False or null/undefined
+        if favorited:
+            query_filter["favorited"] = True
+        else:
+            query_filter["$or"] = [
+                {"favorited": False},
+                {"favorited": {"$exists": False}},
+            ]
 
     # Get total count
     total_count = await db["drinks"].count_documents(query_filter)

@@ -8,6 +8,7 @@ export interface Drink {
   prepTime: string;
   user_id?: string;
   image_url?: string;
+  favorited?: boolean;
   hardwareSteps?: { pump: string; seconds: number }[];
 }
 

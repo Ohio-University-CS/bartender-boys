@@ -55,6 +55,40 @@ async def ensure_indexes(db: AsyncIOMotorDatabase) -> None:
     except Exception as e:
         logger.warning("Failed ensuring drinks indexes: %s", e)
 
+    # Ensure conversations collection indexes
+    conversations = db["conversations"]
+    try:
+        # Index on user_id for efficient queries by user
+        await conversations.create_index("user_id")
+        logger.info("Ensured index on conversations.user_id")
+
+        # Index on updated_at for efficient sorting
+        await conversations.create_index("updated_at")
+        logger.info("Ensured index on conversations.updated_at")
+
+        # Compound index for user_id + updated_at (common query pattern)
+        await conversations.create_index([("user_id", 1), ("updated_at", -1)])
+        logger.info("Ensured compound index on conversations.user_id and updated_at")
+    except Exception as e:
+        logger.warning("Failed ensuring conversations indexes: %s", e)
+
+    # Ensure chats collection indexes
+    chats = db["chats"]
+    try:
+        # Index on conversation_id for efficient queries by conversation
+        await chats.create_index("conversation_id")
+        logger.info("Ensured index on chats.conversation_id")
+
+        # Index on created_at for efficient sorting
+        await chats.create_index("created_at")
+        logger.info("Ensured index on chats.created_at")
+
+        # Compound index for conversation_id + created_at (common query pattern)
+        await chats.create_index([("conversation_id", 1), ("created_at", 1)])
+        logger.info("Ensured compound index on chats.conversation_id and created_at")
+    except Exception as e:
+        logger.warning("Failed ensuring chats indexes: %s", e)
+
     return None
 
 
