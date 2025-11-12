@@ -129,7 +129,6 @@ export default function BartenderScreen() {
       Alert.alert('Connection Error', error.message || 'Failed to connect to bartender');
     },
   });
-
   const handleToggleSession = async () => {
     if (isSessionActive) {
       stopSession();
@@ -174,7 +173,6 @@ export default function BartenderScreen() {
   const avatarBackground = useThemeColor({}, 'surface');
   const accent = useThemeColor({}, 'tint');
   const onAccent = useThemeColor({}, 'onTint');
-
   return (
     <View style={[styles.container, { backgroundColor, paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
       <View style={[styles.avatarContainer, { borderBottomColor: avatarBorder, backgroundColor: avatarBackground }]}>

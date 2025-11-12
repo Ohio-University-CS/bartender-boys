@@ -4,6 +4,7 @@ import { GLView } from 'expo-gl';
 import { Asset } from 'expo-asset';
 import * as THREE from 'three';
 import { Renderer } from 'expo-three';
+import { loadAsync as loadModelAsync } from 'expo-three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
@@ -19,7 +20,7 @@ type BartenderAvatarProps = {
 };
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const DEFAULT_MODEL = require('../assets/models/luiz-h-c-nobre/source/model (10).glb');
+const DEFAULT_MODEL = require('../assets/models/luiz-h-c-nobre/source/bartender.glb');
 
 /**
  * 3D Bartender Avatar Component
@@ -145,23 +146,22 @@ export function BartenderAvatar({
     try {
       const asset = Asset.fromModule(moduleRef);
       console.log('[BartenderAvatar] resolved asset metadata', asset);
-      if (Platform.OS !== 'web') {
-        await asset.downloadAsync();
-      }
-      const uri = asset.localUri ?? asset.uri;
-      if (!uri) {
-        throw new Error('Unable to resolve model URI');
-      }
-      console.log('[BartenderAvatar] asset uri', uri, 'local?', asset.localUri);
+      await asset.downloadAsync();
 
-      const loader = new GLTFLoader();
-      if (asset.localUri) {
-        const resourcePath = asset.localUri.replace(/[^/]*$/, '');
-        loader.setResourcePath(resourcePath);
-        loader.setPath(resourcePath);
+      let gltf: GLTF;
+      if (Platform.OS === 'web') {
+        const uri = asset.localUri ?? asset.uri;
+        if (!uri) {
+          throw new Error('Unable to resolve model URI');
+        }
+        const loader = new GLTFLoader();
+        gltf = (await loader.loadAsync(uri)) as GLTF;
+      } else {
+        gltf = (await loadModelAsync(asset)) as GLTF;
       }
-
-      const gltf: GLTF = await loader.loadAsync(uri);
+      if (!gltf) {
+        throw new Error('GLTF result missing');
+      }
       if (!sceneRef.current || !gltf.scene) {
         throw new Error('Model scene missing');
       }
@@ -362,9 +362,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   container: {
-    width: Platform.OS === 'web' ? '100%' : '85%', // Smaller on mobile to prevent cutoff
-    aspectRatio: 1, // Square container for circular appearance
-    maxWidth: Platform.OS === 'web' ? '100%' : 280, // Max size limit on mobile
+  width: Platform.OS === 'web' ? '70%' : '65%', // Reduce overall footprint for more chat space
+  aspectRatio: 1, // Square container for circular appearance
+  maxWidth: Platform.OS === 'web' ? 360 : 210, // Reduce max size for more vertical room
     backgroundColor: 'transparent',
     borderRadius: 9999, // Fully circular
     overflow: 'hidden',

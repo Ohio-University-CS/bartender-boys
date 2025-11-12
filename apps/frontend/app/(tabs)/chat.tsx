@@ -24,13 +24,16 @@ export default function ChatScreen() {
     { id: 'welcome', role: 'assistant', content: "Hey! I'm your Bartender AI. Ask me for recipes, swaps, or pairing ideas." },
   ]);
   const [busy, setBusy] = useState(false);
+  const [, setIsTalking] = useState(false);
   const talkingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const listRef = useRef<FlatList<ChatMsg> | null>(null);
 
   const stopTalkingImmediately = useCallback(() => {
     if (talkingTimeoutRef.current) {
       clearTimeout(talkingTimeoutRef.current);
       talkingTimeoutRef.current = null;
     }
+    setIsTalking(false);
   }, []);
 
   const finalizeTalking = useCallback((text: string) => {
@@ -41,6 +44,7 @@ export default function ChatScreen() {
     const wordCount = text.trim() ? text.trim().split(/\s+/).length : 0;
     const talkingDuration = Math.max(2000, (wordCount / 150) * 60 * 1000);
     talkingTimeoutRef.current = setTimeout(() => {
+      setIsTalking(false);
       talkingTimeoutRef.current = null;
     }, talkingDuration);
   }, []);
@@ -66,6 +70,10 @@ export default function ChatScreen() {
     };
   }, []);
 
+  useEffect(() => {
+    listRef.current?.scrollToEnd({ animated: true });
+  }, [messages]);
+
   const onSend = useCallback(async () => {
     const text = input.trim();
     if (!text || busy) return;
@@ -86,6 +94,7 @@ export default function ChatScreen() {
       if (Platform.OS === 'web') {
         const aiId = `${Date.now()}-ai`;
         setMessages((m) => [...m, { id: aiId, role: 'assistant', content: '' }]);
+        setIsTalking(true);
 
         const url = new URL(`${baseUrl}/chat/respond_stream`);
         url.searchParams.set('q', JSON.stringify(payload));
@@ -157,6 +166,7 @@ export default function ChatScreen() {
         // Native: use react-native-sse dynamically
         const aiId = `${Date.now()}-ai`;
         setMessages((m) => [...m, { id: aiId, role: 'assistant', content: '' }]);
+        setIsTalking(true);
         const url = `${baseUrl}/chat/respond_stream?q=${encodeURIComponent(JSON.stringify(payload))}`;
         const { default: EventSourceRN } = await import('react-native-sse');
         let aiText = '';
@@ -266,35 +276,42 @@ export default function ChatScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor, paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}> 
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <FlatList
-          data={messages}
-          keyExtractor={(it) => it.id}
-          renderItem={renderItem}
-          contentContainerStyle={styles.list}
-        />
-        <TouchableOpacity
-          style={[styles.talkBtn, { backgroundColor: accent, shadowColor: accent }]}
-          onPress={() => router.push('/bartender' as never)}
-          accessibilityLabel="Talk to bartender"
-        >
-          <Ionicons name="mic" size={16} color={onAccent} />
-          <ThemedText style={styles.talkText} colorName="onTint">Talk to bartender</ThemedText>
-        </TouchableOpacity>
-        <View style={[styles.inputRow, { borderTopColor: borderColor }]}>
-          <TextInput
-            style={[styles.input, { backgroundColor: inputBg, borderColor: inputBorder, color: textColor }]}
-            placeholder="Ask the bartender..."
-            placeholderTextColor={placeholderColor}
-            value={input}
-            onChangeText={setInput}
-            onSubmitEditing={onSend}
-            editable={!busy}
+    <View style={[styles.container, { backgroundColor, paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
+      <KeyboardAvoidingView style={styles.keyboard} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <View style={styles.content}>
+          <FlatList
+            ref={listRef}
+            data={messages}
+            keyExtractor={(it) => it.id}
+            renderItem={renderItem}
+            style={styles.list}
+            contentContainerStyle={styles.listContent}
+            keyboardShouldPersistTaps="handled"
           />
-          <TouchableOpacity style={[styles.sendBtn, { backgroundColor: accent }]} onPress={onSend} disabled={busy}>
-            <Ionicons name="paper-plane" size={18} color={onAccent} />
+        </View>
+        <View style={[styles.controls, { borderTopColor: borderColor }]}>
+          <TouchableOpacity
+            style={[styles.talkBtn, { backgroundColor: accent, shadowColor: accent }]}
+            onPress={() => router.push('/bartender' as never)}
+            accessibilityLabel="Talk to bartender"
+          >
+            <Ionicons name="mic" size={16} color={onAccent} />
+            <ThemedText style={styles.talkText} colorName="onTint">Talk to bartender</ThemedText>
           </TouchableOpacity>
+          <View style={styles.inputRow}>
+            <TextInput
+              style={[styles.input, { backgroundColor: inputBg, borderColor: inputBorder, color: textColor }]}
+              placeholder="Ask the bartender..."
+              placeholderTextColor={placeholderColor}
+              value={input}
+              onChangeText={setInput}
+              onSubmitEditing={onSend}
+              editable={!busy}
+            />
+            <TouchableOpacity style={[styles.sendBtn, { backgroundColor: accent }]} onPress={onSend} disabled={busy}>
+              <Ionicons name="paper-plane" size={18} color={onAccent} />
+            </TouchableOpacity>
+          </View>
         </View>
       </KeyboardAvoidingView>
     </View>
@@ -303,14 +320,18 @@ export default function ChatScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  list: { padding: 12, paddingBottom: 120 },
+  keyboard: { flex: 1 },
+  content: { flex: 1 },
+  list: { flex: 1 },
+  listContent: { paddingHorizontal: 12, paddingTop: 12, paddingBottom: 20 },
   bubble: { maxWidth: '80%', padding: 10, borderRadius: 12, marginBottom: 8 },
   userBubble: { alignSelf: 'flex-end' },
   aiBubble: { alignSelf: 'flex-start', borderWidth: 1 },
   bubbleText: {},
-  inputRow: { flexDirection: 'row', padding: 12, gap: 8, borderTopWidth: 1 },
+  controls: { padding: 12, gap: 12, borderTopWidth: 1 },
+  inputRow: { flexDirection: 'row', gap: 8 },
   input: { flex: 1, padding: 12, borderRadius: 10, borderWidth: 1 },
   sendBtn: { paddingHorizontal: 14, alignItems: 'center', justifyContent: 'center', borderRadius: 10 },
-  talkBtn: { position: 'absolute', right: 16, bottom: 80, borderRadius: 999, paddingVertical: 10, paddingHorizontal: 12, flexDirection: 'row', gap: 6, alignItems: 'center', shadowOpacity: 0.2, shadowRadius: 6, shadowOffset: { width: 0, height: 3 } },
+  talkBtn: { alignSelf: 'flex-end', borderRadius: 999, paddingVertical: 10, paddingHorizontal: 12, flexDirection: 'row', gap: 6, alignItems: 'center', shadowOpacity: 0.2, shadowRadius: 6, shadowOffset: { width: 0, height: 3 } },
   talkText: { fontWeight: '700' },
 });
