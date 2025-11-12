@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { StyleSheet, View, TouchableOpacity, Platform, Alert } from 'react-native';
+import { StyleSheet, View, TouchableOpacity, Platform, Alert, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,6 +9,7 @@ import { ThemedText } from '@/components/themed-text';
 import { useWebRTCRealtime } from '@/hooks/use-webrtc-realtime';
 import { API_BASE_URL } from '@/environment';
 import { useSettings } from '@/contexts/settings';
+import { useNotifications } from '@/contexts/notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type LiveAudioStreamModule = {
@@ -51,7 +52,9 @@ export default function BartenderScreen() {
   const insets = useSafeAreaInsets();
   const [transcript, setTranscript] = useState('');
   const [isTalking, setIsTalking] = useState(false);
+  const [isGeneratingDrink, setIsGeneratingDrink] = useState(false);
   const { apiBaseUrl } = useSettings();
+  const { showSuccess, showError } = useNotifications();
 
   const { isSessionActive, startSession, stopSession } = useWebRTCRealtime({
     onTranscript: (text) => {
@@ -82,6 +85,7 @@ export default function BartenderScreen() {
       }
       
       if (toolName === 'generate_drink') {
+        setIsGeneratingDrink(true);
         try {
           const baseUrl = apiBaseUrl || API_BASE_URL;
           console.log('[bartender] Generating drink:', args);
@@ -118,6 +122,9 @@ export default function BartenderScreen() {
           if (!response.ok) {
             const errorText = await response.text();
             console.error('[bartender] Failed to generate drink:', response.status, errorText);
+            const errorMessage = `Failed to create drink: ${response.status === 400 ? 'Invalid request' : response.status === 500 ? 'Server error' : 'Unknown error'}`;
+            showError(errorMessage, 5000);
+            setIsGeneratingDrink(false);
             return {
               success: false,
               error: `Failed to generate drink: ${response.status} - ${errorText}`,
@@ -127,6 +134,9 @@ export default function BartenderScreen() {
           const data = await response.json();
           console.log('[bartender] Drink generated successfully:', data);
           
+          showSuccess(`Successfully created "${data.drink.name}"!`, 4000);
+          setIsGeneratingDrink(false);
+          
           return {
             success: true,
             message: `Successfully created drink "${data.drink.name}" with an AI-generated image!`,
@@ -134,9 +144,12 @@ export default function BartenderScreen() {
           };
         } catch (error) {
           console.error('[bartender] Error generating drink:', error);
+          const errorMessage = error instanceof Error ? error.message : 'Failed to generate drink';
+          showError(errorMessage, 5000);
+          setIsGeneratingDrink(false);
           return {
             success: false,
-            error: error instanceof Error ? error.message : 'Failed to generate drink',
+            error: errorMessage,
           };
         }
       }
@@ -172,6 +185,7 @@ export default function BartenderScreen() {
         stopSession();
         setTranscript('');
         setIsTalking(false);
+        setIsGeneratingDrink(false);
       };
     }, [stopSession])
   );
@@ -181,6 +195,7 @@ export default function BartenderScreen() {
     stopSession();
     setTranscript('');
     setIsTalking(false);
+    setIsGeneratingDrink(false);
     // Navigate to chat page instead of using router.back()
     // This ensures we always have a valid destination
     router.push('/(tabs)/chat' as never);
@@ -208,17 +223,31 @@ export default function BartenderScreen() {
       </View>
       
       <View style={styles.content}>
-        <ThemedText style={styles.instructionText}>
-          {isSessionActive 
-            ? 'Listening... Tap the microphone to stop.'
-            : 'Tap the microphone to start talking to the bartender.'}
-        </ThemedText>
-        
-        {transcript ? (
-          <ThemedText style={styles.transcriptText}>
-            {transcript}
-        </ThemedText>
-        ) : null}
+        {isGeneratingDrink ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={accent} />
+            <ThemedText style={styles.loadingText} colorName="muted">
+              Creating your drink...
+            </ThemedText>
+            <ThemedText style={styles.loadingSubtext} colorName="mutedForeground">
+              Generating recipe and image
+            </ThemedText>
+          </View>
+        ) : (
+          <>
+            <ThemedText style={styles.instructionText}>
+              {isSessionActive 
+                ? 'Listening... Tap the microphone to stop.'
+                : 'Tap the microphone to start talking to the bartender.'}
+            </ThemedText>
+            
+            {transcript ? (
+              <ThemedText style={styles.transcriptText}>
+                {transcript}
+              </ThemedText>
+            ) : null}
+          </>
+        )}
       </View>
 
       <View style={[styles.controlsContainer, { borderTopColor: avatarBorder }]}>
@@ -284,6 +313,22 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingHorizontal: 16,
     marginTop: 16,
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 16,
+  },
+  loadingText: {
+    fontSize: 18,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginTop: 8,
+  },
+  loadingSubtext: {
+    fontSize: 14,
+    textAlign: 'center',
+    opacity: 0.7,
   },
   controlsContainer: {
     width: '100%',

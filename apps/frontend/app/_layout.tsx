@@ -5,6 +5,8 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { SettingsProvider, useSettings } from '@/contexts/settings';
 import { FavoritesProvider } from '@/contexts/favorites';
+import { NotificationsProvider } from '@/contexts/notifications';
+import { NotificationContainer } from '@/components/NotificationContainer';
 import { Stack } from 'expo-router';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Colors } from '@/constants/theme';
@@ -23,6 +25,7 @@ function ThemedContainer({ children }: { children: React.ReactNode }) {
     <>
       {/* Removed background image due to missing file */}
       {children}
+      <NotificationContainer />
       <StatusBar style={statusBarStyle} />
     </>
   );
@@ -33,15 +36,17 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <SettingsProvider>
         <FavoritesProvider>
-          <ThemedContainer>
-            <Stack initialRouteName="auth">
-              <Stack.Screen name="auth" options={{ headerShown: false }} />
-              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-              <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-              <Stack.Screen name="bartender" options={{ headerShown: false }} />
-              <Stack.Screen name="drink/[id]" options={{ headerShown: false }} />
-            </Stack>
-          </ThemedContainer>
+          <NotificationsProvider>
+            <ThemedContainer>
+              <Stack initialRouteName="auth">
+                <Stack.Screen name="auth" options={{ headerShown: false }} />
+                <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+                <Stack.Screen name="bartender" options={{ headerShown: false }} />
+                <Stack.Screen name="drink/[id]" options={{ headerShown: false }} />
+              </Stack>
+            </ThemedContainer>
+          </NotificationsProvider>
         </FavoritesProvider>
       </SettingsProvider>
     </SafeAreaProvider>

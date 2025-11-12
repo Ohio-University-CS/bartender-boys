@@ -48,7 +48,7 @@ async def get_realtime_token(request: TokenRequest = TokenRequest()):
                     "Content-Type": "application/json",
                 },
                 json={
-                    "model": "gpt-4o-realtime-preview-2024-12-17",
+                    "model": settings.OPENAI_REALTIME_MODEL,
                     "voice": voice,
                 },
                 timeout=30.0

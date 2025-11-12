@@ -36,6 +36,7 @@ class Settings:
     OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", "gpt-4o")
     OPENAI_MAX_TOKENS: int = int(os.getenv("OPENAI_MAX_TOKENS", "500"))
     OPENAI_TEMPERATURE: float = float(os.getenv("OPENAI_TEMPERATURE", "0.1"))
+    OPENAI_REALTIME_MODEL: str = os.getenv("OPENAI_REALTIME_MODEL", "gpt-4o-realtime-preview-2024-12-17")
     
     # Firmware API Configuration (fallback to legacy PI_CONTROLLER_URL)
     FIRMWARE_API_URL: str = os.getenv("FIRMWARE_API_URL") or os.getenv("PI_CONTROLLER_URL", "")
