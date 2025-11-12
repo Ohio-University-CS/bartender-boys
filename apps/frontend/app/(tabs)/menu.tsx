@@ -34,6 +34,7 @@ export default function MenuScreen() {
   const [sortBy, setSortBy] = useState<SortOption>('difficulty');
   const [prepTimeFilter, setPrepTimeFilter] = useState<'any' | 'under2' | 'under3' | 'under4'>('any');
   const [ingredientCountFilter, setIngredientCountFilter] = useState<'any' | 'under4' | 'under6' | 'under8'>('any');
+  const [showMoreFilters, setShowMoreFilters] = useState(false);
   
   // API state
   const [allDrinks, setAllDrinks] = useState<Drink[]>([]);
@@ -309,98 +310,121 @@ export default function MenuScreen() {
         </ScrollView>
       </ThemedView>
 
-      <ThemedView style={[styles.filterSection, Platform.OS === 'web' && styles.filterSectionWeb]}>
-
-        {/* Removed 'Prep time' label */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={[styles.sortContent, Platform.OS === 'web' && styles.sortContentWeb]}
-          style={[styles.filterScroll, Platform.OS === 'web' && styles.filterScrollWeb]}
+      <ThemedView style={[styles.filterToggleContainer, Platform.OS === 'web' && styles.filterToggleContainerWeb]}>
+        <TouchableOpacity
+          style={[
+            styles.filterToggleButton,
+            { backgroundColor: chipBg, borderColor: chipBorder },
+          ]}
+          onPress={() => setShowMoreFilters(!showMoreFilters)}
         >
-          {prepTimeOptions.map((option) => {
-            const isActive = prepTimeFilter === option.key;
-            return (
-              <TouchableOpacity
-                key={option.key}
-                style={[
-                  styles.sortButton,
-                  { backgroundColor: chipBg, borderColor: chipBorder },
-                  isActive && { backgroundColor: accent, borderColor: accent },
-                ]}
-                onPress={() => setPrepTimeFilter(option.key)}
-              >
-                <ThemedText
-                  style={styles.sortText}
-                  colorName={isActive ? 'onTint' : 'mutedForeground'}
-                >
-                  {option.label}
-                </ThemedText>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-
-        {/* Removed 'Ingredient count' label */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={[styles.sortContent, Platform.OS === 'web' && styles.sortContentWeb]}
-          style={[styles.filterScroll, Platform.OS === 'web' && styles.filterScrollWeb]}
-        >
-          {ingredientCountOptions.map((option) => {
-            const isActive = ingredientCountFilter === option.key;
-            return (
-              <TouchableOpacity
-                key={option.key}
-                style={[
-                  styles.sortButton,
-                  { backgroundColor: chipBg, borderColor: chipBorder },
-                  isActive && { backgroundColor: accent, borderColor: accent },
-                ]}
-                onPress={() => setIngredientCountFilter(option.key)}
-              >
-                <ThemedText
-                  style={styles.sortText}
-                  colorName={isActive ? 'onTint' : 'mutedForeground'}
-                >
-                  {option.label}
-                </ThemedText>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
+          <ThemedText style={styles.filterToggleText} colorName="mutedForeground">
+            {showMoreFilters ? 'Hide Filters' : 'More Filters'}
+          </ThemedText>
+          <Ionicons
+            name={showMoreFilters ? 'chevron-up' : 'chevron-down'}
+            size={16}
+            color={mutedForeground}
+            style={styles.filterToggleIcon}
+          />
+        </TouchableOpacity>
       </ThemedView>
 
-      <ThemedView style={[styles.sortContainer, Platform.OS === 'web' && styles.sortContainerWeb]}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={[styles.sortContent, Platform.OS === 'web' && styles.sortContentWeb]}
-        >
-          {sortOptions.map((option) => {
-            const isActive = sortBy === option.key;
-            return (
-              <TouchableOpacity
-                key={option.key}
-                style={[
-                  styles.sortButton,
-                  { backgroundColor: chipBg, borderColor: chipBorder },
-                  isActive && { backgroundColor: accent, borderColor: accent },
-                ]}
-                onPress={() => setSortBy(option.key)}
-              >
-                <ThemedText
-                  style={styles.sortText}
-                  colorName={isActive ? 'onTint' : 'mutedForeground'}
-                >
-                  {option.label}
-                </ThemedText>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-      </ThemedView>
+      {showMoreFilters && (
+        <>
+          <ThemedView style={[styles.filterSection, Platform.OS === 'web' && styles.filterSectionWeb]}>
+            {/* Removed 'Prep time' label */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={[styles.sortContent, Platform.OS === 'web' && styles.sortContentWeb]}
+              style={[styles.filterScroll, Platform.OS === 'web' && styles.filterScrollWeb]}
+            >
+              {prepTimeOptions.map((option) => {
+                const isActive = prepTimeFilter === option.key;
+                return (
+                  <TouchableOpacity
+                    key={option.key}
+                    style={[
+                      styles.sortButton,
+                      { backgroundColor: chipBg, borderColor: chipBorder },
+                      isActive && { backgroundColor: accent, borderColor: accent },
+                    ]}
+                    onPress={() => setPrepTimeFilter(option.key)}
+                  >
+                    <ThemedText
+                      style={styles.sortText}
+                      colorName={isActive ? 'onTint' : 'mutedForeground'}
+                    >
+                      {option.label}
+                    </ThemedText>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            {/* Removed 'Ingredient count' label */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={[styles.sortContent, Platform.OS === 'web' && styles.sortContentWeb]}
+              style={[styles.filterScroll, Platform.OS === 'web' && styles.filterScrollWeb]}
+            >
+              {ingredientCountOptions.map((option) => {
+                const isActive = ingredientCountFilter === option.key;
+                return (
+                  <TouchableOpacity
+                    key={option.key}
+                    style={[
+                      styles.sortButton,
+                      { backgroundColor: chipBg, borderColor: chipBorder },
+                      isActive && { backgroundColor: accent, borderColor: accent },
+                    ]}
+                    onPress={() => setIngredientCountFilter(option.key)}
+                  >
+                    <ThemedText
+                      style={styles.sortText}
+                      colorName={isActive ? 'onTint' : 'mutedForeground'}
+                    >
+                      {option.label}
+                    </ThemedText>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </ThemedView>
+
+          <ThemedView style={[styles.sortContainer, Platform.OS === 'web' && styles.sortContainerWeb]}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={[styles.sortContent, Platform.OS === 'web' && styles.sortContentWeb]}
+            >
+              {sortOptions.map((option) => {
+                const isActive = sortBy === option.key;
+                return (
+                  <TouchableOpacity
+                    key={option.key}
+                    style={[
+                      styles.sortButton,
+                      { backgroundColor: chipBg, borderColor: chipBorder },
+                      isActive && { backgroundColor: accent, borderColor: accent },
+                    ]}
+                    onPress={() => setSortBy(option.key)}
+                  >
+                    <ThemedText
+                      style={styles.sortText}
+                      colorName={isActive ? 'onTint' : 'mutedForeground'}
+                    >
+                      {option.label}
+                    </ThemedText>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </ThemedView>
+        </>
+      )}
 
         {loading && allDrinks.length === 0 ? (
           <View style={styles.loadingContainer}>
@@ -501,6 +525,31 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     width: '100%',
+  },
+  filterToggleContainer: {
+    width: '100%',
+    marginBottom: 8,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+  },
+  filterToggleContainerWeb: {
+    alignItems: 'center',
+  },
+  filterToggleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 16,
+    borderWidth: 1,
+    gap: 6,
+  },
+  filterToggleText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  filterToggleIcon: {
+    marginLeft: 2,
   },
   sortContainer: {
     width: '100%',
