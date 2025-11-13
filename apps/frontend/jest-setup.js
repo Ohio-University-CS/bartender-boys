@@ -21,5 +21,8 @@ jest.mock('@/environment', () => ({
   IS_PROD: false,
   API_BASE_URL: 'http://localhost:8000',
   NETWORK_IP: '127.0.0.1',
+  ENV: {
+    API_BASE_URL: 'http://localhost:8000',
+  },
 }));
 

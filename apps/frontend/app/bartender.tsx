@@ -1,310 +1,172 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { StyleSheet, View, TouchableOpacity, Platform, Alert } from 'react-native';
+import React, { useState } from 'react';
+import { StyleSheet, View, TouchableOpacity, Platform, Alert, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { BartenderAvatar } from '@/components/BartenderAvatar';
 import { ThemedText } from '@/components/themed-text';
-import { useWebSocket } from '@/hooks/use-websocket';
-import { Audio } from 'expo-av';
-import * as FileSystem from 'expo-file-system/legacy';
+import { useWebRTCRealtime } from '@/hooks/use-webrtc-realtime';
+import { API_BASE_URL } from '@/environment';
+import { useSettings } from '@/contexts/settings';
+import { useNotifications } from '@/contexts/notifications';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-type LiveAudioStreamModule = {
-  init: (options: Record<string, unknown>) => void;
-  start: () => void;
-  stop: () => void;
-  on: (event: string, handler: (data: string) => void) => void;
-  removeAllListeners?: (event?: string) => void;
-};
-
-const createLiveAudioStreamStub = (): LiveAudioStreamModule => ({
-  init: () => console.warn('[bartender] Live audio module unavailable; init skipped.'),
-  start: () => console.warn('[bartender] Live audio module unavailable; start skipped.'),
-  stop: () => {},
-  on: () => {},
-  removeAllListeners: () => {},
-});
-
-const liveAudio = (() => {
-  if (Platform.OS === 'web') {
-    return { module: createLiveAudioStreamStub(), available: false };
-  }
-  try {
-    const module = require('react-native-live-audio-stream') as LiveAudioStreamModule;
-    return { module, available: true };
-  } catch (error) {
-    console.warn(
-      '[bartender] react-native-live-audio-stream native module not found. Voice capture is disabled. Use a custom dev build compiled with this module.',
-      error,
-    );
-    return { module: createLiveAudioStreamStub(), available: false };
-  }
-})();
-
-const LiveAudioStream = liveAudio.module;
-const isLiveAudioAvailable = liveAudio.available;
+// Live audio stream module removed - using WebRTC realtime instead
 
 export default function BartenderScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const [isRecording, setIsRecording] = useState(false);
-  const [isTalking] = useState(false);
-  
-  // Generate a client ID for this session
-  const clientIdRef = useRef<string>(`client-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`);
-  
-  // Convert PCM16 base64 data to WAV format
-  const convertPCM16ToWAV = useCallback((base64PCM: string): string => {
-    // Decode base64 to get PCM data
-    const binaryString = atob(base64PCM);
-    const pcmData = new Uint8Array(binaryString.length);
-    for (let i = 0; i < binaryString.length; i++) {
-      pcmData[i] = binaryString.charCodeAt(i);
-    }
-    
-    // WAV file parameters (matching OpenAI Realtime API specs)
-    const sampleRate = 24000;
-    const channels = 1; // mono
-    const bitsPerSample = 16;
-    const dataLength = pcmData.length;
-    const fileSize = 36 + dataLength; // 36 bytes header + data
-    
-    // Create WAV header
-    const header = new ArrayBuffer(44);
-    const view = new DataView(header);
-    
-    // RIFF header
-    view.setUint8(0, 0x52); // 'R'
-    view.setUint8(1, 0x49); // 'I'
-    view.setUint8(2, 0x46); // 'F'
-    view.setUint8(3, 0x46); // 'F'
-    view.setUint32(4, fileSize, true); // File size - 8
-    view.setUint8(8, 0x57); // 'W'
-    view.setUint8(9, 0x41); // 'A'
-    view.setUint8(10, 0x56); // 'V'
-    view.setUint8(11, 0x45); // 'E'
-    
-    // Format chunk
-    view.setUint8(12, 0x66); // 'f'
-    view.setUint8(13, 0x6D); // 'm'
-    view.setUint8(14, 0x74); // 't'
-    view.setUint8(15, 0x20); // ' '
-    view.setUint32(16, 16, true); // Format chunk size
-    view.setUint16(20, 1, true); // Audio format (1 = PCM)
-    view.setUint16(22, channels, true); // Number of channels
-    view.setUint32(24, sampleRate, true); // Sample rate
-    view.setUint32(28, sampleRate * channels * (bitsPerSample / 8), true); // Byte rate
-    view.setUint16(32, channels * (bitsPerSample / 8), true); // Block align
-    view.setUint16(34, bitsPerSample, true); // Bits per sample
-    
-    // Data chunk
-    view.setUint8(36, 0x64); // 'd'
-    view.setUint8(37, 0x61); // 'a'
-    view.setUint8(38, 0x74); // 't'
-    view.setUint8(39, 0x61); // 'a'
-    view.setUint32(40, dataLength, true); // Data size
-    
-    // Combine header and PCM data
-    const wavData = new Uint8Array(44 + dataLength);
-    wavData.set(new Uint8Array(header), 0);
-    wavData.set(pcmData, 44);
-    
-    // Convert to base64
-    let binary = '';
-    for (let i = 0; i < wavData.length; i++) {
-      binary += String.fromCharCode(wavData[i]);
-    }
-    return btoa(binary);
-  }, []);
+  const [transcript, setTranscript] = useState('');
+  const [isTalking, setIsTalking] = useState(false);
+  const [isGeneratingDrink, setIsGeneratingDrink] = useState(false);
+  const { apiBaseUrl } = useSettings();
+  const { showSuccess, showError } = useNotifications();
 
-  // Handle incoming audio response and play it
-  const handleAudioResponseComplete = useCallback(async (base64Data: string) => {
-    try {
-      console.log('[bartender] Processing complete audio response, length:', base64Data.length);
-      
-      // Convert PCM16 to WAV format
-      const wavBase64 = convertPCM16ToWAV(base64Data);
-      
-      if (Platform.OS === 'web') {
-        // Web: Convert base64 to Blob and play using HTML5 Audio
-        const binaryString = atob(wavBase64);
-        const bytes = new Uint8Array(binaryString.length);
-        for (let i = 0; i < binaryString.length; i++) {
-          bytes[i] = binaryString.charCodeAt(i);
-        }
-        const blob = new Blob([bytes], { type: 'audio/wav' });
-        const audioUrl = URL.createObjectURL(blob);
-        
-        const audioElement = new window.Audio(audioUrl);
-        audioElement.onended = () => {
-          URL.revokeObjectURL(audioUrl);
-        };
-        audioElement.onerror = (error: string | Event) => {
-          console.error('[bartender] Error playing audio (web):', error);
-          URL.revokeObjectURL(audioUrl);
-        };
-        
-        await audioElement.play();
-        console.log('[bartender] Audio playback started (web)');
-      } else {
-        // Native: Save to file and play using expo-av
-        const fileName = `audio_${Date.now()}.wav`;
-        const cacheDir = FileSystem.cacheDirectory;
-        if (!cacheDir) {
-          throw new Error('Unable to get cache directory');
-        }
-        const fileUri = `${cacheDir}${fileName}`;
-        
-        // Write WAV data to file (FileSystem expects base64 string)
-        await FileSystem.writeAsStringAsync(fileUri, wavBase64, {
-          encoding: FileSystem.EncodingType.Base64,
-        });
-        
-        console.log('[bartender] Audio file saved:', fileUri);
-        
-        // Unload previous sound if any
-        if (soundRef.current) {
-          await soundRef.current.unloadAsync();
-        }
-        
-        // Load and play the audio file
-        const { sound } = await Audio.Sound.createAsync(
-          { uri: fileUri },
-          { shouldPlay: true }
-        );
-        
-        soundRef.current = sound;
-        
-        sound.setOnPlaybackStatusUpdate((status) => {
-          if (status.isLoaded && status.didJustFinish) {
-            console.log('[bartender] Audio playback finished');
-            sound.unloadAsync().catch(console.error);
-            FileSystem.deleteAsync(fileUri, { idempotent: true }).catch(console.error);
-            soundRef.current = null;
-          }
-        });
-        
-        console.log('[bartender] Audio playback started (native)');
-      }
-    } catch (error) {
-      console.error('[bartender] Error handling audio response:', error);
-    }
-  }, [convertPCM16ToWAV]);
-  
-  // Handle WebSocket messages
-  const handleWebSocketMessage = useCallback((message: any) => {
-    if (message.type === 'response.audio.delta') {
-      // Collect audio delta chunks
-      if (message.delta && typeof message.delta === 'string') {
-        const responseId = message.response_id;
-        
-        // If this is a new response, reset the buffer
-        if (currentResponseIdRef.current !== responseId) {
-          audioResponseBufferRef.current = '';
-          currentResponseIdRef.current = responseId;
-        }
-        
-        // Append the delta to the buffer
-        audioResponseBufferRef.current += message.delta;
-        console.log('[bartender] Audio delta received, buffer size:', audioResponseBufferRef.current.length);
-      }
-    } else if (message.type === 'response.audio.done') {
-      // Audio stream is complete, process the full buffer
-      const completeBase64 = audioResponseBufferRef.current;
-      if (completeBase64) {
-        console.log('[bartender] Audio stream complete, processing buffer');
-        handleAudioResponseComplete(completeBase64);
-        // Reset buffer
-        audioResponseBufferRef.current = '';
-        currentResponseIdRef.current = null;
-      }
-    }
-  }, [handleAudioResponseComplete]);
-  
-  // WebSocket connection
-  const { isConnected, sendMessage } = useWebSocket({
-    clientId: clientIdRef.current,
-    onConnect: () => {
-      console.log('[bartender] WebSocket connected');
+  const { isSessionActive, startSession, stopSession } = useWebRTCRealtime({
+    onTranscript: (text) => {
+      setTranscript(text);
+      setIsTalking(false);
     },
-    onDisconnect: () => {
-      console.log('[bartender] WebSocket disconnected');
+    onEvent: (event) => {
+      console.log('[bartender] Event received:', event);
+      
+      // Detect when AI is speaking
+      if (event.type === 'response.audio_transcript.delta' || event.type === 'response.audio.delta') {
+        setIsTalking(true);
+      }
+    },
+    onToolCall: async (toolName, args) => {
+      console.log('[bartender] Tool call received:', toolName, args);
+      
+      if (toolName === 'kick_user_out') {
+        // Stop the session first
+        stopSession();
+        setTranscript('');
+        setIsTalking(false);
+        
+        // Navigate back to chat page
+        router.push('/(tabs)/chat' as never);
+        
+        return { success: true, message: 'User has been removed from the conversation' };
+      }
+      
+      if (toolName === 'generate_drink') {
+        setIsGeneratingDrink(true);
+        try {
+          const baseUrl = apiBaseUrl || API_BASE_URL;
+          console.log('[bartender] Generating drink:', args);
+          
+          // Get user_id from AsyncStorage, default to "guest" if not provided
+          let userId = args.user_id || 'guest';
+          try {
+            const storedUserId = await AsyncStorage.getItem('user_id');
+            if (storedUserId) {
+              userId = storedUserId;
+            }
+          } catch (error) {
+            console.error('[bartender] Failed to get user_id from AsyncStorage:', error);
+          }
+          
+          const requestBody = {
+            name: args.name,
+            category: args.category,
+            ingredients: args.ingredients || [],
+            instructions: args.instructions,
+            difficulty: args.difficulty,
+            prepTime: args.prepTime,
+            user_id: userId,
+          };
+          
+          const response = await fetch(`${baseUrl}/drinks/generate-drink`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(requestBody),
+          });
+          
+          if (!response.ok) {
+            const errorText = await response.text();
+            console.error('[bartender] Failed to generate drink:', response.status, errorText);
+            const errorMessage = `Failed to create drink: ${response.status === 400 ? 'Invalid request' : response.status === 500 ? 'Server error' : 'Unknown error'}`;
+            showError(errorMessage, 5000);
+            setIsGeneratingDrink(false);
+            return {
+              success: false,
+              error: `Failed to generate drink: ${response.status} - ${errorText}`,
+            };
+          }
+          
+          const data = await response.json();
+          console.log('[bartender] Drink generated successfully:', data);
+          
+          showSuccess(`Successfully created "${data.drink.name}"!`, 4000);
+          setIsGeneratingDrink(false);
+          
+          return {
+            success: true,
+            message: `Successfully created drink "${data.drink.name}" with an AI-generated image!`,
+            drink: data.drink,
+          };
+        } catch (error) {
+          console.error('[bartender] Error generating drink:', error);
+          const errorMessage = error instanceof Error ? error.message : 'Failed to generate drink';
+          showError(errorMessage, 5000);
+          setIsGeneratingDrink(false);
+          return {
+            success: false,
+            error: errorMessage,
+          };
+        }
+      }
+      
+      // Unknown tool
+      return { success: false, error: `Unknown tool: ${toolName}` };
     },
     onError: (error) => {
-      console.error('[bartender] WebSocket error:', error);
+      console.error('[bartender] WebRTC error:', error);
+      Alert.alert('Connection Error', error.message || 'Failed to connect to bartender');
     },
-    onMessage: handleWebSocketMessage,
-    autoConnect: true,
   });
-  
-  // Web-specific refs
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const mediaStreamRef = useRef<MediaStream | null>(null);
-  
-  // Native-specific refs
-  const audioStreamInitialized = useRef<boolean>(false);
-  
-  // Audio item ID for tracking the conversation item
-  const audioItemIdRef = useRef<string>(`audio-item-${Date.now()}`);
-  const audioBufferCreatedRef = useRef<boolean>(false);
-  
-  // Audio response buffer for collecting incoming audio deltas
-  const audioResponseBufferRef = useRef<string>('');
-  const currentResponseIdRef = useRef<string | null>(null);
-  const soundRef = useRef<Audio.Sound | null>(null);
-  
-  // Create audio buffer item before sending chunks
-  const createAudioBuffer = useCallback(() => {
-    if (!isConnected || audioBufferCreatedRef.current) {
-      return;
+
+  const handleToggleSession = async () => {
+    if (isSessionActive) {
+      stopSession();
+      setTranscript('');
+      setIsTalking(false);
+    } else {
+      try {
+        await startSession();
+      } catch (error) {
+        console.error('[bartender] Failed to start session:', error);
+      }
     }
-    
-    try {
-      // Create a new audio buffer item using conversation.item.create
-      audioItemIdRef.current = `audio-item-${Date.now()}`;
-      sendMessage({
-        type: 'conversation.item.create',
-        item: {
-          type: 'input_audio_buffer',
-          audio_buffer: {
-            format: Platform.OS === 'web' ? 'opus' : 'pcm16',
-            sample_rate: 24000,
-            channels: 1,
-          },
-        },
-      });
-      audioBufferCreatedRef.current = true;
-      console.log('[bartender] Created audio buffer:', audioItemIdRef.current);
-    } catch (error) {
-      console.error('[bartender] Error creating audio buffer:', error);
-    }
-  }, [isConnected, sendMessage]);
-  
-  // Function to send audio chunk via WebSocket
-  const sendAudioChunk = useCallback((base64: string) => {
-    if (!isConnected) {
-      console.warn('[bartender] Cannot send audio chunk: WebSocket not connected');
-      return;
-    }
-    
-    // Create buffer if not already created (synchronously, don't wait)
-    if (!audioBufferCreatedRef.current) {
-      createAudioBuffer();
-      // Note: We'll send the chunk anyway - the backend should handle it
-      // In a real implementation, you might want to queue chunks
-    }
-    
-    try {
-      // Send audio chunk - OpenAI expects input_audio_buffer.append with 'audio' parameter
-      sendMessage({
-        type: 'input_audio_buffer.append',
-        audio: base64,
-      });
-    } catch (error) {
-      console.error('[bartender] Error sending audio chunk:', error);
-    }
-  }, [isConnected, sendMessage, createAudioBuffer]);
+  };
+
+  // Cleanup session when navigating away or unmounting
+  useFocusEffect(
+    React.useCallback(() => {
+      return () => {
+        // Cleanup when screen loses focus (user navigates away)
+        stopSession();
+        setTranscript('');
+        setIsTalking(false);
+        setIsGeneratingDrink(false);
+      };
+    }, [stopSession])
+  );
+
+  // Handle back button press with cleanup
+  const handleBackPress = () => {
+    stopSession();
+    setTranscript('');
+    setIsTalking(false);
+    setIsGeneratingDrink(false);
+    // Navigate to chat page instead of using router.back()
+    // This ensures we always have a valid destination
+    router.push('/(tabs)/chat' as never);
+  };
 
   // Theme colors
   const backgroundColor = useThemeColor({}, 'background');
@@ -313,248 +175,11 @@ export default function BartenderScreen() {
   const accent = useThemeColor({}, 'tint');
   const onAccent = useThemeColor({}, 'onTint');
 
-  // Initialize audio stream on mount (native only)
-  useEffect(() => {
-    if (Platform.OS !== 'web' && isLiveAudioAvailable && !audioStreamInitialized.current) {
-      try {
-        const options = {
-          sampleRate: 24000,
-          channels: 1,
-          bitsPerSample: 16,
-          bufferSize: 4096,
-          audioSource: 6, // Android: VOICE_RECOGNITION
-          wavFile: '', // Required by library but not used for streaming
-        };
-        LiveAudioStream.init(options);
-        audioStreamInitialized.current = true;
-        console.log('[bartender] Audio stream initialized (native)');
-      } catch (error) {
-        console.error('[bartender] Error initializing audio stream:', error);
-      }
-    }
-
-    return () => {
-      // Cleanup audio stream on unmount
-      if (Platform.OS !== 'web' && audioStreamInitialized.current && isLiveAudioAvailable) {
-        try {
-          if (isRecording) {
-            LiveAudioStream.stop();
-          }
-          audioStreamInitialized.current = false;
-        } catch (error) {
-          console.error('[bartender] Error cleaning up audio stream:', error);
-        }
-      }
-    };
-  }, [isRecording]);
-
-  // Cleanup audio on unmount
-  useEffect(() => {
-    return () => {
-      if (soundRef.current) {
-        soundRef.current.unloadAsync().catch(console.error);
-        soundRef.current = null;
-      }
-    };
-  }, []);
-
-  // Convert blob to base64
-  const blobToBase64 = useCallback((blob: Blob): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const result = reader.result as string;
-        // Remove data URL prefix (data:audio/webm;base64,)
-        const base64 = result.includes(',') ? result.split(',')[1] : result;
-        resolve(base64);
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
-  }, []);
-
-  // Web: Start recording with MediaRecorder
-  const startRecordingWeb = useCallback(async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        }
-      });
-      mediaStreamRef.current = stream;
-
-      const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: 'audio/webm;codecs=opus',
-      });
-      mediaRecorderRef.current = mediaRecorder;
-
-      // Handle data available events - called periodically while recording
-      mediaRecorder.ondataavailable = async (event) => {
-        if (event.data && event.data.size > 0) {
-          try {
-            const base64 = await blobToBase64(event.data);
-            console.log('[bartender] Audio chunk (web):', {
-              size: event.data.size,
-              base64Length: base64.length,
-              timestamp: Date.now(),
-            });
-            // Send audio chunk via WebSocket
-            sendAudioChunk(base64);
-          } catch (error) {
-            console.error('[bartender] Error converting chunk to base64:', error);
-          }
-        }
-      };
-
-      mediaRecorder.onstop = () => {
-        console.log('[bartender] Recording stopped (web)');
-        if (mediaStreamRef.current) {
-          mediaStreamRef.current.getTracks().forEach(track => track.stop());
-          mediaStreamRef.current = null;
-        }
-      };
-
-      mediaRecorder.onerror = (event) => {
-        console.error('[bartender] MediaRecorder error:', event);
-        Alert.alert('Recording Error', 'An error occurred while recording audio.');
-        setIsRecording(false);
-        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-          mediaRecorderRef.current.stop();
-        }
-        if (mediaStreamRef.current) {
-          mediaStreamRef.current.getTracks().forEach(track => track.stop());
-          mediaStreamRef.current = null;
-        }
-        mediaRecorderRef.current = null;
-      };
-
-      // Start recording with timeslice to get chunks every 250ms
-      mediaRecorder.start(250);
-      setIsRecording(true);
-      console.log('[bartender] Recording started (web)');
-    } catch (error: any) {
-      console.error('[bartender] Error starting recording (web):', error);
-      Alert.alert(
-        'Microphone Access Required',
-        error.message || 'Please allow microphone access to use voice features.'
-      );
-    }
-  }, [blobToBase64, sendAudioChunk]);
-
-  // Native: Start recording with react-native-live-audio-stream
-  const startRecordingNative = useCallback(() => {
-    if (!isLiveAudioAvailable) {
-      Alert.alert(
-        'Voice Capture Unavailable',
-        'The live audio streaming module is not available in this build. Install a custom dev client that includes react-native-live-audio-stream.',
-      );
-      return;
-    }
-
-    try {
-      // Ensure audio stream is initialized
-      if (!audioStreamInitialized.current) {
-        const options = {
-          sampleRate: 24000,
-          channels: 1,
-          bitsPerSample: 16,
-          bufferSize: 4096,
-          audioSource: 6, // Android: VOICE_RECOGNITION
-          wavFile: '', // Required by library but not used for streaming
-        };
-        LiveAudioStream.init(options);
-        audioStreamInitialized.current = true;
-      }
-
-      // Set up data event listener to receive base64 chunks
-      const handleAudioData = (base64Data: string) => {
-        console.log('[bartender] Audio chunk (native):', {
-          base64Length: base64Data.length,
-          firstChars: base64Data.substring(0, 50) + '...',
-          timestamp: Date.now(),
-        });
-        // Send audio chunk via WebSocket
-        sendAudioChunk(base64Data);
-      };
-
-      LiveAudioStream.on('data', handleAudioData);
-
-      // Start recording
-      LiveAudioStream.start();
-      setIsRecording(true);
-      console.log('[bartender] Recording started (native)');
-    } catch (error: any) {
-      console.error('[bartender] Error starting recording (native):', error);
-      Alert.alert(
-        'Recording Error',
-        error.message || 'Failed to start recording. Please try again.'
-      );
-    }
-  }, [sendAudioChunk]);
-
-  const startRecording = useCallback(() => {
-    if (Platform.OS === 'web') {
-      startRecordingWeb();
-    } else {
-      startRecordingNative();
-    }
-  }, [startRecordingWeb, startRecordingNative]);
-
-  // Stop recording
-  const stopRecording = useCallback(async () => {
-    if (!isRecording) return;
-
-    setIsRecording(false);
-
-    // Commit the audio buffer if it was created
-    if (audioBufferCreatedRef.current && isConnected) {
-      try {
-        sendMessage({
-          type: 'input_audio_buffer.commit',
-        });
-        console.log('[bartender] Committed audio buffer');
-      } catch (error) {
-        console.error('[bartender] Error committing audio buffer:', error);
-      }
-      audioBufferCreatedRef.current = false;
-    }
-
-    if (Platform.OS === 'web') {
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-        mediaRecorderRef.current.stop();
-      }
-      if (mediaStreamRef.current) {
-        mediaStreamRef.current.getTracks().forEach(track => track.stop());
-        mediaStreamRef.current = null;
-      }
-      mediaRecorderRef.current = null;
-    } else if (isLiveAudioAvailable) {
-      // Native: Stop recording
-      try {
-        LiveAudioStream.stop();
-        console.log('[bartender] Recording stopped (native)');
-      } catch (error) {
-        console.error('[bartender] Error stopping recording (native):', error);
-      }
-    }
-  }, [isRecording, isConnected, sendMessage]);
-
-  // Toggle recording
-  const toggleRecording = useCallback(() => {
-    if (isRecording) {
-      stopRecording();
-    } else {
-      startRecording();
-    }
-  }, [isRecording, startRecording, stopRecording]);
-
   return (
     <View style={[styles.container, { backgroundColor, paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
       <View style={[styles.avatarContainer, { borderBottomColor: avatarBorder, backgroundColor: avatarBackground }]}>
         <TouchableOpacity 
-          onPress={() => router.back()} 
+          onPress={handleBackPress} 
           style={styles.backButton}
           accessibilityLabel="Go back"
           accessibilityRole="button"
@@ -565,14 +190,31 @@ export default function BartenderScreen() {
       </View>
       
       <View style={styles.content}>
-        <ThemedText style={styles.instructionText}>
-          {isRecording 
-            ? 'Recording... Tap the microphone to stop.'
-            : 'Tap the microphone to start talking to the bartender.'}
-        </ThemedText>
-        <ThemedText style={styles.connectionStatus}>
-          {isConnected ? 'Connected' : 'Connecting...'}
-        </ThemedText>
+        {isGeneratingDrink ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={accent} />
+            <ThemedText style={styles.loadingText} colorName="muted">
+              Creating your drink...
+            </ThemedText>
+            <ThemedText style={styles.loadingSubtext} colorName="mutedForeground">
+              Generating recipe and image
+            </ThemedText>
+          </View>
+        ) : (
+          <>
+            <ThemedText style={styles.instructionText}>
+              {isSessionActive 
+                ? 'Listening... Tap the microphone to stop.'
+                : 'Tap the microphone to start talking to the bartender.'}
+            </ThemedText>
+            
+            {transcript ? (
+              <ThemedText style={styles.transcriptText}>
+                {transcript}
+              </ThemedText>
+            ) : null}
+          </>
+        )}
       </View>
 
       <View style={[styles.controlsContainer, { borderTopColor: avatarBorder }]}>
@@ -580,19 +222,19 @@ export default function BartenderScreen() {
           style={[
             styles.micButton,
             { 
-              backgroundColor: isRecording ? accent : avatarBackground,
+              backgroundColor: isSessionActive ? accent : avatarBackground,
               borderColor: accent,
-              shadowColor: isRecording ? accent : 'transparent',
+              shadowColor: isSessionActive ? accent : 'transparent',
             }
           ]}
-          onPress={toggleRecording}
-          accessibilityLabel={isRecording ? 'Stop recording' : 'Start recording'}
+          onPress={handleToggleSession}
+          accessibilityLabel={isSessionActive ? 'Stop recording' : 'Start recording'}
           accessibilityRole="button"
         >
           <Ionicons 
-            name={isRecording ? 'mic' : 'mic-outline'} 
+            name={isSessionActive ? 'mic' : 'mic-outline'} 
             size={32} 
-            color={isRecording ? onAccent : accent} 
+            color={isSessionActive ? onAccent : accent} 
           />
         </TouchableOpacity>
       </View>
@@ -631,12 +273,29 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textAlign: 'center',
     opacity: 0.7,
+    marginBottom: 16,
   },
-  connectionStatus: {
-    fontSize: 12,
+  transcriptText: {
+    fontSize: 18,
     textAlign: 'center',
-    opacity: 0.5,
+    paddingHorizontal: 16,
+    marginTop: 16,
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 16,
+  },
+  loadingText: {
+    fontSize: 18,
+    fontWeight: '600',
+    textAlign: 'center',
     marginTop: 8,
+  },
+  loadingSubtext: {
+    fontSize: 14,
+    textAlign: 'center',
+    opacity: 0.7,
   },
   controlsContainer: {
     width: '100%',
@@ -658,4 +317,3 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
   },
 });
-

@@ -40,7 +40,7 @@ if (-not $SkipInstall) {
 }
 
 # Copy .env.example -> .env if needed
-if (Test-Path ".env.example" -and -not (Test-Path ".env")) {
+if ((Test-Path ".env.example") -and -not (Test-Path ".env")) {
   Copy-Item .env.example .env
   Write-Host "Copied .env.example -> .env. Please edit .env to add OPENAI_API_KEY if required."
   notepad .env

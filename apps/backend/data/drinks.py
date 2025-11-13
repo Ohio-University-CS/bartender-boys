@@ -1,463 +1,225 @@
-"""
-Drinks database operations.
-
-This module handles all database interactions for drinks, favorites, and chat history.
-All functions that interact with the drinks collection should be in this file.
-"""
 import logging
-import uuid
 from datetime import datetime
 from typing import Optional, Dict, Any, List
+from bson import ObjectId
 
-from motor.motor_asyncio import AsyncIOMotorDatabase  # type: ignore
+from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from services.db import get_db_handle
+from drinks.models import Drink
 
 
 logger = logging.getLogger(__name__)
 
 
-# ============================================================================
-# Favorites Operations
-# ============================================================================
-
-async def add_favorite_drink(
+async def create_drink(
+    drink: Drink,
     user_id: str,
-    drink_id: str,
     db: Optional[AsyncIOMotorDatabase] = None,
 ) -> Dict[str, Any]:
-    """Add a drink to a user's favorites.
-    
+    """Create a new drink document in the database.
+
     Args:
-        user_id: The user's driver's license number (or user identifier)
-        drink_id: The drink ID to add to favorites
-        db: Optional database handle (will use get_db_handle() if not provided)
-        
+        drink: Drink model instance
+        user_id: User ID (foreign key) who created this drink
+        db: Optional database handle (will get default if not provided)
+
     Returns:
-        The favorite document that was created or already existed
+        The created drink document
     """
     if db is None:
         db = get_db_handle()
-    
+
     now = datetime.utcnow()
-    
-    # Check if favorite already exists
-    existing = await db["favorites"].find_one({
-        "user_id": user_id,
-        "drink_id": drink_id
-    })
-    
-    if existing:
-        logger.info("Favorite already exists for user %s and drink %s", user_id, drink_id)
-        return existing
-    
-    # Create new favorite document
-    favorite_doc = {
-        "user_id": user_id,
-        "drink_id": drink_id,
-        "created_at": now,
-        "updated_at": now,
-    }
-    
-    result = await db["favorites"].insert_one(favorite_doc)
-    favorite_doc["_id"] = result.inserted_id
-    logger.info("Added favorite drink %s for user %s", drink_id, user_id)
-    
-    return favorite_doc
 
+    # Convert drink to dict and add database fields
+    drink_doc = drink.model_dump()
+    drink_doc["user_id"] = user_id
+    drink_doc["created_at"] = now
+    drink_doc["updated_at"] = now
 
-async def remove_favorite_drink(
-    user_id: str,
-    drink_id: str,
-    db: Optional[AsyncIOMotorDatabase] = None,
-) -> bool:
-    """Remove a drink from a user's favorites.
-    
-    Args:
-        user_id: The user's driver's license number (or user identifier)
-        drink_id: The drink ID to remove from favorites
-        db: Optional database handle (will use get_db_handle() if not provided)
-        
-    Returns:
-        True if a favorite was removed, False if it didn't exist
-    """
-    if db is None:
-        db = get_db_handle()
-    
-    result = await db["favorites"].delete_one({
-        "user_id": user_id,
-        "drink_id": drink_id
-    })
-    
-    if result.deleted_count > 0:
-        logger.info("Removed favorite drink %s for user %s", drink_id, user_id)
-        return True
+    # Use drink.id as _id if provided, otherwise generate ObjectId
+    if drink.id:
+        drink_doc["_id"] = drink.id
     else:
-        logger.info("Favorite drink %s not found for user %s", drink_id, user_id)
-        return False
+        drink_doc["_id"] = str(ObjectId())
+        drink_doc["id"] = drink_doc["_id"]
+
+    await db["drinks"].insert_one(drink_doc)
+    logger.info(
+        "Created new drink record: %s (ID: %s) for user: %s",
+        drink.name,
+        drink_doc["_id"],
+        user_id,
+    )
+    return drink_doc
 
 
-async def get_user_favorites(
-    user_id: str,
-    db: Optional[AsyncIOMotorDatabase] = None,
-) -> List[str]:
-    """Get all favorite drink IDs for a user.
-    
-    Args:
-        user_id: The user's driver's license number (or user identifier)
-        db: Optional database handle (will use get_db_handle() if not provided)
-        
-    Returns:
-        List of drink IDs that the user has favorited
-    """
-    if db is None:
-        db = get_db_handle()
-    
-    cursor = db["favorites"].find({"user_id": user_id})
-    favorites = await cursor.to_list(length=None)
-    
-    drink_ids = [fav["drink_id"] for fav in favorites]
-    logger.info("Retrieved %d favorites for user %s", len(drink_ids), user_id)
-    
-    return drink_ids
-
-
-async def is_drink_favorited(
-    user_id: str,
-    drink_id: str,
-    db: Optional[AsyncIOMotorDatabase] = None,
-) -> bool:
-    """Check if a drink is favorited by a user.
-    
-    Args:
-        user_id: The user's driver's license number (or user identifier)
-        drink_id: The drink ID to check
-        db: Optional database handle (will use get_db_handle() if not provided)
-        
-    Returns:
-        True if the drink is favorited, False otherwise
-    """
-    if db is None:
-        db = get_db_handle()
-    
-    favorite = await db["favorites"].find_one({
-        "user_id": user_id,
-        "drink_id": drink_id
-    })
-    
-    return favorite is not None
-
-
-# ============================================================================
-# Chat History Operations
-# ============================================================================
-
-async def save_chat_message(
-    user_id: str,
-    role: str,
-    content: str,
-    drink_id: Optional[str] = None,
-    db: Optional[AsyncIOMotorDatabase] = None,
-) -> Dict[str, Any]:
-    """Save a chat message to the database.
-    
-    Args:
-        user_id: The user's driver's license number (or user identifier)
-        role: Message role ('user', 'assistant', or 'system')
-        content: The message content
-        drink_id: Optional drink ID if the message is related to a specific drink
-        db: Optional database handle (will use get_db_handle() if not provided)
-        
-    Returns:
-        The saved chat message document
-    """
-    if db is None:
-        db = get_db_handle()
-    
-    now = datetime.utcnow()
-    
-    chat_doc = {
-        "user_id": user_id,
-        "role": role,
-        "content": content,
-        "created_at": now,
-    }
-    
-    if drink_id:
-        chat_doc["drink_id"] = drink_id
-    
-    result = await db["chat_history"].insert_one(chat_doc)
-    chat_doc["_id"] = result.inserted_id
-    logger.info("Saved chat message for user %s (role: %s)", user_id, role)
-    
-    return chat_doc
-
-
-async def get_user_chat_history(
-    user_id: str,
-    limit: int = 50,
-    db: Optional[AsyncIOMotorDatabase] = None,
-) -> List[Dict[str, Any]]:
-    """Get chat history for a user.
-    
-    Args:
-        user_id: The user's driver's license number (or user identifier)
-        limit: Maximum number of messages to retrieve (default: 50)
-        db: Optional database handle (will use get_db_handle() if not provided)
-        
-    Returns:
-        List of chat message documents, ordered by creation time (newest first)
-    """
-    if db is None:
-        db = get_db_handle()
-    
-    cursor = db["chat_history"].find({"user_id": user_id}).sort("created_at", -1).limit(limit)
-    messages = await cursor.to_list(length=limit)
-    
-    # Reverse to get chronological order (oldest first)
-    messages.reverse()
-    logger.info("Retrieved %d chat messages for user %s", len(messages), user_id)
-    
-    return messages
-
-
-async def get_chat_history_for_drink(
-    user_id: str,
-    drink_id: str,
-    db: Optional[AsyncIOMotorDatabase] = None,
-) -> List[Dict[str, Any]]:
-    """Get chat history related to a specific drink.
-    
-    Args:
-        user_id: The user's driver's license number (or user identifier)
-        drink_id: The drink ID to filter by
-        db: Optional database handle (will use get_db_handle() if not provided)
-        
-    Returns:
-        List of chat message documents related to the drink
-    """
-    if db is None:
-        db = get_db_handle()
-    
-    cursor = db["chat_history"].find({
-        "user_id": user_id,
-        "drink_id": drink_id
-    }).sort("created_at", 1)
-    
-    messages = await cursor.to_list(length=None)
-    logger.info("Retrieved %d chat messages for user %s and drink %s", len(messages), user_id, drink_id)
-    
-    return messages
-
-
-# ============================================================================
-# Custom Drinks Operations
-# ============================================================================
-
-async def save_custom_drink(
-    user_id: str,
-    drink_data: Dict[str, Any],
-    db: Optional[AsyncIOMotorDatabase] = None,
-) -> Dict[str, Any]:
-    """Save a custom drink created by a user.
-    
-    Args:
-        user_id: The user's driver's license number (or user identifier)
-        drink_data: Dictionary containing drink information (name, category, ingredients, etc.)
-        db: Optional database handle (will use get_db_handle() if not provided)
-        
-    Returns:
-        The saved custom drink document
-    """
-    if db is None:
-        db = get_db_handle()
-    
-    now = datetime.utcnow()
-    
-    # Create custom drink document
-    custom_drink = dict(drink_data)
-    custom_drink["user_id"] = user_id
-    custom_drink["created_at"] = now
-    custom_drink["updated_at"] = now
-    custom_drink["is_custom"] = True
-    
-    # Generate a unique ID if not provided
-    if "id" not in custom_drink:
-        # Use UUID for uniqueness
-        custom_drink["id"] = str(uuid.uuid4())
-    
-    result = await db["custom_drinks"].insert_one(custom_drink)
-    custom_drink["_id"] = result.inserted_id
-    logger.info("Saved custom drink '%s' for user %s", custom_drink.get("name"), user_id)
-    
-    return custom_drink
-
-
-async def get_user_custom_drinks(
+async def get_drinks_by_user(
     user_id: str,
     db: Optional[AsyncIOMotorDatabase] = None,
 ) -> List[Dict[str, Any]]:
-    """Get all custom drinks created by a user.
-    
+    """Get all drinks for a specific user.
+
     Args:
-        user_id: The user's driver's license number (or user identifier)
-        db: Optional database handle (will use get_db_handle() if not provided)
-        
+        user_id: User ID to filter drinks by
+        db: Optional database handle (will get default if not provided)
+
     Returns:
-        List of custom drink documents
+        List of drink documents
     """
     if db is None:
         db = get_db_handle()
-    
-    cursor = db["custom_drinks"].find({"user_id": user_id}).sort("created_at", -1)
+
+    cursor = db["drinks"].find({"user_id": user_id}).sort("created_at", -1)
     drinks = await cursor.to_list(length=None)
-    
-    logger.info("Retrieved %d custom drinks for user %s", len(drinks), user_id)
+    logger.info("Retrieved %d drinks for user: %s", len(drinks), user_id)
     return drinks
 
 
-async def update_custom_drink(
-    user_id: str,
-    drink_id: str,
-    drink_data: Dict[str, Any],
+async def get_drinks_paginated(
+    skip: int = 0,
+    limit: int = 20,
+    user_id: Optional[str] = None,
+    category: Optional[str] = None,
+    favorited: Optional[bool] = None,
     db: Optional[AsyncIOMotorDatabase] = None,
-) -> Optional[Dict[str, Any]]:
-    """Update a custom drink created by a user.
-    
+) -> tuple[List[Dict[str, Any]], int]:
+    """Get drinks with pagination.
+
     Args:
-        user_id: The user's driver's license number (or user identifier)
-        drink_id: The drink ID to update
-        drink_data: Dictionary containing updated drink information
-        db: Optional database handle (will use get_db_handle() if not provided)
-        
+        skip: Number of documents to skip
+        limit: Maximum number of documents to return
+        user_id: Optional user ID to filter by
+        category: Optional category to filter by
+        favorited: Optional boolean to filter by favorited status
+        db: Optional database handle (will get default if not provided)
+
     Returns:
-        The updated drink document, or None if not found
+        Tuple of (list of drink documents, total count)
     """
     if db is None:
         db = get_db_handle()
-    
-    # Only allow updating drinks owned by the user
-    update_data = dict(drink_data)
-    update_data["updated_at"] = datetime.utcnow()
-    
-    result = await db["custom_drinks"].find_one_and_update(
-        {"user_id": user_id, "id": drink_id},
-        {"$set": update_data},
-        return_document=True
+
+    # Build query filter
+    query_filter: Dict[str, Any] = {}
+    if user_id:
+        query_filter["user_id"] = user_id
+    if category:
+        query_filter["category"] = category
+    if favorited is not None:
+        # If favorited is True, only get drinks where favorited is True
+        # If favorited is False, get drinks where favorited is False or null/undefined
+        if favorited:
+            query_filter["favorited"] = True
+        else:
+            query_filter["$or"] = [
+                {"favorited": False},
+                {"favorited": {"$exists": False}},
+            ]
+
+    # Get total count
+    total_count = await db["drinks"].count_documents(query_filter)
+
+    # Get paginated results
+    cursor = (
+        db["drinks"].find(query_filter).sort("created_at", -1).skip(skip).limit(limit)
     )
-    
-    if result:
-        logger.info("Updated custom drink %s for user %s", drink_id, user_id)
-    else:
-        logger.warning("Custom drink %s not found for user %s", drink_id, user_id)
-    
-    return result
+    drinks = await cursor.to_list(length=limit)
 
+    logger.info(
+        "Retrieved %d drinks (skip=%d, limit=%d, total=%d)",
+        len(drinks),
+        skip,
+        limit,
+        total_count,
+    )
+    return drinks, total_count
 
-async def delete_custom_drink(
-    user_id: str,
-    drink_id: str,
-    db: Optional[AsyncIOMotorDatabase] = None,
-) -> bool:
-    """Delete a custom drink created by a user.
-    
-    Args:
-        user_id: The user's driver's license number (or user identifier)
-        drink_id: The drink ID to delete
-        db: Optional database handle (will use get_db_handle() if not provided)
-        
-    Returns:
-        True if the drink was deleted, False if it didn't exist
-    """
-    if db is None:
-        db = get_db_handle()
-    
-    result = await db["custom_drinks"].delete_one({
-        "user_id": user_id,
-        "id": drink_id
-    })
-    
-    if result.deleted_count > 0:
-        logger.info("Deleted custom drink %s for user %s", drink_id, user_id)
-        return True
-    else:
-        logger.warning("Custom drink %s not found for user %s", drink_id, user_id)
-        return False
-
-
-# ============================================================================
-# General Drink Operations
-# ============================================================================
 
 async def get_drink_by_id(
     drink_id: str,
     db: Optional[AsyncIOMotorDatabase] = None,
 ) -> Optional[Dict[str, Any]]:
-    """Get a drink by its ID (checks both standard and custom drinks).
-    
+    """Get a drink by its ID.
+
     Args:
-        drink_id: The drink ID to look up
-        db: Optional database handle (will use get_db_handle() if not provided)
-        
+        drink_id: Drink ID
+        db: Optional database handle (will get default if not provided)
+
     Returns:
-        The drink document if found, None otherwise
+        Drink document or None if not found
     """
     if db is None:
         db = get_db_handle()
-    
-    # First check custom drinks
-    custom_drink = await db["custom_drinks"].find_one({"id": drink_id})
-    if custom_drink:
-        return custom_drink
-    
-    # If not found in custom drinks, it's likely a standard drink from the frontend constants
-    # You might want to add a standard_drinks collection if you want to store them in DB
-    logger.info("Drink %s not found in database (may be standard drink)", drink_id)
-    return None
+
+    drink = await db["drinks"].find_one({"_id": drink_id})
+    if drink:
+        logger.info("Retrieved drink: %s (ID: %s)", drink.get("name"), drink_id)
+    else:
+        logger.info("Drink not found: %s", drink_id)
+    return drink
 
 
-async def search_drinks(
-    query: Optional[str] = None,
-    category: Optional[str] = None,
-    user_id: Optional[str] = None,
-    include_custom: bool = True,
+async def update_drink(
+    drink_id: str,
+    drink: Drink,
     db: Optional[AsyncIOMotorDatabase] = None,
-) -> List[Dict[str, Any]]:
-    """Search for drinks with optional filters.
-    
+) -> Optional[Dict[str, Any]]:
+    """Update an existing drink document.
+
     Args:
-        query: Optional search query to match against drink name or ingredients
-        category: Optional category filter
-        user_id: If provided, only return custom drinks for this user
-        include_custom: Whether to include custom drinks in results
-        db: Optional database handle (will use get_db_handle() if not provided)
-        
+        drink_id: Drink ID to update
+        drink: Updated drink model instance
+        db: Optional database handle (will get default if not provided)
+
     Returns:
-        List of matching drink documents
+        Updated drink document or None if not found
     """
     if db is None:
         db = get_db_handle()
-    
-    search_filter: Dict[str, Any] = {}
-    
-    if user_id and include_custom:
-        search_filter["user_id"] = user_id
-    elif not include_custom:
-        # Only search standard drinks (if you have a standard_drinks collection)
-        pass
-    
-    if category:
-        search_filter["category"] = category
-    
-    if query:
-        search_filter["$or"] = [
-            {"name": {"$regex": query, "$options": "i"}},
-            {"ingredients": {"$regex": query, "$options": "i"}},
-        ]
-    
-    cursor = db["custom_drinks"].find(search_filter).sort("created_at", -1)
-    drinks = await cursor.to_list(length=None)
-    
-    logger.info("Found %d drinks matching search criteria", len(drinks))
-    return drinks
 
+    # Convert drink to dict and update timestamp
+    update_doc = drink.model_dump()
+    update_doc["updated_at"] = datetime.utcnow()
+
+    # Remove _id from update doc to avoid conflicts
+    update_doc.pop("_id", None)
+
+    result = await db["drinks"].find_one_and_update(
+        {"_id": drink_id},
+        {"$set": update_doc},
+        return_document=True,
+    )
+
+    if result:
+        logger.info("Updated drink: %s (ID: %s)", drink.name, drink_id)
+    else:
+        logger.info("Drink not found for update: %s", drink_id)
+    return result
+
+
+async def delete_drink(
+    drink_id: str,
+    db: Optional[AsyncIOMotorDatabase] = None,
+) -> bool:
+    """Delete a drink document.
+
+    Args:
+        drink_id: Drink ID to delete
+        db: Optional database handle (will get default if not provided)
+
+    Returns:
+        True if deleted, False if not found
+    """
+    if db is None:
+        db = get_db_handle()
+
+    result = await db["drinks"].delete_one({"_id": drink_id})
+    deleted = result.deleted_count > 0
+
+    if deleted:
+        logger.info("Deleted drink: %s", drink_id)
+    else:
+        logger.info("Drink not found for deletion: %s", drink_id)
+    return deleted

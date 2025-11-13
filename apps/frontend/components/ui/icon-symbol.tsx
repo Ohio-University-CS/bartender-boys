@@ -1,29 +1,35 @@
 // Fallback for using MaterialIcons on Android and web.
 
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { SymbolWeight, SymbolViewProps } from 'expo-symbols';
-import { ComponentProps } from 'react';
-import { OpaqueColorValue, type StyleProp, type TextStyle } from 'react-native';
+import { SymbolWeight } from 'expo-symbols';
+import { OpaqueColorValue, type StyleProp, type TextStyle, Platform } from 'react-native';
+let Text: React.ComponentType<any>;
+if (Platform.OS === 'web') {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  Text = require('react-native-web').Text;
+} else {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  Text = require('react-native').Text;
+}
 
-type IconMapping = Record<SymbolViewProps['name'], ComponentProps<typeof MaterialIcons>['name']>;
-type IconSymbolName = keyof typeof MAPPING;
+type IconSymbolName = string;
 
 /**
  * Add your SF Symbols to Material Icons mappings here.
  * - see Material Icons in the [Icons Directory](https://icons.expo.fyi).
  * - see SF Symbols in the [SF Symbols](https://developer.apple.com/sf-symbols/) app.
  */
-const MAPPING = {
+const MAPPING: { [key: string]: string } = {
   'house.fill': 'home',
   'paperplane.fill': 'send',
   'chevron.left.forwardslash.chevron.right': 'code',
   'chevron.right': 'chevron-right',
   // Added mappings used by tabs
-  'list.bullet.rectangle': 'list',
-  'bubble.left.and.bubble.right': 'chat',
-  'gear': 'settings',
-  'heart.fill': 'favorite',
-} as IconMapping;
+  'list.bullet.rectangle': '🍸',
+  'bubble.left.and.bubble.right': '💬',
+  'gear': '⚙️',
+  'heart.fill': '❤️',
+};
 
 /**
  * An icon component that uses native SF Symbols on iOS, and Material Icons on Android and web.
@@ -42,5 +48,17 @@ export function IconSymbol({
   style?: StyleProp<TextStyle>;
   weight?: SymbolWeight;
 }) {
-  return <MaterialIcons color={color} size={size} name={MAPPING[name]} style={style} />;
+  // Render emoji for mapped tab icons
+  // Only render emoji for focused tab (large icon), otherwise render nothing for inactive tab icon
+  if (['🍸','❤️','💬','⚙️'].includes(MAPPING[name])) {
+    // If size > 24, assume focused/active tab, render emoji
+    if (size > 24) {
+      // @ts-ignore: color prop for Text
+      return <Text style={[{ fontSize: size, color }, style]}>{MAPPING[name]}</Text>;
+    }
+    // Otherwise, render nothing for inactive tab icon
+    return null;
+  }
+  // Fallback to MaterialIcons for other icons
+  return <MaterialIcons color={color} size={size} name={MAPPING[name] as any} style={style} />;
 }
