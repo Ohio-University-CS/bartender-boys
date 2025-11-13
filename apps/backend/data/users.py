@@ -32,7 +32,9 @@ async def get_or_insert_user_from_id_scan(
     # If exists, return without modifying
     existing = await db["users"].find_one({"_id": dl_number})
     if existing:
-        logger.info("Found existing user for DL %s; returning without modification", dl_number)
+        logger.info(
+            "Found existing user for DL %s; returning without modification", dl_number
+        )
         return existing
 
     # Prepare document for insert
@@ -55,5 +57,3 @@ async def get_or_insert_user_from_id_scan(
     await db["users"].insert_one(user_doc)
     logger.info("Inserted new user record in MongoDB for DL %s", dl_number)
     return user_doc
-
-

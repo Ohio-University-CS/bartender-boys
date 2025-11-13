@@ -101,4 +101,36 @@ describe('Favorites Context', () => {
     
     expect(favoritesState?.isFavorite('drink-1')).toBe(false);
   });
+
+  /**
+   * Test 4: Normal case - Clear all favorites
+   * Verifies that clear() removes all favorites
+   */
+  test('should clear all favorites', async () => {
+    render(
+      <FavoritesProvider>
+        <TestComponent onFavorites={(f) => { favoritesState = f; }} />
+      </FavoritesProvider>
+    );
+    
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 10));
+      favoritesState?.add('drink-1');
+      favoritesState?.add('drink-2');
+      favoritesState?.add('drink-3');
+      await new Promise(resolve => setTimeout(resolve, 10));
+    });
+    
+    expect(favoritesState?.ids.length).toBe(3);
+    
+    await act(async () => {
+      favoritesState?.clear();
+      await new Promise(resolve => setTimeout(resolve, 10));
+    });
+    
+    expect(favoritesState?.ids.length).toBe(0);
+    expect(favoritesState?.isFavorite('drink-1')).toBe(false);
+    expect(favoritesState?.isFavorite('drink-2')).toBe(false);
+    expect(favoritesState?.isFavorite('drink-3')).toBe(false);
+  });
 });

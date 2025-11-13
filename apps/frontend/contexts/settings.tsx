@@ -8,6 +8,14 @@ type ThemePref = 'system' | 'light' | 'dark';
 
 type HapticStrength = 'light' | 'medium' | 'heavy';
 
+export type RealtimeVoice = 'alloy' | 'ash' | 'ballad' | 'coral' | 'echo' | 'sage' | 'shimmer' | 'verse' | 'marin' | 'cedar';
+
+export const REALTIME_VOICES: RealtimeVoice[] = ['alloy', 'ash', 'ballad', 'coral', 'echo', 'sage', 'shimmer', 'verse', 'marin', 'cedar'];
+
+export function isRealtimeVoice(value: string): value is RealtimeVoice {
+  return REALTIME_VOICES.includes(value as RealtimeVoice);
+}
+
 type SettingsState = {
   theme: ThemePref;
   apiBaseUrl: string; // optional override for runtime
@@ -31,6 +39,7 @@ type SettingsState = {
   quietHoursEnabled: boolean;
   quietHoursStart: string;
   quietHoursEnd: string;
+  realtimeVoice: RealtimeVoice;
   setTheme: (t: ThemePref) => void;
   setApiBaseUrl: (url: string) => void;
   setHapticsEnabled: (v: boolean) => void;
@@ -53,6 +62,7 @@ type SettingsState = {
   setQuietHoursEnabled: (value: boolean) => void;
   setQuietHoursStart: (value: string) => void;
   setQuietHoursEnd: (value: string) => void;
+  setRealtimeVoice: (value: RealtimeVoice) => void;
   reset: () => void;
 };
 
@@ -80,6 +90,7 @@ const VIBRATION_NOTIFICATIONS_KEY = 'settings.notifications.vibration';
 const QUIET_HOURS_ENABLED_KEY = 'settings.notifications.quietHoursEnabled';
 const QUIET_HOURS_START_KEY = 'settings.notifications.quietHoursStart';
 const QUIET_HOURS_END_KEY = 'settings.notifications.quietHoursEnd';
+const REALTIME_VOICE_KEY = 'settings.realtimeVoice';
 
 export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = useState<ThemePref>('dark');
@@ -104,6 +115,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const [quietHoursEnabled, setQuietHoursEnabledState] = useState<boolean>(false);
   const [quietHoursStart, setQuietHoursStartState] = useState<string>('22:00');
   const [quietHoursEnd, setQuietHoursEndState] = useState<string>('06:00');
+  const [realtimeVoice, setRealtimeVoiceState] = useState<RealtimeVoice>('alloy');
 
   // load on mount
   useEffect(() => {
@@ -132,6 +144,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
           quietEnabled,
           quietStart,
           quietEnd,
+          voice,
         ] = await Promise.all([
           AsyncStorage.getItem(THEME_KEY),
           AsyncStorage.getItem(API_KEY),
@@ -155,6 +168,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
           AsyncStorage.getItem(QUIET_HOURS_ENABLED_KEY),
           AsyncStorage.getItem(QUIET_HOURS_START_KEY),
           AsyncStorage.getItem(QUIET_HOURS_END_KEY),
+          AsyncStorage.getItem(REALTIME_VOICE_KEY),
         ]);
         if (t === 'light' || t === 'dark' || t === 'system') setThemeState(t);
         if (url) setApiBaseUrlState(url);
@@ -180,6 +194,9 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
         if (quietEnabled === 'true' || quietEnabled === 'false') setQuietHoursEnabledState(quietEnabled === 'true');
         if (typeof quietStart === 'string' && quietStart.length > 0) setQuietHoursStartState(quietStart);
         if (typeof quietEnd === 'string' && quietEnd.length > 0) setQuietHoursEndState(quietEnd);
+        if (typeof voice === 'string' && isRealtimeVoice(voice)) {
+          setRealtimeVoiceState(voice);
+        }
       } catch {}
     })();
   }, []);
@@ -259,6 +276,9 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     AsyncStorage.setItem(QUIET_HOURS_END_KEY, quietHoursEnd).catch(() => {});
   }, [quietHoursEnd]);
+  useEffect(() => {
+    AsyncStorage.setItem(REALTIME_VOICE_KEY, realtimeVoice).catch(() => {});
+  }, [realtimeVoice]);
   const value = useMemo<SettingsState>(() => ({
     theme,
     apiBaseUrl,
@@ -282,6 +302,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     quietHoursEnabled,
     quietHoursStart,
     quietHoursEnd,
+    realtimeVoice,
     setTheme: setThemeState,
     setApiBaseUrl: setApiBaseUrlState,
     setHapticsEnabled: setHapticsEnabledState,
@@ -304,6 +325,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     setQuietHoursEnabled: setQuietHoursEnabledState,
     setQuietHoursStart: setQuietHoursStartState,
     setQuietHoursEnd: setQuietHoursEndState,
+    setRealtimeVoice: setRealtimeVoiceState,
     reset: () => {
       setThemeState('dark');
       setApiBaseUrlState('');
@@ -327,6 +349,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
       setQuietHoursEnabledState(false);
       setQuietHoursStartState('22:00');
       setQuietHoursEndState('06:00');
+      setRealtimeVoiceState('alloy');
       AsyncStorage.multiRemove([
         THEME_KEY,
         API_KEY,
@@ -350,6 +373,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
         QUIET_HOURS_ENABLED_KEY,
         QUIET_HOURS_START_KEY,
         QUIET_HOURS_END_KEY,
+        REALTIME_VOICE_KEY,
       ]).catch(() => {});
       // Ensure logger follows reset
       logger.setEnabled(!IS_PROD && (!IS_PROD));
@@ -377,6 +401,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     quietHoursEnabled,
     quietHoursStart,
     quietHoursEnd,
+    realtimeVoice,
   ]);
 
   return (

@@ -1,10 +1,19 @@
+"""IoT firmware routes for the bartender service.
+
+This module exposes a small FastAPI router used by the Pi firmware to
+receive drink dispense requests and execute hardware steps.
+"""
+
+import json
 import logging
+from pathlib import Path
 from typing import Literal, Optional
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from hardware import get_pump_controller
+
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +32,7 @@ class Drink(BaseModel):
     category: str
     ingredients: list[str]
     instructions: str
-    difficulty: Literal['Easy', 'Medium', 'Hard']
+    difficulty: Literal["Easy", "Medium", "Hard"]
     prepTime: str
     hardwareSteps: Optional[list[HardwareStep]] = None
 
@@ -39,20 +48,44 @@ class PourResponse(BaseModel):
     message: str
 
 
+class HardwareMapping(BaseModel):
+    """Mapping between logical components and physical GPIO pins."""
+
+    pumps: dict[str, int]
+    flow_rates_ml_per_second: dict[str, float] | None = None
+    defaults: dict[str, float] | None = None
+    calibration: dict[str, dict[str, float | str]] | None = None
+
+
+def load_hardware_mapping() -> HardwareMapping | None:
+    """Load the Raspberry Pi hardware mapping if present."""
+    config_path = Path(__file__).resolve().parent.parent / "backend" / "config" / "pi_mapping.json"
+    if not config_path.exists():
+        logger.info("Hardware mapping file not found at %s", config_path)
+        return None
+
+    try:
+        data = json.loads(config_path.read_text(encoding="utf-8"))
+        return HardwareMapping.model_validate(data)
+    except Exception as exc:  # Broad to capture JSON or validation errors
+        logger.error("Failed to load hardware mapping: %s", exc)
+        raise HTTPException(status_code=500, detail="Invalid hardware mapping configuration")
+
+
 @router.post("/drink", response_model=PourResponse)
 async def receive_drink_request(request: PourRequest) -> PourResponse:
     """
     Receive a drink request from the main backend.
-    For now, just logs the drink information.
-    
+    Logs the request and attempts to execute any provided hardware steps.
+
     Args:
         request: Drink request containing the drink object
-        
+
     Returns:
-        Response confirming receipt
+        PourResponse indicating success or error
     """
     drink = request.drink
-    logger.info(f"Received drink request: %s (ID: %s)", drink.name, drink.id)
+    logger.info("Received drink request: %s (ID: %s)", drink.name, drink.id)
     logger.info(
         "Category: %s, Difficulty: %s, Prep time: %s",
         drink.category,

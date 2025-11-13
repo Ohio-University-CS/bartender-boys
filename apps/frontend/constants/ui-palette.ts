@@ -8,7 +8,6 @@ export const CATEGORY_COLORS: Record<string, string> = {
   Vodka: '#6366F1',
   Tequila: '#84CC16',
   Brandy: '#F43F5E',
-  'Non-Alcoholic': '#0EA5E9',
 };
 
 export const DIFFICULTY_COLORS: Record<string, string> = {

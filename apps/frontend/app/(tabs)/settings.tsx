@@ -1,55 +1,29 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { StyleSheet, ScrollView, View, Switch, TouchableOpacity, Alert, Platform, TextInput } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import SegmentedControl from '@react-native-segmented-control/segmented-control';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { ACCENT_OPTIONS } from '@/constants/theme';
-import { useSettings } from '@/contexts/settings';
+import { useSettings, REALTIME_VOICES } from '@/contexts/settings';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useThemeColor } from '@/hooks/use-theme-color';
-import { useRouter } from 'expo-router';
-import Constants from 'expo-constants';
+import { router } from 'expo-router';
 import { API_BASE_URL } from '@/environment';
 
 export default function SettingsScreen() {
-  const router = useRouter();
   const insets = useSafeAreaInsets();
   const {
     theme,
     setTheme,
     apiBaseUrl,
     setApiBaseUrl,
-    displayName,
-    setDisplayName,
-    profilePronouns,
-    setProfilePronouns,
-    favoriteSpirit,
-    setFavoriteSpirit,
-    homeBarName,
-    setHomeBarName,
-    bartenderBio,
-    setBartenderBio,
     accentColor,
     setAccentColor,
-  animationsEnabled,
-  setAnimationsEnabled,
-  autoSaveFavorites,
-  setAutoSaveFavorites,
-    pushNotifications,
-    setPushNotifications,
-    emailNotifications,
-    setEmailNotifications,
-    notificationSound,
-    setNotificationSound,
-    notificationVibration,
-    setNotificationVibration,
-    quietHoursEnabled,
-    setQuietHoursEnabled,
-    quietHoursStart,
-    setQuietHoursStart,
-    quietHoursEnd,
-    setQuietHoursEnd,
+    animationsEnabled,
+    setAnimationsEnabled,
+    realtimeVoice,
+    setRealtimeVoice,
   } = useSettings();
 
   // Theme colors
@@ -67,279 +41,72 @@ export default function SettingsScreen() {
   const onAccent = useThemeColor({}, 'onTint');
   const mutedForeground = useThemeColor({}, 'mutedForeground');
   const danger = useThemeColor({}, 'danger');
-  const onDanger = useThemeColor({}, 'onDanger');
 
-  const [nameInput, setNameInput] = useState(displayName);
-  const [pronounsInput, setPronounsInput] = useState(profilePronouns);
-  const [spiritInput, setSpiritInput] = useState(favoriteSpirit);
-  const [homeBarInput, setHomeBarInput] = useState(homeBarName);
-  const [bioInput, setBioInput] = useState(bartenderBio);
-  const [quietStartInput, setQuietStartInput] = useState(quietHoursStart);
-  const [quietEndInput, setQuietEndInput] = useState(quietHoursEnd);
   const [apiUrlInput, setApiUrlInput] = useState(apiBaseUrl || API_BASE_URL);
+  const [userName, setUserName] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
 
-  useEffect(() => setNameInput(displayName), [displayName]);
-  useEffect(() => setPronounsInput(profilePronouns), [profilePronouns]);
-  useEffect(() => setSpiritInput(favoriteSpirit), [favoriteSpirit]);
-  useEffect(() => setHomeBarInput(homeBarName), [homeBarName]);
-  useEffect(() => setBioInput(bartenderBio), [bartenderBio]);
-  useEffect(() => setQuietStartInput(quietHoursStart), [quietHoursStart]);
-  useEffect(() => setQuietEndInput(quietHoursEnd), [quietHoursEnd]);
   useEffect(() => setApiUrlInput(apiBaseUrl || API_BASE_URL), [apiBaseUrl]);
 
-  const handleSaveProfile = () => {
-    setDisplayName(nameInput.trim());
-    setProfilePronouns(pronounsInput.trim());
-    setFavoriteSpirit(spiritInput.trim());
-    setHomeBarName(homeBarInput.trim());
-    setBartenderBio(bioInput.trim());
-    Alert.alert('Saved', 'Profile details updated');
-  };
-
-  const handleClearProfile = () => {
-    setNameInput('');
-    setPronounsInput('');
-    setSpiritInput('');
-    setHomeBarInput('');
-    setBioInput('');
-    setDisplayName('');
-    setProfilePronouns('');
-    setFavoriteSpirit('');
-    setHomeBarName('');
-    setBartenderBio('');
-  };
-
-  const handleLogout = async () => {
-    Alert.alert(
-      'Log Out',
-      'Are you sure you want to log out?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Log Out',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await AsyncStorage.removeItem('isVerified');
-              router.replace('/auth');
-            } catch (error) {
-              console.error('Logout error:', error);
-              Alert.alert('Error', 'Failed to log out. Please try again.');
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  const isTimeValid = (value: string) => {
-    if (!/^\d{2}:\d{2}$/.test(value)) return false;
-    const [hours, minutes] = value.split(':').map(Number);
-    return hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59;
-  };
-
-  const handleQuietStartBlur = () => {
-    const normalized = quietStartInput.trim();
-    if (isTimeValid(normalized)) {
-      setQuietHoursStart(normalized);
-    } else {
-      Alert.alert('Invalid time', 'Quiet hours start must use HH:MM (24-hour) format.');
-      setQuietStartInput(quietHoursStart);
-    }
-  };
-
-  const handleQuietEndBlur = () => {
-    const normalized = quietEndInput.trim();
-    if (isTimeValid(normalized)) {
-      setQuietHoursEnd(normalized);
-    } else {
-      Alert.alert('Invalid time', 'Quiet hours end must use HH:MM (24-hour) format.');
-      setQuietEndInput(quietHoursEnd);
-    }
-  };
-
-  const handleExportLogs = () => {
-    Alert.alert(
-      'Log export',
-      'Connect the device to your development machine to pull the latest log bundle for support. Automated export is coming soon.'
-    );
-  };
-
-  const handleClearMenuCache = async () => {
-    try {
-      const keys = await AsyncStorage.getAllKeys();
-      const targets = keys.filter((key) => key.includes('menu') || key.includes('favorites'));
-      if (targets.length > 0) {
-        await AsyncStorage.multiRemove(targets);
+  // Load user information from AsyncStorage
+  useEffect(() => {
+    const loadUserInfo = async () => {
+      try {
+        const [name, id] = await Promise.all([
+          AsyncStorage.getItem('user_name'),
+          AsyncStorage.getItem('user_id'),
+        ]);
+        setUserName(name);
+        setUserId(id);
+      } catch (error) {
+        console.error('Failed to load user info:', error);
       }
-      Alert.alert('Cache cleared', targets.length > 0 ? 'Menu and favorites caches cleared.' : 'No cached menu data found.');
-    } catch (error) {
-      console.error('Cache clear error', error);
-      Alert.alert('Error', 'Unable to clear cached data. Try again.');
-    }
-  };
-
-  const diagnosticsSummary = useMemo(() => {
-    const version = Constants.expoConfig?.version ?? 'dev';
-    const easExtra = (Constants.expoConfig as { extra?: { eas?: { buildNumber?: string } } } | undefined)?.extra?.eas;
-    const build = easExtra?.buildNumber ?? Constants.nativeBuildVersion ?? 'dev';
-    return `Version ${version} (build ${build})`;
+    };
+    loadUserInfo();
   }, []);
 
+
+  const handleLogout = async () => {
+    console.log('[Settings] Logout button pressed, starting logout process');
+    try {
+      // Remove verification flag and user info
+      await AsyncStorage.removeItem('isVerified');
+      await AsyncStorage.removeItem('user_id');
+      await AsyncStorage.removeItem('user_name');
+      console.log('[Settings] Removed user info from AsyncStorage');
+      
+      // Clear state immediately
+      setUserName(null);
+      setUserId(null);
+      
+      // Verify it was removed
+      const stillVerified = await AsyncStorage.getItem('isVerified');
+      console.log('[Settings] Verification check after removal:', stillVerified);
+      
+      // Use setTimeout to ensure navigation happens after state updates
+      setTimeout(() => {
+        console.log('[Settings] Navigating to /auth');
+        try {
+          router.replace('/auth' as any);
+          console.log('[Settings] Navigation called successfully');
+        } catch (navError) {
+          console.error('[Settings] Navigation error:', navError);
+          // Fallback: try navigating to root
+          router.replace('/' as any);
+        }
+      }, 200);
+    } catch (error) {
+      console.error('[Settings] Logout error:', error);
+      Alert.alert('Error', 'Failed to log out. Please try again.');
+    }
+  };
+
   return (
-    <View style={[styles.container, { backgroundColor, paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
-      <ScrollView contentContainerStyle={styles.containerContent}>
-      <ThemedView colorName="surfaceElevated" style={[styles.section, { borderColor }]}> 
-        <ThemedText type="subtitle" colorName="tint" style={styles.sectionTitle}>Profile</ThemedText>
-        <ThemedText style={styles.help} colorName="muted">Personalize how the bartender greets you</ThemedText>
-        <TextInput
-          placeholder="Your name"
-          value={nameInput}
-          onChangeText={setNameInput}
-          style={[styles.input, { backgroundColor: inputBg, borderColor: inputBorder, color: textColor }]}
-          placeholderTextColor={placeholderColor}
-          autoCapitalize="words"
-        />
-        <TextInput
-          placeholder="Pronouns (e.g., she/her)"
-          value={pronounsInput}
-          onChangeText={setPronounsInput}
-          style={[styles.input, { backgroundColor: inputBg, borderColor: inputBorder, color: textColor }]}
-          placeholderTextColor={placeholderColor}
-          autoCapitalize="none"
-        />
-        <TextInput
-          placeholder="Favorite spirit"
-          value={spiritInput}
-          onChangeText={setSpiritInput}
-          style={[styles.input, { backgroundColor: inputBg, borderColor: inputBorder, color: textColor }]}
-          placeholderTextColor={placeholderColor}
-          autoCapitalize="words"
-        />
-        <TextInput
-          placeholder="Home bar name"
-          value={homeBarInput}
-          onChangeText={setHomeBarInput}
-          style={[styles.input, { backgroundColor: inputBg, borderColor: inputBorder, color: textColor }]}
-          placeholderTextColor={placeholderColor}
-          autoCapitalize="words"
-        />
-        <TextInput
-          placeholder="Add a short bio or preferences"
-          value={bioInput}
-          onChangeText={setBioInput}
-          style={[styles.textArea, { backgroundColor: inputBg, borderColor: inputBorder, color: textColor }]}
-          placeholderTextColor={placeholderColor}
-          multiline
-          numberOfLines={3}
-          textAlignVertical="top"
-        />
-        <View style={styles.rowGap}>
-          <TouchableOpacity
-            style={[styles.button, { backgroundColor: accent }]}
-            onPress={handleSaveProfile}
-          >
-            <ThemedText style={styles.buttonText} colorName="onTint">Save Profile</ThemedText>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.button, styles.secondary, { backgroundColor: surface, borderColor: inputBorder }]}
-            onPress={handleClearProfile}
-          >
-            <ThemedText style={styles.secondaryText} colorName="tint">Clear</ThemedText>
-          </TouchableOpacity>
+    <View style={[styles.container, { backgroundColor, paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}> 
+      <ScrollView contentContainerStyle={styles.containerContent}> 
+        <View style={{ alignItems: 'center', flexDirection: 'column', marginBottom: 8 }}>
+          <ThemedText type="title" colorName="tint" style={{ fontSize: 24 }}>Settings</ThemedText>
         </View>
-      </ThemedView>
-
-      <ThemedView colorName="surfaceElevated" style={[styles.section, { borderColor }]}> 
-        <ThemedText type="subtitle" colorName="tint" style={styles.sectionTitle}>Notifications</ThemedText>
-        <ThemedText style={styles.help} colorName="muted">Choose how and when we alert you</ThemedText>
-
-        <View style={styles.row}>
-          <ThemedText>Push notifications</ThemedText>
-          <Switch
-            value={pushNotifications}
-            onValueChange={setPushNotifications}
-            trackColor={{ false: mutedForeground, true: accent }}
-            thumbColor={Platform.OS === 'android' ? onAccent : undefined}
-          />
-        </View>
-        <ThemedText style={[styles.help, styles.helpInset]} colorName="muted">Enable real-time alerts on this device.</ThemedText>
-
-        <View style={styles.row}>
-          <ThemedText>Email updates</ThemedText>
-          <Switch
-            value={emailNotifications}
-            onValueChange={setEmailNotifications}
-            trackColor={{ false: mutedForeground, true: accent }}
-            thumbColor={Platform.OS === 'android' ? onAccent : undefined}
-          />
-        </View>
-        <ThemedText style={[styles.help, styles.helpInset]} colorName="muted">Send a summary if you miss in-app alerts.</ThemedText>
-
-        <View style={styles.row}>
-          <ThemedText>Play sounds</ThemedText>
-          <Switch
-            value={notificationSound}
-            onValueChange={setNotificationSound}
-            trackColor={{ false: mutedForeground, true: accent }}
-            thumbColor={Platform.OS === 'android' ? onAccent : undefined}
-          />
-        </View>
-        <ThemedText style={[styles.help, styles.helpInset]} colorName="muted">Audible chimes for incoming requests.</ThemedText>
-
-        <View style={styles.row}>
-          <ThemedText>Vibrate device</ThemedText>
-          <Switch
-            value={notificationVibration}
-            onValueChange={setNotificationVibration}
-            trackColor={{ false: mutedForeground, true: accent }}
-            thumbColor={Platform.OS === 'android' ? onAccent : undefined}
-          />
-        </View>
-        <ThemedText style={[styles.help, styles.helpInset]} colorName="muted">Use haptics for discreet alerts.</ThemedText>
-
-        <View style={styles.row}>
-          <ThemedText>Quiet hours</ThemedText>
-          <Switch
-            value={quietHoursEnabled}
-            onValueChange={setQuietHoursEnabled}
-            trackColor={{ false: mutedForeground, true: accent }}
-            thumbColor={Platform.OS === 'android' ? onAccent : undefined}
-          />
-        </View>
-        <ThemedText style={[styles.help, styles.helpInset]} colorName="muted">Pause push alerts during downtime.</ThemedText>
-
-        {quietHoursEnabled && (
-          <View style={styles.quietHoursRow}>
-            <View style={styles.quietField}>
-              <ThemedText style={styles.quietLabel}>Start</ThemedText>
-              <TextInput
-                value={quietStartInput}
-                onChangeText={setQuietStartInput}
-                onBlur={handleQuietStartBlur}
-                keyboardType={Platform.OS === 'ios' ? 'numbers-and-punctuation' : 'numeric'}
-                style={[styles.quietInput, { backgroundColor: inputBg, borderColor: inputBorder, color: textColor }]}
-                placeholderTextColor={placeholderColor}
-                placeholder="22:00"
-                maxLength={5}
-              />
-            </View>
-            <View style={styles.quietField}>
-              <ThemedText style={styles.quietLabel}>End</ThemedText>
-              <TextInput
-                value={quietEndInput}
-                onChangeText={setQuietEndInput}
-                onBlur={handleQuietEndBlur}
-                keyboardType={Platform.OS === 'ios' ? 'numbers-and-punctuation' : 'numeric'}
-                style={[styles.quietInput, { backgroundColor: inputBg, borderColor: inputBorder, color: textColor }]}
-                placeholderTextColor={placeholderColor}
-                placeholder="06:00"
-                maxLength={5}
-              />
-            </View>
-          </View>
-        )}
-      </ThemedView>
 
       <ThemedView colorName="surfaceElevated" style={[styles.section, { borderColor }]}> 
         <ThemedText type="subtitle" colorName="tint" style={styles.sectionTitle}>Appearance</ThemedText>
@@ -429,16 +196,34 @@ export default function SettingsScreen() {
         </View>
         <ThemedText style={[styles.help, styles.helpInset]} colorName="muted">Enable smooth animations throughout the app</ThemedText>
 
-        <View style={styles.row}>
-          <ThemedText>Auto-save Favorites</ThemedText>
-          <Switch
-            value={autoSaveFavorites}
-            onValueChange={setAutoSaveFavorites}
-            trackColor={{ false: mutedForeground, true: accent }}
-            thumbColor={Platform.OS === 'android' ? onAccent : undefined}
-          />
+        <ThemedText style={[styles.help, { marginTop: 16 }]} colorName="muted">Realtime Voice</ThemedText>
+        <ThemedText style={[styles.help, styles.helpInset]} colorName="muted">Choose the voice for AI conversations</ThemedText>
+        <View style={styles.accentRow}>
+          {REALTIME_VOICES.map((voice) => {
+            const isActive = realtimeVoice === voice;
+            return (
+              <TouchableOpacity
+                key={voice}
+                style={[
+                  styles.chip,
+                  { backgroundColor: chipBg, borderColor: chipBorder },
+                  isActive && [
+                    styles.chipActive,
+                    { backgroundColor: accent, borderColor: accent },
+                  ]
+                ]}
+                onPress={() => setRealtimeVoice(voice)}
+              >
+                <ThemedText
+                  style={styles.chipText}
+                  colorName={isActive ? 'onTint' : 'mutedForeground'}
+                >
+                  {voice.charAt(0).toUpperCase() + voice.slice(1)}
+                </ThemedText>
+              </TouchableOpacity>
+            );
+          })}
         </View>
-        <ThemedText style={[styles.help, styles.helpInset]} colorName="muted">Automatically sync favorites across sessions</ThemedText>
       </ThemedView>
 
       <ThemedView colorName="surfaceElevated" style={[styles.section, { borderColor }]}> 
@@ -489,30 +274,34 @@ export default function SettingsScreen() {
       </ThemedView>
 
       <ThemedView colorName="surfaceElevated" style={[styles.section, { borderColor }]}> 
-        <ThemedText type="subtitle" colorName="tint" style={styles.sectionTitle}>Data & Diagnostics</ThemedText>
-        <ThemedText style={styles.help} colorName="muted">Manage cache and share runtime info with support</ThemedText>
-
-        <View style={styles.rowGap}>
-          <TouchableOpacity
-            style={[styles.button, styles.secondary, { backgroundColor: surface, borderColor: inputBorder }]}
-            onPress={handleExportLogs}
-          >
-            <ThemedText style={styles.secondaryText} colorName="tint">Export latest logs</ThemedText>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.button, styles.secondary, { backgroundColor: surface, borderColor: inputBorder }]}
-            onPress={handleClearMenuCache}
-          >
-            <ThemedText style={styles.secondaryText} colorName="tint">Clear cached menu data</ThemedText>
-          </TouchableOpacity>
-        </View>
-
-        <ThemedText style={[styles.meta, { color: mutedForeground }]}>{diagnosticsSummary}</ThemedText>
-      </ThemedView>
-
-      <ThemedView colorName="surfaceElevated" style={[styles.section, { borderColor }]}> 
         <ThemedText type="subtitle" colorName="tint" style={styles.sectionTitle}>Account</ThemedText>
-        <View style={styles.rowGap}>
+        
+        {userName || userId ? (
+          <View style={styles.rowGap}>
+            {userName && (
+              <View style={styles.accountRow}>
+                <ThemedText style={styles.accountLabel} colorName="mutedForeground">Name</ThemedText>
+                <ThemedText style={styles.accountValue} colorName="text">{userName}</ThemedText>
+              </View>
+            )}
+            {userId && userId !== 'guest' && (
+              <View style={styles.accountRow}>
+                <ThemedText style={styles.accountLabel} colorName="mutedForeground">Driver&apos;s License (User ID)</ThemedText>
+                <ThemedText style={styles.accountValue} colorName="text">{userId}</ThemedText>
+              </View>
+            )}
+            {userId === 'guest' && (
+              <View style={styles.accountRow}>
+                <ThemedText style={styles.accountLabel} colorName="mutedForeground">User ID</ThemedText>
+                <ThemedText style={styles.accountValue} colorName="text">Guest</ThemedText>
+              </View>
+            )}
+          </View>
+        ) : (
+          <ThemedText style={styles.help} colorName="muted">No account information available. Verify your ID to link your account.</ThemedText>
+        )}
+
+        <View style={[styles.rowGap, { marginTop: userName || userId ? 16 : 8 }]}>
           <TouchableOpacity
             style={[styles.button, { backgroundColor: danger }]}
             onPress={handleLogout}
@@ -557,11 +346,18 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   chipActive: {
-    shadowColor: '#000',
-    shadowOpacity: 0.18,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 3,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 3px 6px rgba(0, 0, 0, 0.18)',
+      },
+      default: {
+        shadowColor: '#000',
+        shadowOpacity: 0.18,
+        shadowRadius: 6,
+        shadowOffset: { width: 0, height: 3 },
+        elevation: 3,
+      },
+    }),
   },
   chipText: { fontWeight: '600' },
   accentRow: {
@@ -609,5 +405,23 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 12,
     fontVariant: ['tabular-nums'],
+  },
+  accountRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  accountLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  accountValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    flex: 1,
+    textAlign: 'right',
   },
 });
