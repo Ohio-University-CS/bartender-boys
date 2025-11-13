@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { StyleSheet, View, TouchableOpacity, Platform, Alert, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -11,6 +11,7 @@ import { API_BASE_URL } from '@/environment';
 import { useSettings } from '@/contexts/settings';
 import { useNotifications } from '@/contexts/notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getBartenderModelDefinition } from '@/constants/bartender-models';
 
 // Live audio stream module removed - using WebRTC realtime instead
 
@@ -20,8 +21,13 @@ export default function BartenderScreen() {
   const [transcript, setTranscript] = useState('');
   const [isTalking, setIsTalking] = useState(false);
   const [isGeneratingDrink, setIsGeneratingDrink] = useState(false);
-  const { apiBaseUrl } = useSettings();
+  const { apiBaseUrl, bartenderModel } = useSettings();
   const { showSuccess, showError } = useNotifications();
+
+  const bartenderModelDefinition = useMemo(
+    () => getBartenderModelDefinition(bartenderModel),
+    [bartenderModel],
+  );
 
   const { isSessionActive, startSession, stopSession } = useWebRTCRealtime({
     onTranscript: (text) => {
@@ -184,7 +190,11 @@ export default function BartenderScreen() {
         >
           <Ionicons name="arrow-back" size={24} color={accent} />
         </TouchableOpacity>
-        <BartenderAvatar isTalking={isTalking} backgroundColor={avatarBackground} />
+        <BartenderAvatar
+          isTalking={isTalking}
+          backgroundColor={avatarBackground}
+          modelDefinition={bartenderModelDefinition}
+        />
       </View>
       
       <View style={styles.content}>

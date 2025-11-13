@@ -10,6 +10,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { router } from 'expo-router';
 import { API_BASE_URL } from '@/environment';
+import { BARTENDER_MODEL_OPTIONS } from '@/constants/bartender-models';
 
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
@@ -24,6 +25,8 @@ export default function SettingsScreen() {
     setAnimationsEnabled,
     realtimeVoice,
     setRealtimeVoice,
+    bartenderModel,
+    setBartenderModel,
   } = useSettings();
 
   // Theme colors
@@ -219,6 +222,35 @@ export default function SettingsScreen() {
                   colorName={isActive ? 'onTint' : 'mutedForeground'}
                 >
                   {voice.charAt(0).toUpperCase() + voice.slice(1)}
+                </ThemedText>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        <ThemedText style={[styles.help, { marginTop: 16 }]} colorName="muted">Bartender Model</ThemedText>
+        <ThemedText style={[styles.help, styles.helpInset]} colorName="muted">Switch between available bartender avatars</ThemedText>
+        <View style={styles.accentRow}>
+          {BARTENDER_MODEL_OPTIONS.map((option) => {
+            const isActive = bartenderModel === option.id;
+            return (
+              <TouchableOpacity
+                key={option.id}
+                style={[
+                  styles.chip,
+                  { backgroundColor: chipBg, borderColor: chipBorder },
+                  isActive && [
+                    styles.chipActive,
+                    { backgroundColor: accent, borderColor: accent },
+                  ]
+                ]}
+                onPress={() => setBartenderModel(option.id)}
+              >
+                <ThemedText
+                  style={styles.chipText}
+                  colorName={isActive ? 'onTint' : 'mutedForeground'}
+                >
+                  {option.label}
                 </ThemedText>
               </TouchableOpacity>
             );
