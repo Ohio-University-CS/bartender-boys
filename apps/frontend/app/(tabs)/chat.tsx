@@ -44,7 +44,7 @@ export default function ChatScreen() {
   // Fetch conversations
   const fetchConversations = useCallback(async () => {
     if (!userId) return;
-    
+
     try {
       setLoading(true);
       setError(null);
@@ -74,7 +74,7 @@ export default function ChatScreen() {
 
   const handleCreateConversation = useCallback(async () => {
     if (!userId) return;
-    
+
     try {
       const newConversation = await createConversation(userId, apiBaseUrl);
       router.push(`/conversation/${newConversation.id}` as any);
@@ -128,8 +128,8 @@ export default function ChatScreen() {
   }, [router]);
 
   return (
-    <View style={[styles.container, { backgroundColor, paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
-      <ThemedView colorName="surface" style={[styles.header, { borderBottomColor: borderColor }]}>
+    <View style={[styles.container, { backgroundColor, paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}> 
+      <ThemedView colorName="surface" style={[styles.header, { borderBottomColor: borderColor }]}> 
         <ThemedText type="title" colorName="tint" style={styles.title}>Chats</ThemedText>
         <View style={styles.headerButtons}>
           <TouchableOpacity

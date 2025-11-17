@@ -3,6 +3,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { IS_PROD } from '@/environment';
 import { logger } from '@/utils/logger';
 import { DEFAULT_ACCENT, isAccentOption, type AccentOption } from '@/constants/theme';
+import {
+  DEFAULT_BARTENDER_MODEL_ID,
+  type BartenderModelId,
+  isBartenderModelId,
+} from '@/constants/bartender-models';
 
 type ThemePref = 'system' | 'light' | 'dark';
 
@@ -40,6 +45,7 @@ type SettingsState = {
   quietHoursStart: string;
   quietHoursEnd: string;
   realtimeVoice: RealtimeVoice;
+  bartenderModel: BartenderModelId;
   setTheme: (t: ThemePref) => void;
   setApiBaseUrl: (url: string) => void;
   setHapticsEnabled: (v: boolean) => void;
@@ -63,6 +69,7 @@ type SettingsState = {
   setQuietHoursStart: (value: string) => void;
   setQuietHoursEnd: (value: string) => void;
   setRealtimeVoice: (value: RealtimeVoice) => void;
+  setBartenderModel: (value: BartenderModelId) => void;
   reset: () => void;
 };
 
@@ -91,6 +98,7 @@ const QUIET_HOURS_ENABLED_KEY = 'settings.notifications.quietHoursEnabled';
 const QUIET_HOURS_START_KEY = 'settings.notifications.quietHoursStart';
 const QUIET_HOURS_END_KEY = 'settings.notifications.quietHoursEnd';
 const REALTIME_VOICE_KEY = 'settings.realtimeVoice';
+const BARTENDER_MODEL_KEY = 'settings.bartenderModel';
 
 export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = useState<ThemePref>('dark');
@@ -116,6 +124,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const [quietHoursStart, setQuietHoursStartState] = useState<string>('22:00');
   const [quietHoursEnd, setQuietHoursEndState] = useState<string>('06:00');
   const [realtimeVoice, setRealtimeVoiceState] = useState<RealtimeVoice>('alloy');
+  const [bartenderModel, setBartenderModelState] = useState<BartenderModelId>(DEFAULT_BARTENDER_MODEL_ID);
 
   // load on mount
   useEffect(() => {
@@ -145,6 +154,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
           quietStart,
           quietEnd,
           voice,
+          model,
         ] = await Promise.all([
           AsyncStorage.getItem(THEME_KEY),
           AsyncStorage.getItem(API_KEY),
@@ -169,6 +179,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
           AsyncStorage.getItem(QUIET_HOURS_START_KEY),
           AsyncStorage.getItem(QUIET_HOURS_END_KEY),
           AsyncStorage.getItem(REALTIME_VOICE_KEY),
+          AsyncStorage.getItem(BARTENDER_MODEL_KEY),
         ]);
         if (t === 'light' || t === 'dark' || t === 'system') setThemeState(t);
         if (url) setApiBaseUrlState(url);
@@ -196,6 +207,9 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
         if (typeof quietEnd === 'string' && quietEnd.length > 0) setQuietHoursEndState(quietEnd);
         if (typeof voice === 'string' && isRealtimeVoice(voice)) {
           setRealtimeVoiceState(voice);
+        }
+        if (typeof model === 'string' && isBartenderModelId(model)) {
+          setBartenderModelState(model);
         }
       } catch {}
     })();
@@ -279,6 +293,9 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     AsyncStorage.setItem(REALTIME_VOICE_KEY, realtimeVoice).catch(() => {});
   }, [realtimeVoice]);
+  useEffect(() => {
+    AsyncStorage.setItem(BARTENDER_MODEL_KEY, bartenderModel).catch(() => {});
+  }, [bartenderModel]);
   const value = useMemo<SettingsState>(() => ({
     theme,
     apiBaseUrl,
@@ -293,8 +310,8 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     homeBarName,
     bartenderBio,
     accentColor,
-  animationsEnabled,
-  autoSaveFavorites,
+    animationsEnabled,
+    autoSaveFavorites,
     pushNotifications,
     emailNotifications,
     notificationSound,
@@ -303,6 +320,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     quietHoursStart,
     quietHoursEnd,
     realtimeVoice,
+    bartenderModel,
     setTheme: setThemeState,
     setApiBaseUrl: setApiBaseUrlState,
     setHapticsEnabled: setHapticsEnabledState,
@@ -316,8 +334,8 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     setHomeBarName: setHomeBarNameState,
     setBartenderBio: setBartenderBioState,
     setAccentColor: setAccentColorState,
-  setAnimationsEnabled: setAnimationsEnabledState,
-  setAutoSaveFavorites: setAutoSaveFavoritesState,
+    setAnimationsEnabled: setAnimationsEnabledState,
+    setAutoSaveFavorites: setAutoSaveFavoritesState,
     setPushNotifications: setPushNotificationsState,
     setEmailNotifications: setEmailNotificationsState,
     setNotificationSound: setNotificationSoundState,
@@ -326,6 +344,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     setQuietHoursStart: setQuietHoursStartState,
     setQuietHoursEnd: setQuietHoursEndState,
     setRealtimeVoice: setRealtimeVoiceState,
+    setBartenderModel: setBartenderModelState,
     reset: () => {
       setThemeState('dark');
       setApiBaseUrlState('');
@@ -340,8 +359,8 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
       setHomeBarNameState('');
       setBartenderBioState('');
       setAccentColorState(DEFAULT_ACCENT);
-  setAnimationsEnabledState(true);
-  setAutoSaveFavoritesState(true);
+      setAnimationsEnabledState(true);
+      setAutoSaveFavoritesState(true);
       setPushNotificationsState(true);
       setEmailNotificationsState(false);
       setNotificationSoundState(true);
@@ -350,6 +369,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
       setQuietHoursStartState('22:00');
       setQuietHoursEndState('06:00');
       setRealtimeVoiceState('alloy');
+      setBartenderModelState(DEFAULT_BARTENDER_MODEL_ID);
       AsyncStorage.multiRemove([
         THEME_KEY,
         API_KEY,
@@ -364,8 +384,8 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
         HOME_BAR_NAME_KEY,
         BARTENDER_BIO_KEY,
         ACCENT_KEY,
-  ANIMATIONS_KEY,
-  AUTO_SAVE_FAVORITES_KEY,
+        ANIMATIONS_KEY,
+        AUTO_SAVE_FAVORITES_KEY,
         PUSH_NOTIFICATIONS_KEY,
         EMAIL_NOTIFICATIONS_KEY,
         SOUND_NOTIFICATIONS_KEY,
@@ -374,6 +394,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
         QUIET_HOURS_START_KEY,
         QUIET_HOURS_END_KEY,
         REALTIME_VOICE_KEY,
+        BARTENDER_MODEL_KEY,
       ]).catch(() => {});
       // Ensure logger follows reset
       logger.setEnabled(!IS_PROD && (!IS_PROD));
@@ -392,8 +413,8 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     homeBarName,
     bartenderBio,
     accentColor,
-  animationsEnabled,
-  autoSaveFavorites,
+    animationsEnabled,
+    autoSaveFavorites,
     pushNotifications,
     emailNotifications,
     notificationSound,
@@ -402,6 +423,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     quietHoursStart,
     quietHoursEnd,
     realtimeVoice,
+    bartenderModel,
   ]);
 
   return (

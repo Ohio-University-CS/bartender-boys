@@ -1,25 +1,30 @@
 import React, { useEffect, useRef } from 'react';
 import { View, StyleSheet, Platform } from 'react-native';
+import type { ImageSourcePropType } from 'react-native';
 import { GLView } from 'expo-gl';
 import { Asset } from 'expo-asset';
 import * as THREE from 'three';
 import { Renderer } from 'expo-three';
+import { loadAsync as loadModelAsync } from 'expo-three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 import { useThemeColor } from '@/hooks/use-theme-color';
+import type { BartenderModelDefinition } from '@/constants/bartender-models';
 
 type BartenderAvatarProps = {
   /** Is the bartender currently talking? */
   isTalking?: boolean;
   /** Path to custom 3D model (GLB/GLTF) - place file in assets/models/ */
-  modelPath?: any; // e.g., require('../assets/models/bartender.glb')
+  modelPath?: ImageSourcePropType; // e.g., require('../assets/models/bartender.glb')
+  /** Optional model metadata with transform guidance */
+  modelDefinition?: BartenderModelDefinition;
   /** Background color for the GL canvas */
   backgroundColor?: string;
 };
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const DEFAULT_MODEL = require('../assets/models/luiz-h-c-nobre/source/model (10).glb');
+const DEFAULT_MODEL = require('../assets/models/luiz-h-c-nobre/source/bartender.glb');
 
 /**
  * 3D Bartender Avatar Component
@@ -38,6 +43,7 @@ const DEFAULT_MODEL = require('../assets/models/luiz-h-c-nobre/source/model (10)
 export function BartenderAvatar({
   isTalking = false,
   modelPath,
+  modelDefinition,
   backgroundColor,
 }: BartenderAvatarProps) {
   const accent = useThemeColor({}, 'tint');
@@ -55,8 +61,21 @@ export function BartenderAvatar({
   const hasCustomModelRef = useRef(false);
   const talkingRef = useRef(isTalking);
   const isWeb = Platform.OS === 'web';
+  const positionOffsetRef = useRef(new THREE.Vector3(0, 0, 0));
+  const rotationOffsetRef = useRef(new THREE.Euler(0, 0, 0));
+  const baseScaleRef = useRef(new THREE.Vector3(1, 1, 1));
+  const bobAmplitudeRef = useRef<number | null>(null);
+  const loadTokenRef = useRef(0);
+
+  const resetTransformDefaults = () => {
+    positionOffsetRef.current.set(0, 0, 0);
+    rotationOffsetRef.current.set(0, 0, 0);
+    baseScaleRef.current.set(1, 1, 1);
+    bobAmplitudeRef.current = null;
+  };
 
   const removeCurrentMesh = () => {
+    resetTransformDefaults();
     if (sceneRef.current && meshRef.current) {
       sceneRef.current.remove(meshRef.current);
     }
@@ -139,32 +158,49 @@ export function BartenderAvatar({
     meshRef.current = group;
     scene.add(group);
     hasCustomModelRef.current = false;
+    bobAmplitudeRef.current = 0.08;
   };
 
-  const loadCustomModel = async (scene: THREE.Scene, moduleRef: any) => {
+  const loadCustomModel = async (
+    scene: THREE.Scene,
+    moduleRef: ImageSourcePropType,
+    definition: BartenderModelDefinition | undefined,
+    token: number,
+  ) => {
     try {
-      const asset = Asset.fromModule(moduleRef);
+      const asset = Asset.fromModule(moduleRef as number);
       console.log('[BartenderAvatar] resolved asset metadata', asset);
-      if (Platform.OS !== 'web') {
-        await asset.downloadAsync();
-      }
-      const uri = asset.localUri ?? asset.uri;
-      if (!uri) {
-        throw new Error('Unable to resolve model URI');
-      }
-      console.log('[BartenderAvatar] asset uri', uri, 'local?', asset.localUri);
+      await asset.downloadAsync();
 
-      const loader = new GLTFLoader();
-      if (asset.localUri) {
-        const resourcePath = asset.localUri.replace(/[^/]*$/, '');
-        loader.setResourcePath(resourcePath);
-        loader.setPath(resourcePath);
+      if (loadTokenRef.current !== token) {
+        console.log('[BartenderAvatar] Skipping model load, a newer request is in flight');
+        return;
       }
 
-      const gltf: GLTF = await loader.loadAsync(uri);
+      let gltf: GLTF;
+      if (Platform.OS === 'web') {
+        const uri = asset.localUri ?? asset.uri;
+        if (!uri) {
+          throw new Error('Unable to resolve model URI');
+        }
+        const loader = new GLTFLoader();
+        gltf = (await loader.loadAsync(uri)) as GLTF;
+      } else {
+        gltf = (await loadModelAsync(asset)) as GLTF;
+      }
+      if (!gltf) {
+        throw new Error('GLTF result missing');
+      }
       if (!sceneRef.current || !gltf.scene) {
         throw new Error('Model scene missing');
       }
+
+      if (loadTokenRef.current !== token) {
+        console.log('[BartenderAvatar] Skipping model load, GLTF parse superseded');
+        return;
+      }
+
+      removeCurrentMesh();
 
       const pivot = new THREE.Group();
       const model = gltf.scene;
@@ -187,10 +223,48 @@ export function BartenderAvatar({
       const scaledBox = new THREE.Box3().setFromObject(model);
       const center = scaledBox.getCenter(new THREE.Vector3());
       model.position.sub(center);
-  model.position.y += targetHeight * 0.5;
+      model.position.y += targetHeight * 0.5;
 
-      removeCurrentMesh();
+      const transform = definition?.transform;
+      const positionTransform = transform?.position ?? {};
+      const rotationTransform = transform?.rotation ?? {};
+      const scaleFactor = transform?.scale ?? 1;
+      positionOffsetRef.current.set(
+        positionTransform.x ?? 0,
+        positionTransform.y ?? 0,
+        positionTransform.z ?? 0,
+      );
+      rotationOffsetRef.current.set(
+        rotationTransform.x ?? 0,
+        rotationTransform.y ?? 0,
+        rotationTransform.z ?? 0,
+      );
+      baseScaleRef.current.set(scaleFactor, scaleFactor, scaleFactor);
+      bobAmplitudeRef.current = transform?.bobAmplitude ?? 0.05;
+
+      pivot.scale.set(
+        baseScaleRef.current.x,
+        baseScaleRef.current.y,
+        baseScaleRef.current.z,
+      );
+
+      if (loadTokenRef.current !== token) {
+        console.log('[BartenderAvatar] Skipping model load, transform application superseded');
+        return;
+      }
+
       meshRef.current = pivot;
+      meshRef.current.rotation.set(
+        rotationOffsetRef.current.x,
+        rotationOffsetRef.current.y,
+        rotationOffsetRef.current.z,
+      );
+      meshRef.current.position.set(
+        positionOffsetRef.current.x,
+        positionOffsetRef.current.y,
+        positionOffsetRef.current.z,
+      );
+
       scene.add(pivot);
       hasCustomModelRef.current = true;
       console.log('[BartenderAvatar] Loaded model successfully');
@@ -253,9 +327,10 @@ export function BartenderAvatar({
 
     clockRef.current = new THREE.Clock();
 
-    const resolvedModel = modelPath ?? DEFAULT_MODEL;
+    const resolvedModel = (modelDefinition?.asset ?? modelPath ?? DEFAULT_MODEL) as ImageSourcePropType;
     if (resolvedModel) {
-      await loadCustomModel(scene, resolvedModel);
+      const token = ++loadTokenRef.current;
+      await loadCustomModel(scene, resolvedModel, modelDefinition, token);
     } else {
       attachPlaceholderModel(scene);
     }
@@ -271,25 +346,42 @@ export function BartenderAvatar({
       }
 
       if (meshRef.current) {
-        const bobAmplitude = hasCustomModelRef.current ? 0.05 : 0.08;
-        meshRef.current.position.y = Math.sin(timeRef.current * 0.5) * bobAmplitude;
+        const basePosition = positionOffsetRef.current;
+        const bobAmplitude =
+          bobAmplitudeRef.current ?? (hasCustomModelRef.current ? 0.05 : 0.08);
+        const bobOffset = Math.sin(timeRef.current * 0.5) * bobAmplitude;
+
+        meshRef.current.position.set(
+          basePosition.x,
+          basePosition.y + bobOffset,
+          basePosition.z,
+        );
 
         const talkingNow = talkingRef.current;
         const hasTalkingClip = Boolean(talkingActionRef.current);
-        if (!hasTalkingClip) {
-          const targetRotation = talkingNow ? Math.sin(timeRef.current * 5) * 0.1 : 0;
-          meshRef.current.rotation.y += (targetRotation - meshRef.current.rotation.y) * 0.1;
+        const baseRotation = rotationOffsetRef.current;
+        const baseScale = baseScaleRef.current;
 
-          const targetScaleY = talkingNow ? 1 + Math.abs(Math.sin(timeRef.current * 8)) * 0.12 : 1;
-          const targetScaleXZ = talkingNow ? 1 - Math.abs(Math.sin(timeRef.current * 6)) * 0.05 : 1;
+        meshRef.current.rotation.x += (baseRotation.x - meshRef.current.rotation.x) * 0.1;
+        meshRef.current.rotation.z += (baseRotation.z - meshRef.current.rotation.z) * 0.1;
+
+        if (!hasTalkingClip) {
+          const talkRotationOffset = talkingNow ? Math.sin(timeRef.current * 5) * 0.1 : 0;
+          const targetRotationY = baseRotation.y + talkRotationOffset;
+          meshRef.current.rotation.y += (targetRotationY - meshRef.current.rotation.y) * 0.1;
+
+          const pulseY = Math.abs(Math.sin(timeRef.current * 8));
+          const pulseXZ = Math.abs(Math.sin(timeRef.current * 6));
+          const targetScaleY = talkingNow ? baseScale.y * (1 + pulseY * 0.12) : baseScale.y;
+          const targetScaleXZ = talkingNow ? baseScale.x * (1 - pulseXZ * 0.05) : baseScale.x;
           meshRef.current.scale.y += (targetScaleY - meshRef.current.scale.y) * 0.1;
           meshRef.current.scale.x += (targetScaleXZ - meshRef.current.scale.x) * 0.1;
           meshRef.current.scale.z += (targetScaleXZ - meshRef.current.scale.z) * 0.1;
         } else {
-          meshRef.current.rotation.y *= 0.9;
-          meshRef.current.scale.x += (1 - meshRef.current.scale.x) * 0.1;
-          meshRef.current.scale.y += (1 - meshRef.current.scale.y) * 0.1;
-          meshRef.current.scale.z += (1 - meshRef.current.scale.z) * 0.1;
+          meshRef.current.rotation.y += (baseRotation.y - meshRef.current.rotation.y) * 0.1;
+          meshRef.current.scale.x += (baseScale.x - meshRef.current.scale.x) * 0.1;
+          meshRef.current.scale.y += (baseScale.y - meshRef.current.scale.y) * 0.1;
+          meshRef.current.scale.z += (baseScale.z - meshRef.current.scale.z) * 0.1;
         }
       }
 
@@ -311,6 +403,26 @@ export function BartenderAvatar({
   useEffect(() => {
     talkingRef.current = isTalking;
   }, [isTalking]);
+
+  useEffect(() => {
+    if (!sceneRef.current) {
+      return;
+    }
+
+    const scene = sceneRef.current;
+    const assetModule = (modelDefinition?.asset ?? modelPath ?? DEFAULT_MODEL) as ImageSourcePropType;
+    const token = ++loadTokenRef.current;
+
+    if (!assetModule) {
+      attachPlaceholderModel(scene);
+      return;
+    }
+
+    loadCustomModel(scene, assetModule, modelDefinition, token).catch((error) => {
+      console.warn('[BartenderAvatar] Failed to swap model', error);
+      attachPlaceholderModel(scene);
+    });
+  }, [modelDefinition?.id, modelPath]);
 
   useEffect(() => {
     if (mixerRef.current) {
@@ -362,9 +474,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   container: {
-    width: Platform.OS === 'web' ? '100%' : '85%', // Smaller on mobile to prevent cutoff
-    aspectRatio: 1, // Square container for circular appearance
-    maxWidth: Platform.OS === 'web' ? '100%' : 280, // Max size limit on mobile
+  width: Platform.OS === 'web' ? '70%' : '65%', // Reduce overall footprint for more chat space
+  aspectRatio: 1, // Square container for circular appearance
+  maxWidth: Platform.OS === 'web' ? 360 : 210, // Reduce max size for more vertical room
     backgroundColor: 'transparent',
     borderRadius: 9999, // Fully circular
     overflow: 'hidden',
