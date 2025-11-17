@@ -7,10 +7,9 @@ import { useRouter } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { type Drink } from '@/constants/drinks';
-import { useFavorites } from '../../contexts/favorites';
 import { CATEGORY_COLORS, DIFFICULTY_COLORS } from '@/constants/ui-palette';
 import { useThemeColor } from '@/hooks/use-theme-color';
-import { getDrinks } from '@/utils/drinks-api';
+import { getDrinks, toggleFavorite as toggleFavoriteApi } from '@/utils/drinks-api';
 import { useSettings } from '@/contexts/settings';
 
 type SortOption = 'difficulty' | 'alcohol' | 'name' | 'prepTime';
@@ -29,7 +28,6 @@ export default function MenuScreen() {
   const { apiBaseUrl } = useSettings();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
-  const { isFavorite, toggleFavorite } = useFavorites();
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [sortBy, setSortBy] = useState<SortOption>('difficulty');
   const [prepTimeFilter, setPrepTimeFilter] = useState<'any' | 'under2' | 'under3' | 'under4'>('any');
@@ -64,6 +62,17 @@ export default function MenuScreen() {
   const toggleExpanded = useCallback((id: string) => {
     setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
   }, []);
+
+  const handleToggleFavorite = useCallback(async (drinkId: string) => {
+    try {
+      const updatedDrink = await toggleFavoriteApi(drinkId, apiBaseUrl);
+      // Update the drink in the local state
+      setAllDrinks(prev => prev.map(d => d.id === drinkId ? updatedDrink : d));
+    } catch (err) {
+      console.error('[MenuScreen] Error toggling favorite:', err);
+      // Optionally show an error message to the user
+    }
+  }, [apiBaseUrl]);
 
   const categories = ['All', 'Cocktail', 'Whiskey', 'Rum', 'Gin', 'Vodka', 'Tequila', 'Brandy'];
   const sortOptions: { key: SortOption; label: string }[] = [
@@ -199,11 +208,11 @@ export default function MenuScreen() {
           <ThemedText type="defaultSemiBold" style={styles.drinkName}>
             {drink.name}
           </ThemedText>
-          <TouchableOpacity onPress={() => toggleFavorite(drink.id)}>
+          <TouchableOpacity onPress={() => handleToggleFavorite(drink.id)}>
             <Ionicons
-              name={isFavorite(drink.id) ? 'heart' : 'heart-outline'}
+              name={drink.favorited ? 'heart' : 'heart-outline'}
               size={20}
-              color={isFavorite(drink.id) ? danger : mutedForeground}
+              color={drink.favorited ? danger : mutedForeground}
             />
           </TouchableOpacity>
         </View>
@@ -235,7 +244,7 @@ export default function MenuScreen() {
         </View>
       </TouchableOpacity>
     );
-  }, [expanded, cardBg, borderColor, accent, danger, mutedForeground, badgeBg, badgeText, metaText, toggleFavorite, isFavorite, showDrinkDetails, toggleExpanded]);
+  }, [expanded, cardBg, borderColor, accent, danger, mutedForeground, badgeBg, badgeText, metaText, handleToggleFavorite, showDrinkDetails, toggleExpanded]);
 
   const renderFooter = useCallback(() => {
     if (!loadingMore) return null;

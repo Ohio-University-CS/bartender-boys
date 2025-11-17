@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime
 from bson import ObjectId
 
 from fastapi import APIRouter, HTTPException
@@ -44,6 +45,9 @@ async def get_drinks(
     ),
     user_id: str | None = Query(None, description="Filter drinks by user ID"),
     category: str | None = Query(None, description="Filter drinks by category"),
+    favorited: bool | None = Query(
+        None, description="Filter drinks by favorited status"
+    ),
 ) -> DrinksListResponse:
     """
     Get drinks with pagination.
@@ -53,6 +57,7 @@ async def get_drinks(
         limit: Maximum number of drinks to return (1-100)
         user_id: Optional user ID to filter by
         category: Optional category to filter by
+        favorited: Optional boolean to filter by favorited status
 
     Returns:
         Paginated list of drinks
@@ -63,6 +68,7 @@ async def get_drinks(
             limit=limit,
             user_id=user_id,
             category=category,
+            favorited=favorited,
         )
 
         # Convert documents to Drink models
@@ -96,6 +102,7 @@ async def get_drinks(
                 prepTime=doc.get("prepTime", ""),
                 user_id=doc.get("user_id"),
                 image_url=doc.get("image_url"),
+                favorited=doc.get("favorited", False),
             )
             drinks.append(drink)
 
@@ -140,6 +147,7 @@ async def get_drink_by_id(drink_id: str) -> Drink:
             prepTime=drink_doc["prepTime"],
             user_id=drink_doc.get("user_id"),
             image_url=drink_doc.get("image_url"),
+            favorited=drink_doc.get("favorited", False),
         )
 
         return drink
@@ -191,6 +199,7 @@ async def generate_drink(request: GenerateDrinkRequest) -> GenerateDrinkResponse
             prepTime=request.prepTime,
             user_id=request.user_id,
             image_url=image_url,
+            favorited=False,
         )
 
         # Save to MongoDB
@@ -209,6 +218,7 @@ async def generate_drink(request: GenerateDrinkRequest) -> GenerateDrinkResponse
             prepTime=saved_drink_doc["prepTime"],
             user_id=saved_drink_doc.get("user_id"),
             image_url=saved_drink_doc.get("image_url"),
+            favorited=saved_drink_doc.get("favorited", False),
         )
 
         logger.info(
@@ -224,3 +234,61 @@ async def generate_drink(request: GenerateDrinkRequest) -> GenerateDrinkResponse
     except Exception as e:
         logger.exception("Failed to generate and save drink")
         raise HTTPException(status_code=500, detail=f"Error generating drink: {str(e)}")
+
+
+@router.patch("/{drink_id}/favorite", response_model=Drink)
+async def toggle_favorite(drink_id: str) -> Drink:
+    """
+    Toggle the favorited status of a drink.
+
+    Args:
+        drink_id: Drink ID to toggle favorite status for
+
+    Returns:
+        Updated drink with new favorited status
+    """
+    try:
+        from services.db import get_db_handle
+
+        db = get_db_handle()
+        drinks_collection = db["drinks"]
+
+        # Get current drink
+        drink_doc = await drinks_collection.find_one({"_id": drink_id})
+        if not drink_doc:
+            raise HTTPException(status_code=404, detail="Drink not found")
+
+        # Toggle favorited status (default to True if not set)
+        current_favorited = drink_doc.get("favorited", False)
+        new_favorited = not current_favorited
+
+        # Update the drink
+        await drinks_collection.update_one(
+            {"_id": drink_id},
+            {"$set": {"favorited": new_favorited, "updated_at": datetime.utcnow()}},
+        )
+
+        # Get updated drink
+        updated_drink_doc = await drinks_collection.find_one({"_id": drink_id})
+
+        drink = Drink(
+            id=updated_drink_doc.get("_id", updated_drink_doc.get("id", drink_id)),
+            name=updated_drink_doc["name"],
+            category=updated_drink_doc["category"],
+            ingredients=updated_drink_doc["ingredients"],
+            instructions=updated_drink_doc["instructions"],
+            difficulty=updated_drink_doc["difficulty"],
+            prepTime=updated_drink_doc["prepTime"],
+            user_id=updated_drink_doc.get("user_id"),
+            image_url=updated_drink_doc.get("image_url"),
+            favorited=updated_drink_doc.get("favorited", False),
+        )
+
+        return drink
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Failed to toggle favorite")
+        raise HTTPException(
+            status_code=500, detail=f"Error toggling favorite: {str(e)}"
+        )

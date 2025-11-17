@@ -17,6 +17,9 @@ class Drink(BaseModel):
         None, description="User ID (foreign key) who created/saved this drink"
     )
     image_url: Optional[str] = Field(None, description="URL of the drink image")
+    favorited: Optional[bool] = Field(
+        None, description="Whether the drink is favorited (optional, defaults to false)"
+    )
 
 
 class GenerateImageRequest(BaseModel):
