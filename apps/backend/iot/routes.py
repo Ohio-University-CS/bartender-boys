@@ -1,14 +1,23 @@
 import logging
-import httpx
-from fastapi import APIRouter
-from .models import PourRequest, PourResponse
-from .utils import FirmwareClient
+from fastapi import APIRouter, HTTPException
+
+from .models import PourRequest, PourResponse, SelectedPump
+from .utils import (
+    FirmwareClient,
+    build_firmware_command,
+    get_hardware_profile,
+)
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/iot", tags=["IoT"])
 
 _firmware_client: FirmwareClient | None = None
+try:
+    _hardware_profile = get_hardware_profile()
+except RuntimeError as exc:  # pragma: no cover - configuration issues
+    logger.error("Hardware profile load failed: %s", exc)
+    _hardware_profile = None
 
 
 def get_firmware_client() -> FirmwareClient | None:
@@ -34,33 +43,67 @@ async def send_drink_to_firmware(request: PourRequest) -> PourResponse:
     Returns:
         Response from firmware API, or success response if firmware is unavailable
     """
+    drink_payload = (
+        request.drink.model_dump()
+        if hasattr(request.drink, "model_dump")
+        else request.drink.dict()
+    )
+    if _hardware_profile is None:
+        logger.warning(
+            "Hardware profile unavailable. Defaulting to simulated pump selection."
+        )
+        try:
+            profile = get_hardware_profile()
+            selection = profile.choose_random_pump()
+            global _hardware_profile  # noqa: PLW0603 - update cache after recovery
+            _hardware_profile = profile
+        except RuntimeError as exc:  # pragma: no cover - config missing
+            raise HTTPException(
+                status_code=500,
+                detail="Pi pump configuration not found. Ensure pi_mapping.json exists.",
+            ) from exc
+    else:
+        selection = _hardware_profile.choose_random_pump()
+    selected_pump = SelectedPump(**selection.to_response_dict())
+    command_payload = build_firmware_command(drink_payload, selection)
+
     client = get_firmware_client()
     if client is None:
         logger.warning(
-            "Firmware API URL not configured. Request will succeed without hardware dispense."
+            "Firmware API URL not configured. Simulating pour via pump %s.",
+            selected_pump.id,
         )
         return PourResponse(
             status="ok",
-            message="Firmware API not configured - request accepted but not dispensed",
+            message=(
+                "Firmware API not configured - simulated dispense using "
+                f"{selected_pump.label}"
+            ),
+            selected_pump=selected_pump,
         )
 
     try:
-        drink_dict = request.drink.dict()
-        result = await client.send_drink_request(drink_dict)
-        return PourResponse(**result)
-    except httpx.HTTPError as e:
+        result = await client.send_drink_request(command_payload)
+        status = result.get("status", "ok")
+        message = result.get("message") or f"Dispensing via {selected_pump.label}."
+
+        if status != "ok":
+            return PourResponse(
+                status="error",
+                message=message,
+                selected_pump=selected_pump,
+            )
+
+        return PourResponse(status="ok", message=message, selected_pump=selected_pump)
+    except Exception as exc:
         logger.warning(
-            f"Firmware API is unresponsive: {str(e)}. Request will succeed without hardware dispense."
+            "Firmware communication error (%s). Returning simulated success.", exc
         )
         return PourResponse(
             status="ok",
-            message="Firmware API unresponsive - request accepted but not dispensed",
-        )
-    except Exception as e:
-        logger.warning(
-            f"Unexpected error communicating with firmware: {str(e)}. Request will succeed without hardware dispense."
-        )
-        return PourResponse(
-            status="ok",
-            message="Firmware communication error - request accepted but not dispensed",
+            message=(
+                "Firmware communication error - request accepted using "
+                f"{selected_pump.label}, but hardware may not have dispensed."
+            ),
+            selected_pump=selected_pump,
         )
