@@ -57,7 +57,7 @@ function resolveDevHostIp(): string | null {
 }
 
 // Allow manual override via env (e.g., EAS env vars)
-const MANUAL_API_BASE_URL = (process.env as any)?.API_BASE_URL as string | undefined;
+const MANUAL_API_BASE_URL = '172.18.176.1';
 
 const DEV_HOST_IP = resolveDevHostIp();
 // For iOS physical devices, if we can't auto-detect, try common network IPs
