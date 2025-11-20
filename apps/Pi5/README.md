@@ -49,6 +49,8 @@ uv run uvicorn main:app --host 0.0.0.0 --port 9000
 
 The service ships with sensible defaults but can be tweaked via environment variables (all prefixed with `PI5_`):
 
+Copy `.env.example` in this folder to `.env` and edit as needed. If you secure the Pi endpoints with `PI5_FIRMWARE_AUTH_TOKEN`, set the same value in the backend as `FIRMWARE_API_TOKEN` so requests include the token.
+
 | Variable | Default | Description |
 | --- | --- | --- |
 | `PI5_API_HOST` | `0.0.0.0` | Host interface for FastAPI |

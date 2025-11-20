@@ -45,7 +45,7 @@ async def send_drink_to_firmware(request: PourRequest) -> PourResponse:
         )
 
     try:
-        drink_dict = request.drink.dict()
+        drink_dict = request.drink.dict(by_alias=True, exclude_none=True)
         result = await client.send_drink_request(drink_dict)
         return PourResponse(**result)
     except httpx.HTTPError as e:

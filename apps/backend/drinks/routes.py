@@ -74,6 +74,7 @@ async def get_drinks(
         # Convert documents to Drink models
         drinks = []
         for doc in drinks_docs:
+            hardware_steps = doc.get("hardwareSteps") or doc.get("hardware_steps")
             # Skip documents that don't have required fields
             if not all(
                 key in doc
@@ -100,6 +101,8 @@ async def get_drinks(
                 instructions=doc.get("instructions", ""),
                 difficulty=doc.get("difficulty", "Easy"),
                 prepTime=doc.get("prepTime", ""),
+                hardwareSteps=hardware_steps,
+                dispense=doc.get("dispense"),
                 user_id=doc.get("user_id"),
                 image_url=doc.get("image_url"),
                 favorited=doc.get("favorited", False),
@@ -145,6 +148,9 @@ async def get_drink_by_id(drink_id: str) -> Drink:
             instructions=drink_doc["instructions"],
             difficulty=drink_doc["difficulty"],
             prepTime=drink_doc["prepTime"],
+            hardwareSteps=drink_doc.get("hardwareSteps")
+            or drink_doc.get("hardware_steps"),
+            dispense=drink_doc.get("dispense"),
             user_id=drink_doc.get("user_id"),
             image_url=drink_doc.get("image_url"),
             favorited=drink_doc.get("favorited", False),
@@ -279,6 +285,9 @@ async def toggle_favorite(drink_id: str) -> Drink:
             instructions=updated_drink_doc["instructions"],
             difficulty=updated_drink_doc["difficulty"],
             prepTime=updated_drink_doc["prepTime"],
+            hardwareSteps=updated_drink_doc.get("hardwareSteps")
+            or updated_drink_doc.get("hardware_steps"),
+            dispense=updated_drink_doc.get("dispense"),
             user_id=updated_drink_doc.get("user_id"),
             image_url=updated_drink_doc.get("image_url"),
             favorited=updated_drink_doc.get("favorited", False),

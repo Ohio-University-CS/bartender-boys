@@ -44,6 +44,9 @@ class Settings:
     FIRMWARE_API_URL: str = os.getenv("FIRMWARE_API_URL") or os.getenv(
         "PI_CONTROLLER_URL", ""
     )
+    FIRMWARE_API_TOKEN: Optional[str] = os.getenv("FIRMWARE_API_TOKEN") or os.getenv(
+        "PI5_FIRMWARE_AUTH_TOKEN"
+    )
 
     def validate(self) -> None:
         """Validate required settings"""

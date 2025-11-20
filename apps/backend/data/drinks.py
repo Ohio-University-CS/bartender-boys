@@ -33,7 +33,7 @@ async def create_drink(
     now = datetime.utcnow()
 
     # Convert drink to dict and add database fields
-    drink_doc = drink.model_dump()
+    drink_doc = drink.dict(by_alias=True, exclude_none=True)
     drink_doc["user_id"] = user_id
     drink_doc["created_at"] = now
     drink_doc["updated_at"] = now
@@ -180,7 +180,7 @@ async def update_drink(
         db = get_db_handle()
 
     # Convert drink to dict and update timestamp
-    update_doc = drink.model_dump()
+    update_doc = drink.dict(by_alias=True, exclude_none=True)
     update_doc["updated_at"] = datetime.utcnow()
 
     # Remove _id from update doc to avoid conflicts
