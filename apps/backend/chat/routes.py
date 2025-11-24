@@ -5,7 +5,7 @@ from urllib.parse import unquote
 from datetime import datetime
 from typing import List
 from bson import ObjectId
-from fastapi import APIRouter, HTTPException, Request, Query
+from fastapi import APIRouter, HTTPException, Request, Query, Response
 from fastapi.responses import StreamingResponse
 
 from services.openai import OpenAIService
@@ -387,3 +387,59 @@ async def create_chat(conversation_id: str, chat: ChatCreate):
         content=chat_doc["content"],
         created_at=chat_doc["created_at"],
     )
+
+
+@router.delete("/conversations/{conversation_id}/chats/{chat_id}", status_code=204)
+async def delete_chat(conversation_id: str, chat_id: str):
+    """Delete a single chat message from a conversation."""
+    db = get_db_handle()
+    chats_collection = db["chats"]
+    conversations_collection = db["conversations"]
+
+    try:
+        conv_object_id = ObjectId(conversation_id)
+        chat_object_id = ObjectId(chat_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid ID format")
+
+    # Ensure conversation exists
+    conversation = await conversations_collection.find_one({"_id": conv_object_id})
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+
+    # Ensure chat exists and belongs to the conversation
+    chat_doc = await chats_collection.find_one(
+        {"_id": chat_object_id, "conversation_id": conversation_id}
+    )
+    if not chat_doc:
+        raise HTTPException(status_code=404, detail="Chat not found")
+
+    await chats_collection.delete_one({"_id": chat_object_id})
+    await conversations_collection.update_one(
+        {"_id": conv_object_id}, {"$set": {"updated_at": datetime.utcnow()}}
+    )
+
+    return Response(status_code=204)
+
+
+@router.delete("/conversations/{conversation_id}", status_code=204)
+async def delete_conversation(conversation_id: str):
+    """Delete an entire conversation and its chat messages."""
+    db = get_db_handle()
+    conversations_collection = db["conversations"]
+    chats_collection = db["chats"]
+
+    try:
+        conv_object_id = ObjectId(conversation_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid conversation ID format")
+
+    conversation = await conversations_collection.find_one({"_id": conv_object_id})
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+
+    # Delete chats first, then the conversation record
+    await chats_collection.delete_many({"conversation_id": conversation_id})
+    await conversations_collection.delete_one({"_id": conv_object_id})
+
+    return Response(status_code=204)

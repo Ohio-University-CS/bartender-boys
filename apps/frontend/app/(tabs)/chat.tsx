@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { StyleSheet, View, TouchableOpacity, FlatList, ActivityIndicator } from 'react-native';
+import { StyleSheet, View, TouchableOpacity, FlatList, ActivityIndicator, Alert, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useSettings } from '@/contexts/settings';
@@ -7,7 +7,7 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { getConversations, createConversation, type Conversation } from '@/utils/chat-api';
+import { getConversations, createConversation, deleteConversation, type Conversation } from '@/utils/chat-api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function ChatScreen() {
@@ -18,6 +18,7 @@ export default function ChatScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   // Theme colors
   const backgroundColor = useThemeColor({}, 'background');
@@ -89,6 +90,40 @@ export default function ChatScreen() {
     router.push(`/conversation/${conversationId}` as any);
   }, [router]);
 
+  const confirmDeleteConversation = useCallback((conversation: Conversation) => {
+    const proceed = async () => {
+      setDeletingId(conversation.id);
+      try {
+        await deleteConversation(conversation.id, apiBaseUrl);
+        setConversations((prev) => prev.filter((c) => c.id !== conversation.id));
+      } catch (err: any) {
+        const message = err?.message || 'Failed to delete conversation. Please try again.';
+        console.error('[ChatScreen] Delete conversation error:', err);
+        if (typeof window !== 'undefined') {
+          window.alert(message);
+        }
+      } finally {
+        setDeletingId((current) => (current === conversation.id ? null : current));
+      }
+    };
+
+    if (typeof window !== 'undefined' && Platform.OS === 'web') {
+      if (window.confirm('Delete this conversation and all messages?')) {
+        void proceed();
+      }
+      return;
+    }
+
+    Alert.alert(
+      'Delete conversation',
+      'This will remove the entire chat and its messages.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: () => void proceed() },
+      ]
+    );
+  }, [apiBaseUrl]);
+
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();
@@ -105,23 +140,41 @@ export default function ChatScreen() {
   };
 
   const renderConversation = useCallback(({ item }: { item: Conversation }) => {
+    const isDeleting = deletingId === item.id;
     return (
-      <TouchableOpacity
-        style={[styles.conversationCard, { backgroundColor: cardBg, borderColor }]}
-        onPress={() => handleConversationPress(item.id)}
-      >
-        <View style={styles.conversationContent}>
+      <View style={[styles.conversationCard, { backgroundColor: cardBg, borderColor }]}>
+        <TouchableOpacity style={styles.conversationContent} onPress={() => handleConversationPress(item.id)}>
           <ThemedText type="defaultSemiBold" style={styles.conversationTitle}>
             {item.title || 'New Conversation'}
           </ThemedText>
           <ThemedText style={[styles.conversationDate, { color: metaText }]}>
             {formatDate(item.updated_at)}
           </ThemedText>
+        </TouchableOpacity>
+        <View style={styles.cardActions}>
+          <TouchableOpacity
+            onPress={() => handleConversationPress(item.id)}
+            style={styles.iconButton}
+            accessibilityLabel="Open conversation"
+          >
+            <Ionicons name="chevron-forward" size={20} color={mutedForeground} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => confirmDeleteConversation(item)}
+            style={styles.iconButton}
+            disabled={isDeleting}
+            accessibilityLabel="Delete conversation"
+          >
+            {isDeleting ? (
+              <ActivityIndicator size="small" color={mutedForeground} />
+            ) : (
+              <Ionicons name="trash" size={18} color={mutedForeground} />
+            )}
+          </TouchableOpacity>
         </View>
-        <Ionicons name="chevron-forward" size={20} color={mutedForeground} />
-      </TouchableOpacity>
+      </View>
     );
-  }, [cardBg, borderColor, metaText, mutedForeground, handleConversationPress]);
+  }, [cardBg, borderColor, metaText, mutedForeground, handleConversationPress, deletingId, confirmDeleteConversation]);
 
   const handleBartenderPress = useCallback(() => {
     router.push('/bartender' as any);
@@ -217,6 +270,7 @@ const styles = StyleSheet.create({
   },
   conversationContent: {
     flex: 1,
+    paddingRight: 8,
   },
   conversationTitle: {
     fontSize: 16,
@@ -224,6 +278,15 @@ const styles = StyleSheet.create({
   },
   conversationDate: {
     fontSize: 12,
+  },
+  cardActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  iconButton: {
+    padding: 6,
+    borderRadius: 10,
   },
   loadingContainer: {
     flex: 1,

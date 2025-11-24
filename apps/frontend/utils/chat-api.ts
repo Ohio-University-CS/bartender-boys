@@ -66,6 +66,25 @@ export async function createConversation(
 }
 
 /**
+ * Delete a conversation and all of its chats
+ */
+export async function deleteConversation(
+  conversation_id: string,
+  apiBaseUrl?: string
+): Promise<void> {
+  const baseUrl = apiBaseUrl || API_BASE_URL;
+
+  const response = await fetch(`${baseUrl}/chat/conversations/${conversation_id}`, {
+    method: 'DELETE',
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Failed to delete conversation: ${response.status} - ${errorText}`);
+  }
+}
+
+/**
  * Fetch all chats for a conversation
  */
 export async function getConversationChats(
@@ -114,5 +133,28 @@ export async function createChat(
   }
   
   return response.json();
+}
+
+/**
+ * Delete a chat message from a conversation
+ */
+export async function deleteChat(
+  conversation_id: string,
+  chat_id: string,
+  apiBaseUrl?: string
+): Promise<void> {
+  const baseUrl = apiBaseUrl || API_BASE_URL;
+
+  const response = await fetch(
+    `${baseUrl}/chat/conversations/${conversation_id}/chats/${chat_id}`,
+    {
+      method: 'DELETE',
+    }
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Failed to delete chat: ${response.status} - ${errorText}`);
+  }
 }
 
