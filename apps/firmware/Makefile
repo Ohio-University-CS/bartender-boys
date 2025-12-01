@@ -15,32 +15,16 @@ dev:
 	uv run uvicorn main:app --reload --host 0.0.0.0 --port $(PORT)
 
 # Run with ngrok (production mode) - uses helper script for better process management
-run-ngrok: stop-ngrok
+run-ngrok:
+	@-$(MAKE) stop-ngrok || true
 	@./start-with-ngrok.sh prod
 
 # Run with ngrok (development mode with hot reload) - uses helper script
-dev-ngrok: stop-ngrok
+dev-ngrok:
+	@-$(MAKE) stop-ngrok || true
 	@./start-with-ngrok.sh dev
 
 # Stop ngrok and uvicorn processes
 stop-ngrok:
-	@if [ -f $(NGROK_PID_FILE) ]; then \
-		PID=$$(cat $(NGROK_PID_FILE) 2>/dev/null); \
-		if [ -n "$$PID" ] && kill -0 $$PID 2>/dev/null; then \
-			kill $$PID 2>/dev/null || true; \
-		fi; \
-		rm -f $(NGROK_PID_FILE); \
-		echo "Stopped ngrok"; \
-	fi
-	@if [ -f $(PID_FILE) ]; then \
-		PID=$$(cat $(PID_FILE) 2>/dev/null); \
-		if [ -n "$$PID" ] && kill -0 $$PID 2>/dev/null; then \
-			kill $$PID 2>/dev/null || true; \
-		fi; \
-		rm -f $(PID_FILE); \
-		echo "Stopped uvicorn"; \
-	fi
-	@pkill -f "ngrok http" 2>/dev/null || true
-	@pkill -f "uvicorn main:app" 2>/dev/null || true
-	@echo "Cleanup complete"
+	@./stop-processes.sh
 
