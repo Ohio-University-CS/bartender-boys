@@ -65,16 +65,47 @@ sleep 2
 echo "Starting ngrok tunnel..."
 ngrok http $PORT --log=stdout > .ngrok.log 2>&1 &
 echo $! > "$NGROK_PID_FILE"
-sleep 3
+sleep 5
 
-# Get ngrok URL
+# Get ngrok URL with retries
 echo ""
 echo "=========================================="
 echo "FastAPI server running on http://localhost:$PORT"
 echo "Waiting for ngrok URL..."
-sleep 2
 
-NGROK_URL=$(curl -s http://localhost:4040/api/tunnels 2>/dev/null | grep -o '"public_url":"[^"]*' | grep -o 'https://[^"]*' | head -1)
+NGROK_URL=""
+MAX_RETRIES=10
+RETRY_COUNT=0
+
+while [ -z "$NGROK_URL" ] && [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+    sleep 1
+    RETRY_COUNT=$((RETRY_COUNT + 1))
+    
+    # Try to get URL from ngrok API
+    API_RESPONSE=$(curl -s http://localhost:4040/api/tunnels 2>/dev/null)
+    
+    if [ -n "$API_RESPONSE" ]; then
+        # Try multiple extraction methods
+        # Method 1: Using grep for public_url
+        NGROK_URL=$(echo "$API_RESPONSE" | grep -o '"public_url":"https://[^"]*' | grep -o 'https://[^"]*' | head -1)
+        
+        # Method 2: If jq is available, use it (more reliable)
+        if [ -z "$NGROK_URL" ] && command -v jq &> /dev/null; then
+            NGROK_URL=$(echo "$API_RESPONSE" | jq -r '.tunnels[0].public_url' 2>/dev/null | grep '^https://')
+        fi
+        
+        # Method 3: Alternative grep pattern
+        if [ -z "$NGROK_URL" ]; then
+            NGROK_URL=$(echo "$API_RESPONSE" | grep -oP '"public_url"\s*:\s*"https://[^"]*' | grep -oP 'https://[^"]*' | head -1)
+        fi
+    fi
+    
+    if [ -z "$NGROK_URL" ]; then
+        echo -n "."
+    fi
+done
+
+echo ""
 
 if [ -n "$NGROK_URL" ]; then
     echo "ngrok URL: $NGROK_URL"
@@ -82,8 +113,12 @@ if [ -n "$NGROK_URL" ]; then
     echo "Set this URL in your backend environment:"
     echo "  export FIRMWARE_API_URL=$NGROK_URL"
 else
-    echo "ngrok URL: Check http://localhost:4040 for the tunnel URL"
-    echo "Or run: curl http://localhost:4040/api/tunnels"
+    echo "Could not automatically detect ngrok URL."
+    echo ""
+    echo "You can find it by:"
+    echo "  1. Opening http://localhost:4040 in your browser"
+    echo "  2. Running: curl http://localhost:4040/api/tunnels | jq '.tunnels[0].public_url'"
+    echo "  3. Checking the ngrok web interface"
 fi
 echo "=========================================="
 echo "Press Ctrl+C to stop"
