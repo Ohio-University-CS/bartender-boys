@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 from fastapi import APIRouter, Header
 from typing import Optional, Literal
 from pydantic import BaseModel
@@ -17,6 +18,47 @@ logger = logging.getLogger(__name__)
 
 # GPIO pin to control (using pin 17 as default, can be configured)
 GPIO_PIN = 17
+
+# Onboard LED paths (varies by Pi model)
+LED_PATHS = [
+    "/sys/class/leds/led0/brightness",  # Older Pi models
+    "/sys/class/leds/ACT/brightness",     # Pi 4 and newer
+    "/sys/class/leds/PWR/brightness",    # Power LED (some models)
+]
+
+
+async def flicker_onboard_led(times: int = 3, duration: float = 0.1):
+    """
+    Flicker the onboard LED to indicate request received.
+    
+    Args:
+        times: Number of times to flicker
+        duration: Duration of each on/off cycle in seconds
+    """
+    led_path = None
+    for path in LED_PATHS:
+        if os.path.exists(path):
+            led_path = path
+            break
+    
+    if not led_path:
+        logger.debug("Onboard LED not found - skipping LED flicker")
+        return
+    
+    try:
+        for _ in range(times):
+            # Turn LED on
+            with open(led_path, 'w') as f:
+                f.write('1')
+            await asyncio.sleep(duration)
+            # Turn LED off
+            with open(led_path, 'w') as f:
+                f.write('0')
+            await asyncio.sleep(duration)
+    except (PermissionError, IOError) as e:
+        logger.warning(f"Could not control onboard LED: {e}. May need to run with sudo or adjust permissions.")
+    except Exception as e:
+        logger.debug(f"LED flicker error (non-critical): {e}")
 
 
 class DrinkRequest(BaseModel):
@@ -44,6 +86,10 @@ async def receive_drink_request(
     """
     drink = request.drink
     drink_name = drink.get("name", "Unknown drink")
+    
+    # Flicker onboard LED to indicate request received
+    logger.info(f"Received drink request for {drink_name}")
+    await flicker_onboard_led(times=3, duration=0.1)
     
     if not GPIO_AVAILABLE:
         logger.warning("GPIO not available - simulating pour action")
