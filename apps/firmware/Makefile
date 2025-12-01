@@ -8,11 +8,23 @@ NGROK_PID_FILE := .ngrok.pid
 
 # Run the firmware backend normally (no reload)
 run:
-	uv run uvicorn main:app --host 0.0.0.0 --port $(PORT)
+	@if command -v uv &> /dev/null; then \
+		uv run uvicorn main:app --host 0.0.0.0 --port $(PORT); \
+	elif command -v python3 &> /dev/null; then \
+		python3 -m uvicorn main:app --host 0.0.0.0 --port $(PORT); \
+	else \
+		python -m uvicorn main:app --host 0.0.0.0 --port $(PORT); \
+	fi
 
 # Run the firmware backend with hot reload
 dev:
-	uv run uvicorn main:app --reload --host 0.0.0.0 --port $(PORT)
+	@if command -v uv &> /dev/null; then \
+		uv run uvicorn main:app --reload --host 0.0.0.0 --port $(PORT); \
+	elif command -v python3 &> /dev/null; then \
+		python3 -m uvicorn main:app --reload --host 0.0.0.0 --port $(PORT); \
+	else \
+		python -m uvicorn main:app --reload --host 0.0.0.0 --port $(PORT); \
+	fi
 
 # Run with ngrok (production mode) - uses helper script for better process management
 run-ngrok:

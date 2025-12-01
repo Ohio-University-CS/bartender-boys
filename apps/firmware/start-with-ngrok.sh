@@ -37,12 +37,26 @@ if ! command -v ngrok &> /dev/null; then
     exit 1
 fi
 
+# Determine how to run uvicorn
+if command -v uv &> /dev/null; then
+    UVICORN_CMD="uv run uvicorn"
+elif command -v python3 &> /dev/null; then
+    UVICORN_CMD="python3 -m uvicorn"
+elif command -v python &> /dev/null; then
+    UVICORN_CMD="python -m uvicorn"
+else
+    echo "Error: Neither 'uv' nor 'python3'/'python' found in PATH"
+    echo "Please install uv (https://docs.astral.sh/uv/) or ensure Python is installed"
+    exit 1
+fi
+
 # Start FastAPI server
 echo "Starting FastAPI server on port $PORT..."
+echo "Using: $UVICORN_CMD"
 if [ "$MODE" = "dev" ]; then
-    uv run uvicorn main:app --reload --host 0.0.0.0 --port $PORT &
+    $UVICORN_CMD main:app --reload --host 0.0.0.0 --port $PORT &
 else
-    uv run uvicorn main:app --host 0.0.0.0 --port $PORT &
+    $UVICORN_CMD main:app --host 0.0.0.0 --port $PORT &
 fi
 echo $! > "$PID_FILE"
 sleep 2
