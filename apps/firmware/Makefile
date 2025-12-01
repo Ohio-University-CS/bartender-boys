@@ -1,3 +1,5 @@
+SHELL := /bin/bash
+
 .PHONY: run dev run-ngrok dev-ngrok stop-ngrok
 
 PORT := 8001
@@ -23,12 +25,18 @@ dev-ngrok: stop-ngrok
 # Stop ngrok and uvicorn processes
 stop-ngrok:
 	@if [ -f $(NGROK_PID_FILE) ]; then \
-		kill `cat $(NGROK_PID_FILE)` 2>/dev/null || true; \
+		PID=$$(cat $(NGROK_PID_FILE) 2>/dev/null); \
+		if [ -n "$$PID" ] && kill -0 $$PID 2>/dev/null; then \
+			kill $$PID 2>/dev/null || true; \
+		fi; \
 		rm -f $(NGROK_PID_FILE); \
 		echo "Stopped ngrok"; \
 	fi
 	@if [ -f $(PID_FILE) ]; then \
-		kill `cat $(PID_FILE)` 2>/dev/null || true; \
+		PID=$$(cat $(PID_FILE) 2>/dev/null); \
+		if [ -n "$$PID" ] && kill -0 $$PID 2>/dev/null; then \
+			kill $$PID 2>/dev/null || true; \
+		fi; \
 		rm -f $(PID_FILE); \
 		echo "Stopped uvicorn"; \
 	fi
