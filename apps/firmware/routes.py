@@ -1,119 +1,90 @@
-"""IoT firmware routes for the bartender service.
-
-This module exposes a small FastAPI router used by the Pi firmware to
-receive drink dispense requests and execute hardware steps.
-"""
-
-import json
+import asyncio
 import logging
-from pathlib import Path
-from typing import Literal, Optional
+from fastapi import APIRouter, Header
+from typing import Optional, Literal
+from pydantic import BaseModel
 
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
+# Try to import GPIO library (only available on Raspberry Pi)
+try:
+    import RPi.GPIO as GPIO
+    GPIO_AVAILABLE = True
+except ImportError:
+    GPIO_AVAILABLE = False
+    logging.warning("RPi.GPIO not available - running in development mode without hardware control")
 
-from hardware import get_pump_controller
-
-
+router = APIRouter()
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/iot", tags=["IoT"])
+# GPIO pin to control (using pin 17 as default, can be configured)
+GPIO_PIN = 17
 
 
-class HardwareStep(BaseModel):
-    pump: str = Field(..., description="Pump identifier to activate")
-    seconds: float = Field(..., gt=0, le=15, description="Run time for the pump")
+class DrinkRequest(BaseModel):
+    """Request model for drink dispense."""
+    drink: dict
 
 
-class Drink(BaseModel):
-    """Drink model matching the frontend interface."""
-    id: str
-    name: str
-    category: str
-    ingredients: list[str]
-    instructions: str
-    difficulty: Literal["Easy", "Medium", "Hard"]
-    prepTime: str
-    hardwareSteps: Optional[list[HardwareStep]] = None
-
-
-class PourRequest(BaseModel):
-    """Request model for receiving a drink from the main backend."""
-    drink: Drink
-
-
-class PourResponse(BaseModel):
-    """Response model for drink requests."""
+class DrinkResponse(BaseModel):
+    """Response model for drink dispense."""
     status: Literal["ok", "error"]
     message: str
 
 
-class HardwareMapping(BaseModel):
-    """Mapping between logical components and physical GPIO pins."""
-
-    pumps: dict[str, int]
-    flow_rates_ml_per_second: dict[str, float] | None = None
-    defaults: dict[str, float] | None = None
-    calibration: dict[str, dict[str, float | str]] | None = None
-
-
-def load_hardware_mapping() -> HardwareMapping | None:
-    """Load the Raspberry Pi hardware mapping if present."""
-    config_path = Path(__file__).resolve().parent.parent / "backend" / "config" / "pi_mapping.json"
-    if not config_path.exists():
-        logger.info("Hardware mapping file not found at %s", config_path)
-        return None
-
-    try:
-        data = json.loads(config_path.read_text(encoding="utf-8"))
-        return HardwareMapping.model_validate(data)
-    except Exception as exc:  # Broad to capture JSON or validation errors
-        logger.error("Failed to load hardware mapping: %s", exc)
-        raise HTTPException(status_code=500, detail="Invalid hardware mapping configuration")
-
-
-@router.post("/drink", response_model=PourResponse)
-async def receive_drink_request(request: PourRequest) -> PourResponse:
+@router.post("/iot/drink", response_model=DrinkResponse)
+async def receive_drink_request(
+    request: DrinkRequest,
+    x_firmware_token: Optional[str] = Header(None, alias="X-Firmware-Token"),
+    authorization: Optional[str] = Header(None),
+):
     """
-    Receive a drink request from the main backend.
-    Logs the request and attempts to execute any provided hardware steps.
-
-    Args:
-        request: Drink request containing the drink object
-
-    Returns:
-        PourResponse indicating success or error
+    Receive a drink request from the backend.
+    
+    This endpoint accepts pour requests from the backend and processes them
+    for hardware dispense. Turns on a GPIO pin for 1 second, then turns it off.
     """
     drink = request.drink
-    logger.info("Received drink request: %s (ID: %s)", drink.name, drink.id)
-    logger.info(
-        "Category: %s, Difficulty: %s, Prep time: %s",
-        drink.category,
-        drink.difficulty,
-        drink.prepTime,
-    )
-
-    steps = drink.hardwareSteps or []
-    if not steps:
-        logger.warning("No hardware steps supplied for drink '%s'", drink.name)
-        return PourResponse(status="error", message="No hardware steps supplied")
-
-    controller = get_pump_controller()
-    paused_results: list[dict] = []
-
-    try:
-        paused_results = await controller.dispense_steps(
-            [step.model_dump() for step in steps]
+    drink_name = drink.get("name", "Unknown drink")
+    
+    if not GPIO_AVAILABLE:
+        logger.warning("GPIO not available - simulating pour action")
+        return DrinkResponse(
+            status="ok",
+            message=f"Received drink request for {drink_name}. GPIO not available (development mode).",
         )
-    except ValueError as exc:
-        logger.exception("Failed to dispense drink '%s'", drink.name)
-        return PourResponse(status="error", message=str(exc))
-    except Exception as exc:  # pragma: no cover - defensive guard for runtime faults.
-        logger.exception("Unexpected failure while dispensing drink '%s'", drink.name)
-        return PourResponse(status="error", message=f"Dispense failure: {exc}")
-
-    logger.info("Dispense complete with %d steps", len(paused_results))
-
-    mode = "hardware" if controller.hardware_available else "simulation"
-    return PourResponse(status="ok", message=f"Dispense complete ({mode})")
+    
+    try:
+        # Set up GPIO
+        GPIO.setmode(GPIO.BCM)
+        GPIO.setup(GPIO_PIN, GPIO.OUT)
+        
+        # Turn on GPIO pin
+        logger.info(f"Turning on GPIO pin {GPIO_PIN} for {drink_name}")
+        GPIO.output(GPIO_PIN, GPIO.HIGH)
+        
+        # Wait for 1 second
+        await asyncio.sleep(1.0)
+        
+        # Turn off GPIO pin
+        logger.info(f"Turning off GPIO pin {GPIO_PIN}")
+        GPIO.output(GPIO_PIN, GPIO.LOW)
+        
+        # Clean up GPIO
+        GPIO.cleanup(GPIO_PIN)
+        
+        return DrinkResponse(
+            status="ok",
+            message=f"Successfully dispensed {drink_name} (GPIO pin {GPIO_PIN} activated for 1 second).",
+        )
+    except Exception as e:
+        logger.error(f"Error controlling GPIO: {str(e)}")
+        # Clean up GPIO on error
+        try:
+            if GPIO_AVAILABLE:
+                GPIO.cleanup(GPIO_PIN)
+        except Exception:
+            pass
+        return DrinkResponse(
+            status="error",
+            message=f"Failed to control GPIO: {str(e)}",
+        )
 
