@@ -16,8 +16,8 @@ except ImportError:
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-# GPIO pin to control (using pin 17 as default, can be configured)
-GPIO_PIN = 17
+# GPIO pin to control (using pin 2 as default, can be configured)
+GPIO_PIN = 2
 
 # Onboard LED paths (varies by Pi model)
 LED_PATHS = [
