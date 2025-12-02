@@ -103,6 +103,9 @@ async def receive_drink_request(
         GPIO.setmode(GPIO.BCM)
         GPIO.setup(GPIO_PIN, GPIO.OUT)
         
+        # Initialize to LOW (off) to ensure pin starts in off state
+        GPIO.output(GPIO_PIN, GPIO.LOW)
+        
         # Turn on GPIO pin
         logger.info(f"Turning on GPIO pin {GPIO_PIN} for {drink_name}")
         GPIO.output(GPIO_PIN, GPIO.HIGH)
@@ -110,11 +113,11 @@ async def receive_drink_request(
         # Wait for 1 second
         await asyncio.sleep(1.0)
         
-        # Turn off GPIO pin
+        # Turn off GPIO pin (ensure it's off)
         logger.info(f"Turning off GPIO pin {GPIO_PIN}")
         GPIO.output(GPIO_PIN, GPIO.LOW)
         
-        # Clean up GPIO
+        # Clean up GPIO (this also ensures pin is off)
         GPIO.cleanup(GPIO_PIN)
         
         return DrinkResponse(
@@ -123,9 +126,14 @@ async def receive_drink_request(
         )
     except Exception as e:
         logger.error(f"Error controlling GPIO: {str(e)}")
-        # Clean up GPIO on error
+        # Clean up GPIO on error - ensure pin is turned off
         try:
             if GPIO_AVAILABLE:
+                # Try to turn off the pin before cleanup
+                try:
+                    GPIO.output(GPIO_PIN, GPIO.LOW)
+                except Exception:
+                    pass
                 GPIO.cleanup(GPIO_PIN)
         except Exception:
             pass
