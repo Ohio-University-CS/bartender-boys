@@ -38,16 +38,62 @@ if ! command -v ngrok &> /dev/null; then
 fi
 
 # Determine how to run uvicorn
-if command -v uv &> /dev/null; then
-    UVICORN_CMD="uv run uvicorn"
-elif command -v python3 &> /dev/null; then
-    UVICORN_CMD="python3 -m uvicorn"
-elif command -v python &> /dev/null; then
-    UVICORN_CMD="python -m uvicorn"
+# Handle sudo case - try to use original user's environment
+if [ "$EUID" -eq 0 ] && [ -n "$SUDO_USER" ]; then
+    # Running as root via sudo - use original user's environment
+    SUDO_HOME=$(eval echo ~$SUDO_USER)
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    
+    # Try venv in current directory first
+    if [ -f "$SCRIPT_DIR/venv/bin/activate" ]; then
+        source "$SCRIPT_DIR/venv/bin/activate"
+        UVICORN_CMD="python -m uvicorn"
+        echo "Using venv from script directory"
+    elif [ -f "$SCRIPT_DIR/.venv/bin/activate" ]; then
+        source "$SCRIPT_DIR/.venv/bin/activate"
+        UVICORN_CMD="python -m uvicorn"
+        echo "Using .venv from script directory"
+    # Try user's uv installation
+    elif [ -f "$SUDO_HOME/.cargo/bin/uv" ]; then
+        UVICORN_CMD="$SUDO_HOME/.cargo/bin/uv run uvicorn"
+        echo "Using uv from user's home directory"
+    elif [ -f "$SUDO_HOME/.local/bin/uv" ]; then
+        UVICORN_CMD="$SUDO_HOME/.local/bin/uv run uvicorn"
+        echo "Using uv from user's local bin"
+    else
+        # Fall back to system Python
+        UVICORN_CMD="python3 -m uvicorn"
+        echo "Warning: Using system Python (venv/uv not found)"
+    fi
 else
-    echo "Error: Neither 'uv' nor 'python3'/'python' found in PATH"
-    echo "Please install uv (https://docs.astral.sh/uv/) or ensure Python is installed"
-    exit 1
+    # Normal user execution - check for venv first
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    if [ -f "$SCRIPT_DIR/venv/bin/activate" ]; then
+        source "$SCRIPT_DIR/venv/bin/activate"
+        UVICORN_CMD="python -m uvicorn"
+        echo "Using venv from script directory"
+    elif [ -f "$SCRIPT_DIR/.venv/bin/activate" ]; then
+        source "$SCRIPT_DIR/.venv/bin/activate"
+        UVICORN_CMD="python -m uvicorn"
+        echo "Using .venv from script directory"
+    elif [ -n "$VIRTUAL_ENV" ] && [ -f "$VIRTUAL_ENV/bin/activate" ]; then
+        source "$VIRTUAL_ENV/bin/activate"
+        UVICORN_CMD="python -m uvicorn"
+        echo "Using active virtual environment"
+    elif command -v uv &> /dev/null; then
+        UVICORN_CMD="uv run uvicorn"
+        echo "Using: uv"
+    elif command -v python3 &> /dev/null; then
+        UVICORN_CMD="python3 -m uvicorn"
+        echo "Using: python3"
+    elif command -v python &> /dev/null; then
+        UVICORN_CMD="python -m uvicorn"
+        echo "Using: python"
+    else
+        echo "Error: Neither 'uv' nor 'python3'/'python' found in PATH"
+        echo "Please install uv (https://docs.astral.sh/uv/) or ensure Python is installed"
+        exit 1
+    fi
 fi
 
 # Start FastAPI server
