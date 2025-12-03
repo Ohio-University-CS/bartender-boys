@@ -30,21 +30,14 @@ export default function TabLayout() {
       <Tabs.Screen
         name="menu"
         options={{
-          title: '🍸 Menu',
+          title: 'Menu',
           tabBarIcon: ({ color }) => <IconSymbol size={24} name="list.bullet.rectangle" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="favorites"
-        options={{
-          title: '❤️ Favorites',
-          tabBarIcon: ({ color }) => <IconSymbol size={24} name="heart.fill" color={color} />,
         }}
       />
       <Tabs.Screen
         name="chat"
         options={{
-          title: '💬 Chat',
+          title: 'Chat',
           tabBarIcon: ({ color }) => <IconSymbol size={24} name="bubble.left.and.bubble.right" color={color} />,
         }}
       />
@@ -52,7 +45,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="settings"
         options={{
-          title: '⚙️ Settings',
+          title: 'Settings',
           tabBarIcon: ({ color }) => <IconSymbol size={24} name="gear" color={color} />,
         }}
       />

@@ -8,8 +8,10 @@ import Markdown from 'react-native-markdown-display';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { API_BASE_URL } from '@/environment';
+import { FontFamilies } from '@/constants/theme';
 import { useSettings } from '@/contexts/settings';
 import { getConversationChats, createChat, type ChatMessage } from '@/utils/chat-api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function ConversationScreen() {
   const router = useRouter();
@@ -29,6 +31,12 @@ export default function ConversationScreen() {
     new Animated.Value(0),
     new Animated.Value(0),
   ]).current;
+
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      document.title = 'BrewBot - Conversation';
+    }
+  }, []);
 
   const stopTalkingImmediately = useCallback(() => {
     if (talkingTimeoutRef.current) {
@@ -139,11 +147,17 @@ export default function ConversationScreen() {
       // Add the new user message
       openAIMessages.push({ role: 'user', content: text });
       
+      // Get user_id from AsyncStorage if available
+      let userId: string | null = null;
+      try {
+        userId = await AsyncStorage.getItem('user_id');
+      } catch (error) {
+        console.error('Failed to get user_id:', error);
+      }
+      
       const payload = {
-        messages: [
-          { role: 'system', content: 'You are a helpful bartender assistant. Provide concise cocktail advice, recipes, and substitutions. Keep answers short.' },
-          ...openAIMessages,
-        ],
+        messages: openAIMessages,
+        user_id: userId || undefined,
       };
       
       // Prefer EventSource (web native or react-native-sse on native)
@@ -387,7 +401,12 @@ export default function ConversationScreen() {
         ) : (
           <Markdown
             style={{
-              body: { color: bubbleText, fontSize: 15, lineHeight: 22 },
+              body: { 
+                color: bubbleText, 
+                fontSize: 15, 
+                lineHeight: 22,
+                fontFamily: FontFamilies.regular,
+              },
               paragraph: { marginBottom: 8 },
               code_inline: {
                 backgroundColor: aiBubbleBg,
@@ -395,7 +414,7 @@ export default function ConversationScreen() {
                 paddingVertical: 2,
                 borderRadius: 4,
                 fontSize: 13,
-                fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace' }),
+                fontFamily: FontFamilies.mono,
               },
               fence: { backgroundColor: aiBubbleBg, padding: 12, borderRadius: 4, marginVertical: 8 },
               code_block: { backgroundColor: aiBubbleBg, padding: 12, borderRadius: 4, marginVertical: 8 },
@@ -504,6 +523,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 20,
     fontWeight: '700',
+    fontFamily: FontFamilies.bold,
   },
   list: { padding: 12, paddingBottom: 120 },
   bubble: { maxWidth: '80%', padding: 12, borderRadius: 12, marginBottom: 8 },

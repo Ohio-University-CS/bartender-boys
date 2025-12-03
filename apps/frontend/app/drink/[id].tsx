@@ -1,5 +1,5 @@
 import React, { useCallback, useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Alert, ActivityIndicator, Animated } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Alert, ActivityIndicator, Animated, Platform } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { type Drink } from '@/constants/drinks';
@@ -8,6 +8,7 @@ import { CATEGORY_COLORS, DIFFICULTY_COLORS } from '@/constants/ui-palette';
 import { API_BASE_URL } from '@/environment';
 import { getDrinkById } from '@/utils/drinks-api';
 import { useSettings } from '@/contexts/settings';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function DrinkDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -36,6 +37,17 @@ export default function DrinkDetailScreen() {
   const wineIconScale = useRef(new Animated.Value(1)).current;
   const checkmarkIconScale = useRef(new Animated.Value(0.8)).current;
   const buttonOpacity = useRef(new Animated.Value(1)).current;
+
+  // Set document title
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      if (drink) {
+        document.title = `BrewBot - ${drink.name}`;
+      } else {
+        document.title = 'BrewBot - Drink';
+      }
+    }
+  }, [drink]);
 
   // Fetch drink from API
   useEffect(() => {
@@ -167,18 +179,49 @@ export default function DrinkDetailScreen() {
       wineIconScale.setValue(1);
       checkmarkIconScale.setValue(0.8);
       buttonOpacity.setValue(1);
+      
+      // Get user_id from AsyncStorage
+      let userId: string | null = null;
+      try {
+        userId = await AsyncStorage.getItem('user_id');
+      } catch (error) {
+        console.error('Failed to get user_id from AsyncStorage:', error);
+      }
+      
       const baseUrl = apiBaseUrl || API_BASE_URL;
       const response = await fetch(`${baseUrl}/iot/pour`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ drink }),
+        body: JSON.stringify({ 
+          drink,
+          user_id: userId || undefined,
+        }),
       });
 
       if (!response.ok) {
-        const errorBody = await response.text();
-        throw new Error(errorBody || `Backend returned ${response.status}`);
+        // Try to parse error response as JSON first
+        let errorMessage = `Backend returned ${response.status}`;
+        try {
+          const errorData = await response.json();
+          if (errorData.message) {
+            errorMessage = errorData.message;
+          } else if (errorData.detail) {
+            errorMessage = errorData.detail;
+          }
+        } catch {
+          // If JSON parsing fails, try text
+          try {
+            const errorText = await response.text();
+            if (errorText) {
+              errorMessage = errorText;
+            }
+          } catch {
+            // Use default error message
+          }
+        }
+        throw new Error(errorMessage);
       }
 
       const result = await response.json();
@@ -186,10 +229,13 @@ export default function DrinkDetailScreen() {
         setPourSuccess(true);
         Alert.alert('Dispensing started', result.message || 'Your drink is on the way!');
       } else {
+        // Handle error status from backend (e.g., missing ingredients)
         Alert.alert('Dispense failed', result.message || 'Unknown error');
       }
     } catch (error: any) {
-      Alert.alert('Dispense failed', error?.message ?? 'Unknown error');
+      // Display user-friendly error message
+      const errorMessage = error?.message ?? 'Unknown error occurred';
+      Alert.alert('Dispense failed', errorMessage);
     } finally {
       setPouring(false);
     }

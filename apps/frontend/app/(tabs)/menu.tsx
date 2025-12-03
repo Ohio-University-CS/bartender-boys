@@ -1,16 +1,18 @@
 import { useMemo, useState, useEffect, useCallback } from 'react';
-import { StyleSheet, FlatList, ScrollView, TouchableOpacity, TextInput, View, Platform, ActivityIndicator } from 'react-native';
+import { StyleSheet, FlatList, ScrollView, TouchableOpacity, TextInput, View, Platform, ActivityIndicator, Image, Modal } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { TabHeader } from '@/components/tab-header';
 import { type Drink } from '@/constants/drinks';
 import { CATEGORY_COLORS, DIFFICULTY_COLORS } from '@/constants/ui-palette';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { getDrinks, toggleFavorite as toggleFavoriteApi } from '@/utils/drinks-api';
 import { useSettings } from '@/contexts/settings';
+import { webStyles } from '@/utils/web-styles';
 
 type SortOption = 'difficulty' | 'alcohol' | 'name' | 'prepTime';
 
@@ -26,13 +28,19 @@ export default function MenuScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { apiBaseUrl } = useSettings();
+
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      document.title = 'Menu';
+    }
+  }, []);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [sortBy, setSortBy] = useState<SortOption>('difficulty');
   const [prepTimeFilter, setPrepTimeFilter] = useState<'any' | 'under2' | 'under3' | 'under4'>('any');
   const [ingredientCountFilter, setIngredientCountFilter] = useState<'any' | 'under4' | 'under6' | 'under8'>('any');
-  const [showMoreFilters, setShowMoreFilters] = useState(false);
+  const [showFilterMenu, setShowFilterMenu] = useState(false);
   
   // API state
   const [allDrinks, setAllDrinks] = useState<Drink[]>([]);
@@ -74,7 +82,7 @@ export default function MenuScreen() {
     }
   }, [apiBaseUrl]);
 
-  const categories = ['All', 'Cocktail', 'Whiskey', 'Rum', 'Gin', 'Vodka', 'Tequila', 'Brandy'];
+  const categories = ['All', 'Favorites', 'Cocktail', 'Whiskey', 'Rum', 'Gin', 'Vodka', 'Tequila', 'Brandy'];
   const sortOptions: { key: SortOption; label: string }[] = [
     { key: 'difficulty', label: 'Difficulty' },
     { key: 'name', label: 'A-Z' },
@@ -103,12 +111,16 @@ export default function MenuScreen() {
         setLoadingMore(true);
       }
       
-      const category = selectedCategory === 'All' ? undefined : selectedCategory;
+      const isFavoritesFilter = selectedCategory === 'Favorites';
+      const category = selectedCategory === 'All' || isFavoritesFilter ? undefined : selectedCategory;
+      const favorited = isFavoritesFilter ? true : undefined;
+      
       const response = await getDrinks(
         {
           skip,
           limit: PAGE_SIZE,
           category,
+          favorited,
         },
         apiBaseUrl
       );
@@ -166,9 +178,12 @@ export default function MenuScreen() {
         (ingredientCountFilter === 'under6' && ingredientCount <= 6) ||
         (ingredientCountFilter === 'under8' && ingredientCount <= 8);
 
-      return matchesSearch && matchesPrepTime && matchesIngredientCount;
+      // When Favorites filter is selected, only show favorited drinks
+      const matchesFavorites = selectedCategory !== 'Favorites' || drink.favorited;
+
+      return matchesSearch && matchesPrepTime && matchesIngredientCount && matchesFavorites;
     });
-  }, [allDrinks, searchQuery, prepTimeFilter, ingredientCountFilter]);
+  }, [allDrinks, searchQuery, prepTimeFilter, ingredientCountFilter, selectedCategory]);
 
   const sortedItems = useMemo(() => {
     const data = [...filteredDrinks];
@@ -197,50 +212,80 @@ export default function MenuScreen() {
     const isExpanded = !!expanded[drink.id];
     const shownIngredients = isExpanded ? drink.ingredients : drink.ingredients.slice(0, 3);
     const remaining = drink.ingredients.length - shownIngredients.length;
+    const drinkImageUrl = drink.image_url || `https://via.placeholder.com/120x120/1a1a1a/FFA500?text=${encodeURIComponent(drink.name.substring(0, 2))}`;
     
     return (
       <TouchableOpacity
-        style={[styles.drinkCard, { backgroundColor: cardBg, borderColor }]}
+        style={[
+          styles.drinkCard, 
+          { backgroundColor: cardBg, borderColor },
+          webStyles.hoverable,
+          webStyles.shadow,
+        ]}
         onPress={() => showDrinkDetails(drink)}
       >
-        <View style={[styles.accentBar, { backgroundColor: CATEGORY_COLORS[drink.category] || accent }]} />
-        <View style={styles.drinkTopRow}>
-          <ThemedText type="defaultSemiBold" style={styles.drinkName}>
-            {drink.name}
-          </ThemedText>
-          <TouchableOpacity onPress={() => handleToggleFavorite(drink.id)}>
-            <Ionicons
-              name={drink.favorited ? 'heart' : 'heart-outline'}
-              size={20}
-              color={drink.favorited ? danger : mutedForeground}
+        <View style={styles.drinkCardContent}>
+          <View style={styles.drinkImageContainer}>
+            <Image
+              source={{ uri: drinkImageUrl }}
+              style={styles.drinkImage}
+              defaultSource={require('@/assets/images/icon.png')}
             />
-          </TouchableOpacity>
-        </View>
-        <ThemedText style={styles.category} colorName="tint">{drink.category}</ThemedText>
-
-        <View style={styles.badgeRow}>
-          {shownIngredients.map((ing, idx) => (
-            <View key={idx} style={[styles.badge, { backgroundColor: badgeBg }]}>
-              <ThemedText style={[styles.badgeText, { color: badgeText }]}>{ing}</ThemedText>
+          </View>
+          <View style={styles.drinkDetails}>
+            <View style={styles.drinkTopRow}>
+              <View style={styles.drinkNameContainer}>
+                <ThemedText type="defaultSemiBold" style={styles.drinkName} numberOfLines={2}>
+                  {drink.name}
+                </ThemedText>
+                <ThemedText style={styles.category} colorName="tint">{drink.category}</ThemedText>
+              </View>
+              <TouchableOpacity 
+                onPress={(e) => {
+                  e.stopPropagation();
+                  handleToggleFavorite(drink.id);
+                }}
+                style={[webStyles.hoverable, webStyles.transition]}
+              >
+                <Ionicons
+                  name={drink.favorited ? 'heart' : 'heart-outline'}
+                  size={20}
+                  color={drink.favorited ? danger : mutedForeground}
+                />
+              </TouchableOpacity>
             </View>
-          ))}
-          {remaining > 0 && !isExpanded && (
-            <TouchableOpacity onPress={() => toggleExpanded(drink.id)}>
-              <ThemedText style={styles.moreText} colorName="tint">+{remaining} more</ThemedText>
-            </TouchableOpacity>
-          )}
-          {isExpanded && (
-            <TouchableOpacity onPress={() => toggleExpanded(drink.id)}>
-              <ThemedText style={styles.moreText} colorName="tint">Show less</ThemedText>
-            </TouchableOpacity>
-          )}
-        </View>
 
-        <View style={styles.metaRow}>
-          <ThemedText style={[styles.metaText, { color: metaText }]}>{drink.prepTime}</ThemedText>
-          <ThemedText style={[styles.metaText, { color: DIFFICULTY_COLORS[drink.difficulty] || accent, fontWeight: '700' }]}>
-            {drink.difficulty}
-          </ThemedText>
+            <View style={styles.badgeRow}>
+              {shownIngredients.map((ing, idx) => (
+                <View key={idx} style={[styles.badge, { backgroundColor: badgeBg }]}>
+                  <ThemedText style={[styles.badgeText, { color: badgeText }]}>{ing}</ThemedText>
+                </View>
+              ))}
+              {remaining > 0 && !isExpanded && (
+                <TouchableOpacity onPress={(e) => {
+                  e.stopPropagation();
+                  toggleExpanded(drink.id);
+                }}>
+                  <ThemedText style={styles.moreText} colorName="tint">+{remaining} more</ThemedText>
+                </TouchableOpacity>
+              )}
+              {isExpanded && (
+                <TouchableOpacity onPress={(e) => {
+                  e.stopPropagation();
+                  toggleExpanded(drink.id);
+                }}>
+                  <ThemedText style={styles.moreText} colorName="tint">Show less</ThemedText>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            <View style={styles.metaRow}>
+              <ThemedText style={[styles.metaText, { color: metaText }]}>{drink.prepTime}</ThemedText>
+              <ThemedText style={[styles.metaText, { color: DIFFICULTY_COLORS[drink.difficulty] || accent, fontWeight: '700' }]}>
+                {drink.difficulty}
+              </ThemedText>
+            </View>
+          </View>
         </View>
       </TouchableOpacity>
     );
@@ -258,9 +303,18 @@ export default function MenuScreen() {
   return (
     <View style={[styles.container, { backgroundColor, paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
       <View style={styles.containerContent}>
-        <ThemedView colorName="surface" style={[styles.header, { borderBottomColor: borderColor, alignItems: 'center', flexDirection: 'column' }]}>
-          <ThemedText type="title" colorName="tint" style={styles.title}>Full Menu</ThemedText>
-        </ThemedView>
+        <TabHeader 
+          title="Full Menu" 
+          rightActionButtons={
+            <TouchableOpacity
+              onPress={() => setShowFilterMenu(true)}
+              style={styles.filterButton}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Ionicons name="ellipsis-horizontal" size={24} color={textColor} />
+            </TouchableOpacity>
+          }
+        />
 
       <ThemedView
         style={[
@@ -277,6 +331,43 @@ export default function MenuScreen() {
         />
       </ThemedView>
 
+      <ThemedView style={styles.toggleButtonsContainer}>
+        <View style={styles.toggleButtons}>
+          <TouchableOpacity
+            style={[
+              styles.toggleButton,
+              { backgroundColor: cardBg, borderColor },
+              selectedCategory === 'All' && { backgroundColor: accent, borderColor: accent },
+              webStyles.hoverable,
+              webStyles.transition,
+            ]}
+            onPress={() => setSelectedCategory('All')}
+          >
+            <ThemedText
+              style={[styles.toggleButtonText, { color: selectedCategory === 'All' ? onAccent : mutedForeground }]}
+            >
+              All
+            </ThemedText>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.toggleButton,
+              { backgroundColor: cardBg, borderColor },
+              selectedCategory === 'Favorites' && { backgroundColor: accent, borderColor: accent },
+              webStyles.hoverable,
+              webStyles.transition,
+            ]}
+            onPress={() => setSelectedCategory('Favorites')}
+          >
+            <ThemedText
+              style={[styles.toggleButtonText, { color: selectedCategory === 'Favorites' ? onAccent : mutedForeground }]}
+            >
+              Favorites
+            </ThemedText>
+          </TouchableOpacity>
+        </View>
+      </ThemedView>
+
       <ThemedView style={styles.categoriesContainer}>
         <ScrollView
           horizontal
@@ -287,14 +378,10 @@ export default function MenuScreen() {
             Platform.OS === 'web' && styles.categoriesContentWeb
           ]}
         >
-          {categories.map((category) => {
+          {categories.filter(cat => cat !== 'All' && cat !== 'Favorites').map((category) => {
             const isActive = selectedCategory === category;
-            const customColor = category !== 'All' ? CATEGORY_COLORS[category] : accent;
-            const textColorValue = isActive
-              ? category !== 'All'
-                ? '#FFFFFF'
-                : onAccent
-              : mutedForeground;
+            const customColor = CATEGORY_COLORS[category] || accent;
+            const textColorValue = isActive ? '#FFFFFF' : mutedForeground;
             return (
               <TouchableOpacity
                 key={category}
@@ -305,6 +392,8 @@ export default function MenuScreen() {
                     backgroundColor: customColor,
                     borderColor: customColor,
                   },
+                  webStyles.hoverable,
+                  webStyles.transition,
                 ]}
                 onPress={() => setSelectedCategory(category)}
               >
@@ -319,121 +408,122 @@ export default function MenuScreen() {
         </ScrollView>
       </ThemedView>
 
-      <ThemedView style={[styles.filterToggleContainer, Platform.OS === 'web' && styles.filterToggleContainerWeb]}>
+      <Modal
+        visible={showFilterMenu}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowFilterMenu(false)}
+      >
         <TouchableOpacity
-          style={[
-            styles.filterToggleButton,
-            { backgroundColor: chipBg, borderColor: chipBorder },
-          ]}
-          onPress={() => setShowMoreFilters(!showMoreFilters)}
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowFilterMenu(false)}
         >
-          <ThemedText style={styles.filterToggleText} colorName="mutedForeground">
-            {showMoreFilters ? 'Hide Filters' : 'More Filters'}
-          </ThemedText>
-          <Ionicons
-            name={showMoreFilters ? 'chevron-up' : 'chevron-down'}
-            size={16}
-            color={mutedForeground}
-            style={styles.filterToggleIcon}
-          />
+          <ThemedView
+            style={[styles.filterMenu, { backgroundColor: cardBg, borderColor }]}
+            onStartShouldSetResponder={() => true}
+          >
+            <View style={[styles.filterMenuHeader, { borderBottomColor: borderColor }]}>
+              <ThemedText type="defaultSemiBold" style={styles.filterMenuTitle}>Filters</ThemedText>
+              <TouchableOpacity
+                onPress={() => setShowFilterMenu(false)}
+                style={styles.closeButton}
+              >
+                <Ionicons name="close" size={24} color={textColor} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.filterMenuContent} showsVerticalScrollIndicator={false}>
+              <View style={styles.filterMenuSection}>
+                <ThemedText style={styles.filterMenuLabel} colorName="mutedForeground">Sort By</ThemedText>
+                <View style={styles.filterOptions}>
+                  {sortOptions.map((option) => {
+                    const isActive = sortBy === option.key;
+                    return (
+                      <TouchableOpacity
+                        key={option.key}
+                        style={[
+                          styles.filterOption,
+                          { backgroundColor: chipBg, borderColor: chipBorder },
+                          isActive && { backgroundColor: accent, borderColor: accent },
+                          webStyles.hoverable,
+                          webStyles.transition,
+                        ]}
+                        onPress={() => setSortBy(option.key)}
+                      >
+                        <ThemedText
+                          style={styles.filterOptionText}
+                          colorName={isActive ? 'onTint' : 'mutedForeground'}
+                        >
+                          {option.label}
+                        </ThemedText>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+
+              <View style={styles.filterMenuSection}>
+                <ThemedText style={styles.filterMenuLabel} colorName="mutedForeground">Prep Time</ThemedText>
+                <View style={styles.filterOptions}>
+                  {prepTimeOptions.map((option) => {
+                    const isActive = prepTimeFilter === option.key;
+                    return (
+                      <TouchableOpacity
+                        key={option.key}
+                        style={[
+                          styles.filterOption,
+                          { backgroundColor: chipBg, borderColor: chipBorder },
+                          isActive && { backgroundColor: accent, borderColor: accent },
+                          webStyles.hoverable,
+                          webStyles.transition,
+                        ]}
+                        onPress={() => setPrepTimeFilter(option.key)}
+                      >
+                        <ThemedText
+                          style={styles.filterOptionText}
+                          colorName={isActive ? 'onTint' : 'mutedForeground'}
+                        >
+                          {option.label}
+                        </ThemedText>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+
+              <View style={styles.filterMenuSection}>
+                <ThemedText style={styles.filterMenuLabel} colorName="mutedForeground">Ingredient Count</ThemedText>
+                <View style={styles.filterOptions}>
+                  {ingredientCountOptions.map((option) => {
+                    const isActive = ingredientCountFilter === option.key;
+                    return (
+                      <TouchableOpacity
+                        key={option.key}
+                        style={[
+                          styles.filterOption,
+                          { backgroundColor: chipBg, borderColor: chipBorder },
+                          isActive && { backgroundColor: accent, borderColor: accent },
+                          webStyles.hoverable,
+                          webStyles.transition,
+                        ]}
+                        onPress={() => setIngredientCountFilter(option.key)}
+                      >
+                        <ThemedText
+                          style={styles.filterOptionText}
+                          colorName={isActive ? 'onTint' : 'mutedForeground'}
+                        >
+                          {option.label}
+                        </ThemedText>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+            </ScrollView>
+          </ThemedView>
         </TouchableOpacity>
-      </ThemedView>
-
-      {showMoreFilters && (
-        <>
-          <ThemedView style={[styles.filterSection, Platform.OS === 'web' && styles.filterSectionWeb]}>
-            {/* Removed 'Prep time' label */}
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={[styles.sortContent, Platform.OS === 'web' && styles.sortContentWeb]}
-              style={[styles.filterScroll, Platform.OS === 'web' && styles.filterScrollWeb]}
-            >
-              {prepTimeOptions.map((option) => {
-                const isActive = prepTimeFilter === option.key;
-                return (
-                  <TouchableOpacity
-                    key={option.key}
-                    style={[
-                      styles.sortButton,
-                      { backgroundColor: chipBg, borderColor: chipBorder },
-                      isActive && { backgroundColor: accent, borderColor: accent },
-                    ]}
-                    onPress={() => setPrepTimeFilter(option.key)}
-                  >
-                    <ThemedText
-                      style={styles.sortText}
-                      colorName={isActive ? 'onTint' : 'mutedForeground'}
-                    >
-                      {option.label}
-                    </ThemedText>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-
-            {/* Removed 'Ingredient count' label */}
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={[styles.sortContent, Platform.OS === 'web' && styles.sortContentWeb]}
-              style={[styles.filterScroll, Platform.OS === 'web' && styles.filterScrollWeb]}
-            >
-              {ingredientCountOptions.map((option) => {
-                const isActive = ingredientCountFilter === option.key;
-                return (
-                  <TouchableOpacity
-                    key={option.key}
-                    style={[
-                      styles.sortButton,
-                      { backgroundColor: chipBg, borderColor: chipBorder },
-                      isActive && { backgroundColor: accent, borderColor: accent },
-                    ]}
-                    onPress={() => setIngredientCountFilter(option.key)}
-                  >
-                    <ThemedText
-                      style={styles.sortText}
-                      colorName={isActive ? 'onTint' : 'mutedForeground'}
-                    >
-                      {option.label}
-                    </ThemedText>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          </ThemedView>
-
-          <ThemedView style={[styles.sortContainer, Platform.OS === 'web' && styles.sortContainerWeb]}>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={[styles.sortContent, Platform.OS === 'web' && styles.sortContentWeb]}
-            >
-              {sortOptions.map((option) => {
-                const isActive = sortBy === option.key;
-                return (
-                  <TouchableOpacity
-                    key={option.key}
-                    style={[
-                      styles.sortButton,
-                      { backgroundColor: chipBg, borderColor: chipBorder },
-                      isActive && { backgroundColor: accent, borderColor: accent },
-                    ]}
-                    onPress={() => setSortBy(option.key)}
-                  >
-                    <ThemedText
-                      style={styles.sortText}
-                      colorName={isActive ? 'onTint' : 'mutedForeground'}
-                    >
-                      {option.label}
-                    </ThemedText>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          </ThemedView>
-        </>
-      )}
+      </Modal>
 
         {loading && allDrinks.length === 0 ? (
           <View style={styles.loadingContainer}>
@@ -472,10 +562,22 @@ export default function MenuScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    ...Platform.select({
+      web: {
+        alignItems: 'center',
+      },
+    }),
   },
   containerContent: {
     flex: 1,
     alignItems: 'center',
+    ...Platform.select({
+      web: {
+        maxWidth: 1200,
+        width: '100%',
+        marginHorizontal: 'auto',
+      },
+    }),
   },
   loadingContainer: {
     flex: 1,
@@ -495,16 +597,6 @@ const styles = StyleSheet.create({
     marginTop: 12,
     padding: 12,
     borderRadius: 8,
-  },
-  header: {
-    padding: 16,
-    borderBottomWidth: 1,
-    alignItems: 'center',
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: '700',
-    textAlign: 'center',
   },
   searchContainer: {
     margin: 16,
@@ -619,6 +711,14 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 16,
     borderWidth: 1,
+    ...Platform.select({
+      web: {
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        cursor: 'pointer',
+        userSelect: 'none',
+      },
+    }),
   },
   sortText: {
     fontSize: 14,
@@ -630,6 +730,14 @@ const styles = StyleSheet.create({
     marginRight: 8,
     borderRadius: 16,
     borderWidth: 1,
+    ...Platform.select({
+      web: {
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        cursor: 'pointer',
+        userSelect: 'none',
+      },
+    }),
   },
   categoryText: {
     fontSize: 14,
@@ -644,22 +752,107 @@ const styles = StyleSheet.create({
     maxWidth: 680,
     alignSelf: 'center',
   },
+  filterButton: {
+    padding: 4,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Platform.select({
+      web: {
+        cursor: 'pointer',
+      },
+    }),
+  },
+  toggleButtonsContainer: {
+    width: '100%',
+    paddingHorizontal: 16,
+    marginBottom: 12,
+    ...Platform.select({
+      web: {
+        paddingHorizontal: 24,
+      },
+    }),
+  },
+  toggleButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+    ...Platform.select({
+      web: {
+        maxWidth: 400,
+        alignSelf: 'center',
+      },
+    }),
+  },
+  toggleButton: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Platform.select({
+      web: {
+        paddingVertical: 14,
+        cursor: 'pointer',
+        userSelect: 'none',
+      },
+    }),
+  },
+  toggleButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
   drinkCard: {
     borderRadius: 16,
-    padding: 16,
+    padding: 12,
     marginBottom: 12,
     borderWidth: 1,
     width: '100%',
+    ...Platform.select({
+      web: {
+        borderRadius: 18,
+        padding: 14,
+        transition: 'all 0.2s ease-in-out',
+        cursor: 'pointer',
+      },
+    }),
   },
-  accentBar: {
-    height: 4,
-    borderRadius: 999,
-    marginBottom: 10,
+  drinkCardContent: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  drinkImageContainer: {
+    width: 100,
+    height: 100,
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: '#1a1a1a',
+    ...Platform.select({
+      web: {
+        width: 120,
+        height: 120,
+      },
+    }),
+  },
+  drinkImage: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  drinkDetails: {
+    flex: 1,
+    gap: 8,
   },
   drinkTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
+    gap: 8,
+  },
+  drinkNameContainer: {
+    flex: 1,
   },
   drinkHeader: {
     flexDirection: 'row',
@@ -709,5 +902,83 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 16,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  filterMenu: {
+    width: '100%',
+    maxWidth: 400,
+    maxHeight: '80%',
+    borderRadius: 16,
+    borderWidth: 1,
+    overflow: 'hidden',
+    ...Platform.select({
+      web: {
+        borderRadius: 18,
+        boxShadow: '0 8px 24px rgba(0, 0, 0, 0.3)',
+      },
+      default: {
+        elevation: 8,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 12,
+      },
+    }),
+  },
+  filterMenuHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  filterMenuTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  closeButton: {
+    padding: 4,
+    ...Platform.select({
+      web: {
+        cursor: 'pointer',
+      },
+    }),
+  },
+  filterMenuContent: {
+    padding: 16,
+  },
+  filterMenuSection: {
+    marginBottom: 24,
+  },
+  filterMenuLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 12,
+  },
+  filterOptions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  filterOption: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 16,
+    borderWidth: 1,
+    ...Platform.select({
+      web: {
+        cursor: 'pointer',
+        userSelect: 'none',
+      },
+    }),
+  },
+  filterOptionText: {
+    fontSize: 14,
+    fontWeight: '600',
   },
 });

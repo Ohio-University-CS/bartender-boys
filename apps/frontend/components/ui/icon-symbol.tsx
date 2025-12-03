@@ -2,15 +2,7 @@
 
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { SymbolWeight } from 'expo-symbols';
-import { OpaqueColorValue, type StyleProp, type TextStyle, Platform } from 'react-native';
-let Text: React.ComponentType<any>;
-if (Platform.OS === 'web') {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  Text = require('react-native-web').Text;
-} else {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  Text = require('react-native').Text;
-}
+import { OpaqueColorValue, type StyleProp, type TextStyle } from 'react-native';
 
 type IconSymbolName = string;
 
@@ -24,11 +16,11 @@ const MAPPING: { [key: string]: string } = {
   'paperplane.fill': 'send',
   'chevron.left.forwardslash.chevron.right': 'code',
   'chevron.right': 'chevron-right',
-  // Added mappings used by tabs
-  'list.bullet.rectangle': '🍸',
-  'bubble.left.and.bubble.right': '💬',
-  'gear': '⚙️',
-  'heart.fill': '❤️',
+  // Tab navigation icons
+  'list.bullet.rectangle': 'restaurant-menu',
+  'bubble.left.and.bubble.right': 'chat',
+  'gear': 'settings',
+  'heart.fill': 'favorite',
 };
 
 /**
@@ -48,17 +40,11 @@ export function IconSymbol({
   style?: StyleProp<TextStyle>;
   weight?: SymbolWeight;
 }) {
-  // Render emoji for mapped tab icons
-  // Only render emoji for focused tab (large icon), otherwise render nothing for inactive tab icon
-  if (['🍸','❤️','💬','⚙️'].includes(MAPPING[name])) {
-    // If size > 24, assume focused/active tab, render emoji
-    if (size > 24) {
-      // @ts-ignore: color prop for Text
-      return <Text style={[{ fontSize: size, color }, style]}>{MAPPING[name]}</Text>;
-    }
-    // Otherwise, render nothing for inactive tab icon
+  // Use MaterialIcons for all icons (including tab icons)
+  const iconName = MAPPING[name];
+  if (!iconName) {
+    console.warn(`Icon "${name}" not found in mapping`);
     return null;
   }
-  // Fallback to MaterialIcons for other icons
-  return <MaterialIcons color={color} size={size} name={MAPPING[name] as any} style={style} />;
+  return <MaterialIcons color={color} size={size} name={iconName as any} style={style} />;
 }

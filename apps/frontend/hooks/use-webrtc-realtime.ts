@@ -9,6 +9,7 @@ import {
 } from 'react-native-webrtc-web-shim';
 import { getRealtimeToken } from '@/utils/realtime';
 import { useSettings } from '@/contexts/settings';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export interface UseWebRTCRealtimeOptions {
   onTranscript?: (transcript: string) => void;
@@ -31,7 +32,7 @@ export function useWebRTCRealtime(
   options: UseWebRTCRealtimeOptions = {}
 ): UseWebRTCRealtimeReturn {
   const { onTranscript, onEvent, onError, onToolCall } = options;
-  const { realtimeVoice } = useSettings();
+  const { realtimeVoice, apiBaseUrl } = useSettings();
   
   const [isSessionActive, setIsSessionActive] = useState(false);
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
@@ -261,65 +262,105 @@ export function useWebRTCRealtime(
         }
         
         // Configure session with instructions and tools
-        const toolsSchema = [
-          {
-            type: 'function',
-            name: 'kick_user_out',
-            description: 'Call this function when the user is being mean, rude, abusive, or disrespectful to the bartender. This will end the conversation and return the user to the chat page.',
-          },
-          {
-            type: 'function',
-            name: 'generate_drink',
-            description: 'Generate a new drink with an AI-generated image. Use this when the user wants to create a custom drink. You should extract the drink name, category, ingredients list, instructions, difficulty level (Easy, Medium, or Hard), and prep time from the conversation.',
-            parameters: {
-              type: 'object',
-              properties: {
-                name: {
-                  type: 'string',
-                  description: 'The name of the drink',
-                },
-                category: {
-                  type: 'string',
-                  description: 'The category of the drink (e.g., Cocktail, Mocktail, Shot, etc.)',
-                },
-                ingredients: {
-                  type: 'array',
-                  items: { type: 'string' },
-                  description: 'List of ingredients needed for the drink',
-                },
-                instructions: {
-                  type: 'string',
-                  description: 'Step-by-step instructions for making the drink',
-                },
-                difficulty: {
-                  type: 'string',
-                  enum: ['Easy', 'Medium', 'Hard'],
-                  description: 'The difficulty level of making this drink',
-                },
-                prepTime: {
-                  type: 'string',
-                  description: 'The preparation time (e.g., "5 minutes", "10-15 minutes")',
-                },
-                user_id: {
-                  type: 'string',
-                  description: 'The user ID who is creating this drink (optional, defaults to "guest")',
-                },
-              },
-              required: ['name', 'category', 'ingredients', 'instructions', 'difficulty', 'prepTime'],
-            },
-          },
-        ];
+        // Use async IIFE to fetch pump config
+        (async () => {
+          // Fetch pump configuration to include in instructions
+          let availableIngredients: string[] = [];
+          try {
+            const userId = await AsyncStorage.getItem('user_id');
+            if (userId) {
+              const { API_BASE_URL } = await import('@/environment');
+              const apiUrl = apiBaseUrl || API_BASE_URL;
+              const response = await fetch(`${apiUrl}/iot/pump-config?user_id=${encodeURIComponent(userId)}`);
+              if (response.ok) {
+                const config = await response.json();
+                const ingredients = [config.pump1, config.pump2, config.pump3]
+                  .filter((ing: string | null) => ing && ing.trim())
+                  .map((ing: string) => ing.trim());
+                availableIngredients = ingredients;
+                console.log('[useWebRTCRealtime] Loaded pump config with ingredients:', ingredients);
+              }
+            }
+          } catch (error) {
+            console.warn('[useWebRTCRealtime] Failed to load pump config:', error);
+            // Continue without pump config - instructions will be generic
+          }
 
-        const sessionUpdateEvent = {
-          type: 'session.update',
-          session: {
-            modalities: ['text', 'audio'],
-            instructions: 'You are a helpful bartender assistant. Help customers with drink orders and provide friendly service. If a user wants to create a custom drink, use the generate_drink tool to create it with an AI-generated image. If a user is being mean, rude, abusive, or disrespectful to you, use the kick_user_out tool to end the conversation.',
-            tools: toolsSchema,
-          },
-        };
-        console.log('[useWebRTCRealtime] Sending session.update with audio modality and tools');
-        dc.send(JSON.stringify(sessionUpdateEvent));
+          // Build dynamic instructions based on available ingredients
+          let instructionsText = 'You are a helpful bartender assistant. Help customers with drink orders and provide friendly service. ';
+          
+          if (availableIngredients.length > 0) {
+            const ingredientsList = availableIngredients.join(', ');
+            instructionsText += `The user has the following ingredients available in their pumps: ${ingredientsList}. `;
+            instructionsText += 'Only suggest or generate drinks that can be made with these ingredients. ';
+            instructionsText += 'If a user requests a drink with unavailable ingredients, politely suggest alternatives using only the available ingredients. ';
+          } else {
+            instructionsText += 'The user has not configured their pumps yet, so you can suggest any drinks. ';
+          }
+          
+          instructionsText += 'If a user wants to create a custom drink, use the generate_drink tool to create it with an AI-generated image. ';
+          instructionsText += 'If a user is being mean, rude, abusive, or disrespectful to you, use the kick_user_out tool to end the conversation.';
+
+          const toolsSchema = [
+            {
+              type: 'function',
+              name: 'kick_user_out',
+              description: 'Call this function when the user is being mean, rude, abusive, or disrespectful to the bartender. This will end the conversation and return the user to the chat page.',
+            },
+            {
+              type: 'function',
+              name: 'generate_drink',
+              description: 'Generate a new drink with an AI-generated image. Use this when the user wants to create a custom drink. You should extract the drink name, category, ingredients list, instructions, difficulty level (Easy, Medium, or Hard), and prep time from the conversation.',
+              parameters: {
+                type: 'object',
+                properties: {
+                  name: {
+                    type: 'string',
+                    description: 'The name of the drink',
+                  },
+                  category: {
+                    type: 'string',
+                    description: 'The category of the drink (e.g., Cocktail, Mocktail, Shot, etc.)',
+                  },
+                  ingredients: {
+                    type: 'array',
+                    items: { type: 'string' },
+                    description: 'List of ingredients needed for the drink',
+                  },
+                  instructions: {
+                    type: 'string',
+                    description: 'Step-by-step instructions for making the drink',
+                  },
+                  difficulty: {
+                    type: 'string',
+                    enum: ['Easy', 'Medium', 'Hard'],
+                    description: 'The difficulty level of making this drink',
+                  },
+                  prepTime: {
+                    type: 'string',
+                    description: 'The preparation time (e.g., "5 minutes", "10-15 minutes")',
+                  },
+                  user_id: {
+                    type: 'string',
+                    description: 'The user ID who is creating this drink (optional, defaults to "guest")',
+                  },
+                },
+                required: ['name', 'category', 'ingredients', 'instructions', 'difficulty', 'prepTime'],
+              },
+            },
+          ];
+
+          const sessionUpdateEvent = {
+            type: 'session.update',
+            session: {
+              modalities: ['text', 'audio'],
+              instructions: instructionsText,
+              tools: toolsSchema,
+            },
+          };
+          console.log('[useWebRTCRealtime] Sending session.update with audio modality and tools');
+          dc.send(JSON.stringify(sessionUpdateEvent));
+        })();
         
         // After a short delay, verify audio is working by checking track state
         setTimeout(() => {
@@ -512,7 +553,7 @@ export function useWebRTCRealtime(
       }
       setIsSessionActive(false);
     }
-  }, [onTranscript, onEvent, onError, onToolCall, realtimeVoice]);
+  }, [onTranscript, onEvent, onError, onToolCall, realtimeVoice, apiBaseUrl]);
 
   const stopSession = useCallback(() => {
     console.log('[useWebRTCRealtime] Stopping session');

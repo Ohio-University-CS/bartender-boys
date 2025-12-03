@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { StyleSheet, View, TouchableOpacity, Platform, Alert, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -28,6 +28,12 @@ export default function BartenderScreen() {
     () => getBartenderModelDefinition(bartenderModel),
     [bartenderModel],
   );
+
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      document.title = 'BrewBot - Bartender';
+    }
+  }, []);
 
   const { isSessionActive, startSession, stopSession } = useWebRTCRealtime({
     onTranscript: (text) => {

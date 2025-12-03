@@ -3,13 +3,14 @@ import json
 import asyncio
 from urllib.parse import unquote
 from datetime import datetime
-from typing import List
+from typing import List, Optional, Dict, Any
 from bson import ObjectId
 from fastapi import APIRouter, HTTPException, Request, Query, Response
 from fastapi.responses import StreamingResponse
 
 from services.openai import OpenAIService
 from services.db import get_db_handle
+from data.pump_config import get_pump_config
 from .models import (
     ChatRequest,
     ChatResponse,
@@ -37,10 +38,139 @@ def get_openai_service() -> OpenAIService | None:
     return openai_service
 
 
+def get_tools_schema() -> List[Dict[str, Any]]:
+    """Get the tools schema for function calling."""
+    return [
+        {
+            "type": "function",
+            "function": {
+                "name": "generate_drink",
+                "description": "Generate a new drink with an AI-generated image. Use this when the user wants to create a custom drink. Extract the drink name, category, ingredients list, instructions, difficulty level (Easy, Medium, or Hard), and prep time from the conversation.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "name": {
+                            "type": "string",
+                            "description": "The name of the drink",
+                        },
+                        "category": {
+                            "type": "string",
+                            "description": "The category of the drink (e.g., Cocktail, Mocktail, Shot, etc.)",
+                        },
+                        "ingredients": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "List of ingredients needed for the drink",
+                        },
+                        "instructions": {
+                            "type": "string",
+                            "description": "Step-by-step instructions for making the drink",
+                        },
+                        "difficulty": {
+                            "type": "string",
+                            "enum": ["Easy", "Medium", "Hard"],
+                            "description": "The difficulty level of making this drink",
+                        },
+                        "prepTime": {
+                            "type": "string",
+                            "description": "The preparation time (e.g., '5 minutes', '10-15 minutes')",
+                        },
+                        "user_id": {
+                            "type": "string",
+                            "description": "The user ID who is creating this drink (optional, defaults to 'guest')",
+                        },
+                    },
+                    "required": ["name", "category", "ingredients", "instructions", "difficulty", "prepTime"],
+                },
+            },
+        }
+    ]
+
+
+async def handle_function_call(function_name: str, arguments: Dict[str, Any], user_id: Optional[str] = None) -> Dict[str, Any]:
+    """Handle function calls from the chat API."""
+    if function_name == "generate_drink":
+        try:
+            # Use provided user_id or default to guest
+            drink_user_id = arguments.get("user_id") or user_id or "guest"
+            
+            # Prepare request body
+            request_body = {
+                "name": arguments.get("name"),
+                "category": arguments.get("category"),
+                "ingredients": arguments.get("ingredients", []),
+                "instructions": arguments.get("instructions"),
+                "difficulty": arguments.get("difficulty"),
+                "prepTime": arguments.get("prepTime"),
+                "user_id": drink_user_id,
+            }
+            
+            # Call the drinks API to generate the drink
+            # We need to make an internal HTTP call since we're in the same process
+            # For now, we'll import and call the function directly
+            from drinks.routes import generate_drink
+            from drinks.models import GenerateDrinkRequest
+            
+            drink_request = GenerateDrinkRequest(**request_body)
+            result = await generate_drink(drink_request)
+            
+            return {
+                "success": True,
+                "message": f"Successfully created drink '{result.drink.name}'! You can view it in your drinks menu.",
+                "drink": {
+                    "id": result.drink.id,
+                    "name": result.drink.name,
+                    "category": result.drink.category,
+                    "image_url": result.drink.image_url,
+                }
+            }
+        except Exception as e:
+            logger.error(f"Error generating drink: {str(e)}")
+            return {
+                "success": False,
+                "error": f"Failed to generate drink: {str(e)}"
+            }
+    
+    return {"success": False, "error": f"Unknown function: {function_name}"}
+
+
+async def build_system_message(user_id: Optional[str] = None) -> str:
+    """Build system message with pump configuration if available."""
+    base_message = "You are a helpful bartender assistant. Help customers with drink orders and provide friendly service. "
+    
+    if user_id:
+        try:
+            pump_config = await get_pump_config(user_id)
+            if pump_config:
+                available_ingredients = []
+                for pump_key in ["pump1", "pump2", "pump3"]:
+                    pump_value = pump_config.get(pump_key)
+                    if pump_value:
+                        available_ingredients.append(pump_value)
+                
+                if available_ingredients:
+                    ingredients_list = ", ".join(available_ingredients)
+                    base_message += f"The user has the following ingredients available in their pumps: {ingredients_list}. "
+                    base_message += "Only suggest or generate drinks that can be made with these ingredients. "
+                    base_message += "If a user requests a drink with unavailable ingredients, politely suggest alternatives using only the available ingredients. "
+        except Exception as e:
+            logger.warning(f"Failed to load pump config for system message: {str(e)}")
+    
+    base_message += "If a user wants to create a custom drink, use the generate_drink function to create it with an AI-generated image. "
+    base_message += "Keep your responses concise and helpful."
+    
+    return base_message
+
+
 @router.post("/respond")
-async def respond(request: ChatRequest, fastapi_request: Request, stream: bool = False):
+async def respond(
+    request: ChatRequest, 
+    fastapi_request: Request, 
+    stream: bool = False,
+    user_id: Optional[str] = Query(None, description="User ID for pump config and drink creation")
+):
     """
-    Chat completion endpoint.
+    Chat completion endpoint with function calling support.
     - If the client requests `text/event-stream` (or `?stream=true`), stream partial tokens via SSE.
     - Otherwise, return a single JSON response `{ reply: string }`.
     """
@@ -51,18 +181,79 @@ async def respond(request: ChatRequest, fastapi_request: Request, stream: bool =
     accepts = fastapi_request.headers.get("accept", "").lower()
     use_stream = stream or ("text/event-stream" in accepts)
 
+    # Build messages with system message
+    system_message = await build_system_message(user_id)
+    messages = [{"role": "system", "content": system_message}]
+    messages.extend([{"role": m.role, "content": m.content} for m in request.messages])
+    
+    tools = get_tools_schema()
+
     if not use_stream:
         try:
-            completion = service.client.chat.completions.create(
-                model="gpt-4o",
-                messages=[
-                    {"role": m.role, "content": m.content} for m in request.messages
-                ],
-                temperature=0.3,
-                max_tokens=400,
-            )
-            content = completion.choices[0].message.content or ""
+            # Handle function calling in non-streaming mode
+            max_iterations = 5
+            iteration = 0
+            
+            while iteration < max_iterations:
+                completion = service.client.chat.completions.create(
+                    model="gpt-4o",
+                    messages=messages,
+                    tools=tools,
+                    tool_choice="auto",
+                    temperature=0.3,
+                    max_tokens=400,
+                )
+                
+                message = completion.choices[0].message
+                
+                # Check if there's a function call
+                if message.tool_calls:
+                    # Add assistant message with tool calls
+                    messages.append({
+                        "role": "assistant",
+                        "content": message.content or "",
+                        "tool_calls": [
+                            {
+                                "id": tc.id,
+                                "type": tc.type,
+                                "function": {
+                                    "name": tc.function.name,
+                                    "arguments": tc.function.arguments,
+                                }
+                            }
+                            for tc in message.tool_calls
+                        ]
+                    })
+                    
+                    # Execute function calls
+                    for tool_call in message.tool_calls:
+                        function_name = tool_call.function.name
+                        try:
+                            arguments = json.loads(tool_call.function.arguments)
+                        except json.JSONDecodeError:
+                            arguments = {}
+                        
+                        result = await handle_function_call(function_name, arguments, user_id)
+                        
+                        # Add function result to messages
+                        messages.append({
+                            "role": "tool",
+                            "tool_call_id": tool_call.id,
+                            "name": function_name,
+                            "content": json.dumps(result),
+                        })
+                    
+                    iteration += 1
+                    continue
+                
+                # No function call, return the response
+                content = message.content or ""
+                return ChatResponse(reply=content)
+            
+            # If we've exhausted iterations, return the last message
+            content = messages[-1].get("content", "") if messages else ""
             return ChatResponse(reply=content)
+            
         except Exception as e:
             logger.exception("Chat generation failed")
             raise HTTPException(status_code=500, detail=f"Chat error: {str(e)}")
@@ -70,38 +261,113 @@ async def respond(request: ChatRequest, fastapi_request: Request, stream: bool =
     def sse_format(data: dict) -> str:
         return f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
 
-    def event_generator():
+    async def event_generator():
         try:
-            stream_resp = service.client.chat.completions.create(
-                model="gpt-4o",
-                messages=[
-                    {"role": m.role, "content": m.content} for m in request.messages
-                ],
-                temperature=0.3,
-                max_tokens=400,
-                stream=True,
-            )
-
-            for chunk in stream_resp:
-                try:
-                    choices = getattr(chunk, "choices", None)
-                    if not choices:
+            max_iterations = 5
+            iteration = 0
+            
+            while iteration < max_iterations:
+                stream_resp = service.client.chat.completions.create(
+                    model="gpt-4o",
+                    messages=messages,
+                    tools=tools,
+                    tool_choice="auto",
+                    temperature=0.3,
+                    max_tokens=400,
+                    stream=True,
+                )
+                
+                accumulated_content = ""
+                tool_calls = []
+                
+                for chunk in stream_resp:
+                    try:
+                        choices = getattr(chunk, "choices", None)
+                        if not choices:
+                            continue
+                        delta = getattr(choices[0], "delta", None)
+                        if delta is None:
+                            continue
+                        
+                        # Handle content delta
+                        piece = getattr(delta, "content", None)
+                        if piece:
+                            accumulated_content += piece
+                            yield sse_format({"delta": piece})
+                        
+                        # Handle tool call deltas
+                        tool_call_delta = getattr(delta, "tool_calls", None)
+                        if tool_call_delta:
+                            for tc_delta in tool_call_delta:
+                                index = getattr(tc_delta, "index", None)
+                                if index is not None:
+                                    # Ensure we have enough tool calls in the list
+                                    while len(tool_calls) <= index:
+                                        tool_calls.append({
+                                            "id": "",
+                                            "type": "function",
+                                            "function": {"name": "", "arguments": ""}
+                                        })
+                                    
+                                    # Update tool call
+                                    if getattr(tc_delta, "id", None):
+                                        tool_calls[index]["id"] = tc_delta.id
+                                    if getattr(tc_delta.function, "name", None):
+                                        tool_calls[index]["function"]["name"] = tc_delta.function.name
+                                    if getattr(tc_delta.function, "arguments", None):
+                                        tool_calls[index]["function"]["arguments"] += tc_delta.function.arguments
+                    except Exception:
                         continue
-                    delta = getattr(choices[0], "delta", None)
-                    if delta is None:
-                        continue
-                    piece = getattr(delta, "content", None)
-                    if piece:
-                        yield sse_format({"delta": piece})
-                except Exception:
-                    # Continue on malformed chunks
+                
+                # Check if we have tool calls to execute
+                if tool_calls:
+                    # Add assistant message with tool calls
+                    messages.append({
+                        "role": "assistant",
+                        "content": accumulated_content or "",
+                        "tool_calls": [
+                            {
+                                "id": tc["id"],
+                                "type": tc["type"],
+                                "function": {
+                                    "name": tc["function"]["name"],
+                                    "arguments": tc["function"]["arguments"],
+                                }
+                            }
+                            for tc in tool_calls if tc["id"]
+                        ]
+                    })
+                    
+                    # Execute function calls
+                    for tool_call in tool_calls:
+                        if not tool_call["id"]:
+                            continue
+                        
+                        function_name = tool_call["function"]["name"]
+                        try:
+                            arguments = json.loads(tool_call["function"]["arguments"])
+                        except json.JSONDecodeError:
+                            arguments = {}
+                        
+                        result = await handle_function_call(function_name, arguments, user_id)
+                        
+                        # Add function result to messages
+                        messages.append({
+                            "role": "tool",
+                            "tool_call_id": tool_call["id"],
+                            "name": function_name,
+                            "content": json.dumps(result),
+                        })
+                    
+                    iteration += 1
                     continue
-
-            # Signal completion
-            yield sse_format({"done": True})
+                
+                # No tool calls, we're done
+                yield sse_format({"done": True})
+                return
+                
         except Exception as e:
             logger.exception("Streaming chat generation failed")
-            # Send an error event to the client, then end stream
             yield sse_format({"error": str(e)})
 
     headers = {
@@ -117,11 +383,11 @@ async def respond(request: ChatRequest, fastapi_request: Request, stream: bool =
 
 @router.get("/respond_stream")
 async def respond_stream(
-    q: str = Query(..., description="URL-encoded JSON with { messages: Message[] }"),
+    q: str = Query(..., description="URL-encoded JSON with { messages: Message[], user_id?: string }"),
 ):
     """
     SSE endpoint that accepts a URL-encoded JSON object `q` with shape:
-      { "messages": [{ "role": "system"|"user"|"assistant", "content": string }, ...] }
+      { "messages": [{ "role": "system"|"user"|"assistant", "content": string }, ...], "user_id"?: string }
 
     This is designed for EventSource (GET-only) clients, including React Native via react-native-sse.
     """
@@ -133,6 +399,7 @@ async def respond_stream(
         decoded = unquote(q)
         payload = json.loads(decoded)
         raw_messages = payload.get("messages", [])
+        user_id = payload.get("user_id")
         if not isinstance(raw_messages, list):
             raise ValueError("messages must be a list")
         messages = [{"role": m["role"], "content": m["content"]} for m in raw_messages]
@@ -142,31 +409,118 @@ async def respond_stream(
     def sse_format(data: dict) -> str:
         return f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
 
-    def event_generator():
+    async def event_generator():
         try:
-            stream_resp = service.client.chat.completions.create(
-                model="gpt-4o",
-                messages=messages,
-                temperature=0.3,
-                max_tokens=400,
-                stream=True,
-            )
-
-            for chunk in stream_resp:
-                try:
-                    choices = getattr(chunk, "choices", None)
-                    if not choices:
+            # Build messages with system message (replace existing system message if present)
+            system_message = await build_system_message(user_id)
+            # Remove any existing system messages and add ours
+            filtered_messages = [m for m in messages if m.get("role") != "system"]
+            final_messages = [{"role": "system", "content": system_message}] + filtered_messages
+            
+            tools = get_tools_schema()
+            max_iterations = 5
+            iteration = 0
+            
+            while iteration < max_iterations:
+                stream_resp = service.client.chat.completions.create(
+                    model="gpt-4o",
+                    messages=final_messages,
+                    tools=tools,
+                    tool_choice="auto",
+                    temperature=0.3,
+                    max_tokens=400,
+                    stream=True,
+                )
+                
+                accumulated_content = ""
+                tool_calls = []
+                
+                for chunk in stream_resp:
+                    try:
+                        choices = getattr(chunk, "choices", None)
+                        if not choices:
+                            continue
+                        delta = getattr(choices[0], "delta", None)
+                        if delta is None:
+                            continue
+                        
+                        # Handle content delta
+                        piece = getattr(delta, "content", None)
+                        if piece:
+                            accumulated_content += piece
+                            yield sse_format({"delta": piece})
+                        
+                        # Handle tool call deltas
+                        tool_call_delta = getattr(delta, "tool_calls", None)
+                        if tool_call_delta:
+                            for tc_delta in tool_call_delta:
+                                index = getattr(tc_delta, "index", None)
+                                if index is not None:
+                                    # Ensure we have enough tool calls in the list
+                                    while len(tool_calls) <= index:
+                                        tool_calls.append({
+                                            "id": "",
+                                            "type": "function",
+                                            "function": {"name": "", "arguments": ""}
+                                        })
+                                    
+                                    # Update tool call
+                                    if getattr(tc_delta, "id", None):
+                                        tool_calls[index]["id"] = tc_delta.id
+                                    if getattr(tc_delta.function, "name", None):
+                                        tool_calls[index]["function"]["name"] = tc_delta.function.name
+                                    if getattr(tc_delta.function, "arguments", None):
+                                        tool_calls[index]["function"]["arguments"] += tc_delta.function.arguments
+                    except Exception:
                         continue
-                    delta = getattr(choices[0], "delta", None)
-                    if delta is None:
-                        continue
-                    piece = getattr(delta, "content", None)
-                    if piece:
-                        yield sse_format({"delta": piece})
-                except Exception:
+                
+                # Check if we have tool calls to execute
+                if tool_calls:
+                    # Add assistant message with tool calls
+                    final_messages.append({
+                        "role": "assistant",
+                        "content": accumulated_content or "",
+                        "tool_calls": [
+                            {
+                                "id": tc["id"],
+                                "type": tc["type"],
+                                "function": {
+                                    "name": tc["function"]["name"],
+                                    "arguments": tc["function"]["arguments"],
+                                }
+                            }
+                            for tc in tool_calls if tc["id"]
+                        ]
+                    })
+                    
+                    # Execute function calls
+                    for tool_call in tool_calls:
+                        if not tool_call["id"]:
+                            continue
+                        
+                        function_name = tool_call["function"]["name"]
+                        try:
+                            arguments = json.loads(tool_call["function"]["arguments"])
+                        except json.JSONDecodeError:
+                            arguments = {}
+                        
+                        result = await handle_function_call(function_name, arguments, user_id)
+                        
+                        # Add function result to messages
+                        final_messages.append({
+                            "role": "tool",
+                            "tool_call_id": tool_call["id"],
+                            "name": function_name,
+                            "content": json.dumps(result),
+                        })
+                    
+                    iteration += 1
                     continue
-
-            yield sse_format({"done": True})
+                
+                # No tool calls, we're done
+                yield sse_format({"done": True})
+                return
+                
         except Exception as e:
             logger.exception("SSE chat generation failed")
             yield sse_format({"error": str(e)})
