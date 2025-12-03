@@ -1,10 +1,50 @@
 from typing import Literal, Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, validator
+
+
+class DispenseStep(BaseModel):
+    """Represents a single pump activation (matches Pi firmware schema)."""
+
+    pump: str = Field(..., description="Identifier of the pump to activate")
+    seconds: Optional[float] = Field(
+        default=None,
+        gt=0,
+        description="How long to run the pump (takes precedence over ml)",
+    )
+    ml: Optional[float] = Field(
+        default=None,
+        gt=0,
+        description="Target volume; converted to seconds using flow rates",
+    )
+    prime: bool = Field(
+        default=False, description="Use prime time from defaults regardless of ml/seconds"
+    )
+    description: Optional[str] = Field(
+        default=None, description="Optional label describing the step purpose"
+    )
+
+    @validator("pump")
+    def pump_must_not_be_empty(cls, value: str) -> str:  # noqa: D417 - pydantic validator signature
+        if not value.strip():
+            raise ValueError("pump must not be empty")
+        return value
+
+    class Config:
+        allow_population_by_field_name = True
+
+
+class DispensePlan(BaseModel):
+    """Complete dispense plan consisting of multiple steps."""
+
+    steps: list[DispenseStep]
+    pause_between: float = Field(
+        0.25, ge=0, le=5, description="Optional pause between steps"
+    )
 
 
 class Drink(BaseModel):
-    """Drink model matching the frontend interface."""
+    """Drink model matching the frontend + firmware interface."""
 
     id: str
     name: str
@@ -13,6 +53,15 @@ class Drink(BaseModel):
     instructions: str
     difficulty: Literal["Easy", "Medium", "Hard"]
     prepTime: str
+    hardware_steps: Optional[list[DispenseStep]] = Field(
+        default=None,
+        alias="hardwareSteps",
+        description="Explicit pump steps to run on the Pi",
+    )
+    dispense: Optional[DispensePlan] = Field(
+        default=None,
+        description="Alternate dispense plan payload (Pi 2.0 schema)",
+    )
     user_id: Optional[str] = Field(
         None, description="User ID (foreign key) who created/saved this drink"
     )
@@ -20,6 +69,10 @@ class Drink(BaseModel):
     favorited: Optional[bool] = Field(
         None, description="Whether the drink is favorited (optional, defaults to false)"
     )
+
+    class Config:
+        allow_population_by_field_name = True
+        allow_population_by_alias = True
 
 
 class GenerateImageRequest(BaseModel):
@@ -33,19 +86,6 @@ class GenerateImageResponse(BaseModel):
 
     image_url: str
     drink_name: str
-
-
-class DispenseStep(BaseModel):
-    """Represents a single pump activation."""
-
-    pump: str = Field(..., description="Identifier of the pump to activate")
-    seconds: float = Field(..., gt=0, le=15, description="How long to run the pump")
-
-    @field_validator("pump")
-    def pump_must_not_be_empty(cls, value: str) -> str:  # noqa: D417 - pydantic validator signature
-        if not value.strip():
-            raise ValueError("pump must not be empty")
-        return value
 
 
 class DispenseRequest(BaseModel):

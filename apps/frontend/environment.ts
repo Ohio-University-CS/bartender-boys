@@ -56,9 +56,6 @@ function resolveDevHostIp(): string | null {
   return null;
 }
 
-// Allow manual override via env (e.g., EAS env vars)
-const MANUAL_API_BASE_URL = (process.env as any)?.API_BASE_URL as string | undefined;
-
 const DEV_HOST_IP = resolveDevHostIp();
 // For iOS physical devices, if we can't auto-detect, try common network IPs
 // or use manual override. The user can set API_BASE_URL in settings.
@@ -68,10 +65,6 @@ const NETWORK_IP = DEV_HOST_IP || (Platform.OS === 'ios' ? null : '127.0.0.1');
 // For iOS physical devices, if NETWORK_IP is null, we'll need to rely on
 // the settings context or manual API_BASE_URL override
 const getApiBaseUrl = (): string => {
-  if (MANUAL_API_BASE_URL) {
-    console.log('[environment] Using manual API_BASE_URL:', MANUAL_API_BASE_URL);
-    return MANUAL_API_BASE_URL;
-  }
   if (NETWORK_IP) {
     const url = `http://${NETWORK_IP}:8000`;
     console.log('[environment] Using detected IP:', url);

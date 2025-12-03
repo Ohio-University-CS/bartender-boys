@@ -233,10 +233,19 @@ def build_firmware_command(drink: dict, selection: PumpSelection) -> Dict[str, A
 class FirmwareClient:
     """Client for communicating with the firmware API."""
 
-    def __init__(self, base_url: Optional[str] = None):
+    def __init__(self, base_url: Optional[str] = None, token: Optional[str] = None):
         self.base_url = base_url or settings.FIRMWARE_API_URL
+        self.token = token or settings.FIRMWARE_API_TOKEN
         if not self.base_url:
             raise ValueError("FIRMWARE_API_URL must be set in environment variables")
+    def _auth_headers(self) -> dict[str, str]:
+        """Build headers for firmware auth (supports token or Bearer)."""
+        if not self.token:
+            return {}
+        return {
+            "X-Firmware-Token": self.token,
+            "Authorization": f"Bearer {self.token}",
+        }
 
     async def send_drink_request(self, payload: dict) -> dict:
         """
@@ -249,10 +258,11 @@ class FirmwareClient:
             Response from firmware API
         """
         url = f"{self.base_url.rstrip('/')}/iot/drink"
+        headers = self._auth_headers()
 
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.post(url, json=payload)
+                response = await client.post(url, json=payload, headers=headers)
                 response.raise_for_status()
                 return response.json()
         except httpx.HTTPError as e:

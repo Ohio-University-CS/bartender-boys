@@ -150,6 +150,8 @@ The application uses the following environment variables (configured in `.env`):
 | `OPENAI_MAX_TOKENS` | Max tokens per request | `500` | No |
 | `OPENAI_TEMPERATURE` | Model temperature | `0.1` | No |
 | `MAX_IMAGE_SIZE_MB` | Max image size for ID scanning | `10` | No |
+| `FIRMWARE_API_URL` | URL of the Pi firmware `/iot/drink` endpoint | - | No |
+| `FIRMWARE_API_TOKEN` | Shared token forwarded to the Pi (sends `X-Firmware-Token` + `Bearer`) | - | No |
 
 ### Security Notes
 

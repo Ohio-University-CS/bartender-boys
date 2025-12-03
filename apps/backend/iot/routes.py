@@ -96,6 +96,25 @@ async def send_drink_to_firmware(request: PourRequest) -> PourResponse:
 
         return PourResponse(status="ok", message=message, selected_pump=selected_pump)
     except Exception as exc:
+        # Prefer to surface HTTP-specific errors if httpx is available
+        try:
+            import httpx  # local import to avoid module dependency issues
+
+            if isinstance(exc, httpx.HTTPError):
+                logger.warning(
+                    "Firmware communication HTTP error (%s). Returning simulated success.", exc
+                )
+                return PourResponse(
+                    status="ok",
+                    message=(
+                        "Firmware communication error - request accepted using "
+                        f"{selected_pump.label}, but hardware may not have dispensed."
+                    ),
+                    selected_pump=selected_pump,
+                )
+        except Exception:
+            pass
+
         logger.warning(
             "Firmware communication error (%s). Returning simulated success.", exc
         )

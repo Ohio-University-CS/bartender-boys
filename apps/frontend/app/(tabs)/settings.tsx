@@ -436,7 +436,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingVertical: 10,
     paddingHorizontal: 12,
-    fontVariant: ['tabular-nums'],
   },
   accountRow: {
     flexDirection: 'row',

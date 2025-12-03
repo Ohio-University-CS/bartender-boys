@@ -506,7 +506,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   list: { padding: 12, paddingBottom: 120 },
-  bubble: { maxWidth: '80%', padding: 10, borderRadius: 12, marginBottom: 8 },
+  bubble: { maxWidth: '80%', padding: 12, borderRadius: 12, marginBottom: 8 },
   userBubble: { alignSelf: 'flex-end' },
   aiBubble: { alignSelf: 'flex-start', borderWidth: 1 },
   bubbleText: {},
