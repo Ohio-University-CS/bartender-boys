@@ -5,7 +5,8 @@ import SegmentedControl from '@react-native-segmented-control/segmented-control'
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { ACCENT_OPTIONS } from '@/constants/theme';
-import { useSettings, REALTIME_VOICES } from '@/contexts/settings';
+import { useSettings, REALTIME_VOICES, isRealtimeVoice } from '@/contexts/settings';
+import type { RealtimeVoice } from '@/contexts/settings';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { router } from 'expo-router';
@@ -102,15 +103,29 @@ export default function SettingsScreen() {
       console.error('[Settings] Logout error:', error);
       Alert.alert('Error', 'Failed to log out. Please try again.');
     }
-  };
+    };
 
-  return (
+    // Map bartender model ids to a realtime voice key (displayed on model buttons).
+    // Selecting a model will also set the associated realtime voice.
+    const MODEL_VOICE_MAP: Record<string, RealtimeVoice> = {
+      classic: 'alloy',
+      luisa: 'ash',
+      elizabeth: 'ballad',
+      mike: 'coral',
+      robo: 'echo',
+      ironman: 'sage',
+      makayla: 'shimmer',
+      martin: 'verse',
+      matt: 'marin',
+      noir: 'cedar',
+    };
+
+    return (
     <View style={[styles.container, { backgroundColor, paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}> 
       <ScrollView contentContainerStyle={styles.containerContent}> 
         <View style={{ alignItems: 'center', flexDirection: 'column', marginBottom: 8 }}>
           <ThemedText type="title" colorName="tint" style={{ fontSize: 24 }}>Settings</ThemedText>
         </View>
-
       <ThemedView colorName="surfaceElevated" style={[styles.section, { borderColor }]}> 
         <ThemedText type="subtitle" colorName="tint" style={styles.sectionTitle}>Appearance</ThemedText>
         <ThemedText style={styles.help} colorName="muted">Select a theme mode</ThemedText>
@@ -199,40 +214,20 @@ export default function SettingsScreen() {
         </View>
         <ThemedText style={[styles.help, styles.helpInset]} colorName="muted">Enable smooth animations throughout the app</ThemedText>
 
-        <ThemedText style={[styles.help, { marginTop: 16 }]} colorName="muted">Realtime Voice</ThemedText>
-        <ThemedText style={[styles.help, styles.helpInset]} colorName="muted">Choose the voice for AI conversations</ThemedText>
-        <View style={styles.accentRow}>
-          {REALTIME_VOICES.map((voice) => {
-            const isActive = realtimeVoice === voice;
-            return (
-              <TouchableOpacity
-                key={voice}
-                style={[
-                  styles.chip,
-                  { backgroundColor: chipBg, borderColor: chipBorder },
-                  isActive && [
-                    styles.chipActive,
-                    { backgroundColor: accent, borderColor: accent },
-                  ]
-                ]}
-                onPress={() => setRealtimeVoice(voice)}
-              >
-                <ThemedText
-                  style={styles.chipText}
-                  colorName={isActive ? 'onTint' : 'mutedForeground'}
-                >
-                  {voice.charAt(0).toUpperCase() + voice.slice(1)}
-                </ThemedText>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
+        {/* Realtime voice selection removed — voices are now tied to bartender models. */}
+
+        {/* Model->voice mapping moved to component scope */}
 
         <ThemedText style={[styles.help, { marginTop: 16 }]} colorName="muted">Bartender Model</ThemedText>
         <ThemedText style={[styles.help, styles.helpInset]} colorName="muted">Switch between available bartender avatars</ThemedText>
         <View style={styles.accentRow}>
           {BARTENDER_MODEL_OPTIONS.map((option) => {
             const isActive = bartenderModel === option.id;
+            const mappedVoice = MODEL_VOICE_MAP[option.id];
+            const displayLabel = mappedVoice && isRealtimeVoice(mappedVoice)
+              ? `${option.label} (${mappedVoice.charAt(0).toUpperCase() + mappedVoice.slice(1)})`
+              : option.label;
+
             return (
               <TouchableOpacity
                 key={option.id}
@@ -244,13 +239,18 @@ export default function SettingsScreen() {
                     { backgroundColor: accent, borderColor: accent },
                   ]
                 ]}
-                onPress={() => setBartenderModel(option.id)}
+                onPress={() => {
+                  setBartenderModel(option.id);
+                  if (mappedVoice && isRealtimeVoice(mappedVoice)) {
+                    setRealtimeVoice(mappedVoice);
+                  }
+                }}
               >
                 <ThemedText
                   style={styles.chipText}
                   colorName={isActive ? 'onTint' : 'mutedForeground'}
                 >
-                  {option.label}
+                  {displayLabel}
                 </ThemedText>
               </TouchableOpacity>
             );
