@@ -1,32 +1,37 @@
 {
-  "pumps": {
-    "pineapple_juice": 17,
-    "orange_juice": 27,
-    "soda_water": 22
-  },
-  "flow_rates_ml_per_second": {
-    "pineapple_juice": 11.0,
-    "orange_juice": 10.5,
-    "soda_water": 9.0
-  },
   "defaults": {
-    "prime_time_seconds": 1.5,
+    "target_volume_ml": 60,
+    "prime_time_seconds": 1.0,
     "post_dispense_delay_seconds": 0.5,
-    "max_run_seconds": 15,
-    "cooldown_seconds": 2
+    "max_run_seconds": 12,
+    "cooldown_seconds": 3,
+    "active_low": true,
+    "fallback_flow_rate_ml_per_second": 10.0
   },
-  "calibration": {
+  "pumps": {
     "pineapple_juice": {
-      "last_calibrated": "2025-10-20",
-      "correction_factor": 1.0
+      "label": "Bottle A",
+      "liquid": "Pineapple Juice",
+      "gpio_pin": 17,
+      "flow_rate_ml_per_second": 11.0,
+      "correction_factor": 1.0,
+      "last_calibrated": "2025-10-20"
     },
     "orange_juice": {
-      "last_calibrated": "2025-10-20",
-      "correction_factor": 1.0
+      "label": "Bottle B",
+      "liquid": "Orange Juice",
+      "gpio_pin": 27,
+      "flow_rate_ml_per_second": 10.5,
+      "correction_factor": 1.0,
+      "last_calibrated": "2025-10-20"
     },
     "soda_water": {
-      "last_calibrated": "2025-10-20",
-      "correction_factor": 1.0
+      "label": "Bottle C",
+      "liquid": "Soda Water",
+      "gpio_pin": 22,
+      "flow_rate_ml_per_second": 9.0,
+      "correction_factor": 1.0,
+      "last_calibrated": "2025-10-20"
     }
   }
 }

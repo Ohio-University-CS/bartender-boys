@@ -424,6 +424,8 @@ export function BartenderAvatar({
     });
   }, [modelDefinition?.id, modelPath]);
 
+  
+
   useEffect(() => {
     if (mixerRef.current) {
       const idleAction = idleActionRef.current;
