@@ -11,6 +11,7 @@ export interface Drink {
   image_url?: string;
   favorited?: boolean;
   hardwareSteps?: { pump: string; seconds: number }[];
+  created_at?: string;
 }
 
 export const DRINKS: Drink[] = [];

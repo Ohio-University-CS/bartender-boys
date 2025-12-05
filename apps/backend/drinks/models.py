@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Literal, Optional
 
 from pydantic import BaseModel, Field, validator
@@ -72,6 +73,9 @@ class Drink(BaseModel):
     image_url: Optional[str] = Field(None, description="URL of the drink image")
     favorited: Optional[bool] = Field(
         None, description="Whether the drink is favorited (optional, defaults to false)"
+    )
+    created_at: Optional[datetime] = Field(
+        None, description="Date and time when the drink was created"
     )
 
     @validator("ratios")

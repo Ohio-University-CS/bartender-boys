@@ -2,7 +2,7 @@ import { useMemo, useState, useEffect, useCallback } from 'react';
 import { StyleSheet, FlatList, ScrollView, TouchableOpacity, TextInput, View, Platform, ActivityIndicator, Image, Modal } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -14,7 +14,7 @@ import { getDrinks, toggleFavorite as toggleFavoriteApi } from '@/utils/drinks-a
 import { useSettings } from '@/contexts/settings';
 import { webStyles } from '@/utils/web-styles';
 
-type SortOption = 'difficulty' | 'alcohol' | 'name' | 'prepTime';
+type SortOption = 'difficulty' | 'alcohol' | 'name' | 'prepTime' | 'dateCreated';
 
 const PAGE_SIZE = 20;
 
@@ -37,7 +37,7 @@ export default function MenuScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
-  const [sortBy, setSortBy] = useState<SortOption>('difficulty');
+  const [sortBy, setSortBy] = useState<SortOption>('dateCreated');
   const [prepTimeFilter, setPrepTimeFilter] = useState<'any' | 'under2' | 'under3' | 'under4'>('any');
   const [ingredientCountFilter, setIngredientCountFilter] = useState<'any' | 'under4' | 'under6' | 'under8'>('any');
   const [showFilterMenu, setShowFilterMenu] = useState(false);
@@ -83,6 +83,7 @@ export default function MenuScreen() {
 
   const categories = ['All', 'Favorites', 'Cocktail', 'Whiskey', 'Rum', 'Gin', 'Vodka', 'Tequila', 'Brandy'];
   const sortOptions: { key: SortOption; label: string }[] = [
+    { key: 'dateCreated', label: 'Date Created' },
     { key: 'difficulty', label: 'Difficulty' },
     { key: 'name', label: 'A-Z' },
     { key: 'prepTime', label: 'Prep Time' },
@@ -146,6 +147,13 @@ export default function MenuScreen() {
     fetchDrinks(0, true);
   }, [fetchDrinks]);
 
+  // Refresh drinks when screen comes into focus (e.g., after generating a drink)
+  useFocusEffect(
+    useCallback(() => {
+      fetchDrinks(0, true);
+    }, [fetchDrinks])
+  );
+
   // Extracts the first number found in the prepTime string (e.g., '5 min', '10 minutes')
   const parsePrepMinutes = (prepTime: string) => {
     if (!prepTime) return Number.MAX_SAFE_INTEGER;
@@ -187,6 +195,12 @@ export default function MenuScreen() {
   const sortedItems = useMemo(() => {
     const data = [...filteredDrinks];
     const sorter = {
+      dateCreated: (a: Drink, b: Drink) => {
+        // Sort by date created (newest first), fallback to name if dates are equal or missing
+        const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+        return dateB - dateA || a.name.localeCompare(b.name);
+      },
       difficulty: (a: Drink, b: Drink) => difficultyRank[a.difficulty] - difficultyRank[b.difficulty] || a.name.localeCompare(b.name),
       alcohol: (a: Drink, b: Drink) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name),
       name: (a: Drink, b: Drink) => a.name.localeCompare(b.name),

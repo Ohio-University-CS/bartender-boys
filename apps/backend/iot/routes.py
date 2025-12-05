@@ -230,7 +230,6 @@ async def send_drink_to_firmware(request: PourRequest) -> PourResponse:
         try:
             profile = get_hardware_profile()
             selection = profile.choose_random_pump()
-            global _hardware_profile  # noqa: PLW0603 - update cache after recovery
             _hardware_profile = profile
         except RuntimeError as exc:  # pragma: no cover - config missing
             raise HTTPException(

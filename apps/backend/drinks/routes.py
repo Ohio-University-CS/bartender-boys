@@ -162,6 +162,7 @@ async def get_drinks(
                 user_id=doc.get("user_id"),
                 image_url=doc.get("image_url"),
                 favorited=doc.get("favorited", False),
+                created_at=doc.get("created_at"),
             )
             drinks.append(drink)
 
