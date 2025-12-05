@@ -16,9 +16,6 @@ except ImportError:
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-# GPIO pin to control (using pin 2 as default, can be configured)
-GPIO_PIN = 2
-
 # Mapping of pump names to GPIO pins
 # Default mapping - can be configured via environment or config file
 PUMP_TO_GPIO = {
@@ -202,22 +199,15 @@ async def receive_drink_request(
                 )
             else:
                 logger.warning(f"No valid pumps found in hardware_steps for {drink_name}")
+                return DrinkResponse(
+                    status="error",
+                    message=f"Cannot dispense {drink_name}: no valid pumps found in hardware_steps.",
+                )
         
-        # Fallback to single pump behavior if no hardware_steps
-        GPIO.setup(GPIO_PIN, GPIO.OUT)
-        GPIO.output(GPIO_PIN, GPIO.LOW)
-        
-        logger.info(f"Turning on GPIO pin {GPIO_PIN} for {drink_name}")
-        GPIO.output(GPIO_PIN, GPIO.HIGH)
-        await asyncio.sleep(1.0)
-        
-        logger.info(f"Turning off GPIO pin {GPIO_PIN}")
-        GPIO.output(GPIO_PIN, GPIO.LOW)
-        GPIO.cleanup(GPIO_PIN)
-        
+        # If no hardware_steps provided, return error
         return DrinkResponse(
-            status="ok",
-            message=f"Successfully dispensed {drink_name} (GPIO pin {GPIO_PIN} activated for 1 second).",
+            status="error",
+            message=f"Cannot dispense {drink_name}: no hardware_steps provided.",
         )
     except Exception as e:
         logger.error(f"Error controlling GPIO: {str(e)}")
@@ -230,10 +220,6 @@ async def receive_drink_request(
                         GPIO.output(pin, GPIO.LOW)
                     except Exception:
                         pass
-                try:
-                    GPIO.output(GPIO_PIN, GPIO.LOW)
-                except Exception:
-                    pass
                 GPIO.cleanup()
         except Exception:
             pass
