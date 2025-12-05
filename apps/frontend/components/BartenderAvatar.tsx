@@ -242,6 +242,11 @@ export function BartenderAvatar({
       baseScaleRef.current.set(scaleFactor, scaleFactor, scaleFactor);
       bobAmplitudeRef.current = transform?.bobAmplitude ?? 0.05;
 
+      // If this is the Luisa model, disable automatic bobbing and embedded clip autoplay
+      if (definition?.id === 'luisa') {
+        bobAmplitudeRef.current = 0;
+      }
+
       pivot.scale.set(
         baseScaleRef.current.x,
         baseScaleRef.current.y,
@@ -269,18 +274,26 @@ export function BartenderAvatar({
       hasCustomModelRef.current = true;
       console.log('[BartenderAvatar] Loaded model successfully');
 
-      if (gltf.animations && gltf.animations.length) {
+      // Handle embedded animations (simple behavior): if the model includes animation clips,
+      // create a mixer and use the first/explicitly-named clips. External animation file
+      // support and debug remapping were removed to restore prior, simpler behavior.
+      // Don't auto-play embedded animations for Luisa or Robo (they should remain still on selection)
+      // but keep Robo's bobbing behavior. Luisa already disables bobbing above.
+      if (gltf.animations && gltf.animations.length && definition?.id !== 'luisa' && definition?.id !== 'robo') {
         const mixer = new THREE.AnimationMixer(model);
         mixerRef.current = mixer;
 
-        const idleClip = gltf.animations.find((clip) => clip.name.toLowerCase().includes('idle'));
+        const clips = gltf.animations;
+        // prefer clips named 'idle'/'talk' (case-insensitive), otherwise use the first clip as idle
+        const idleClip = clips.find((c) => c.name && c.name.toLowerCase().includes('idle')) ?? clips[0];
+        const talkClip = clips.find((c) => c.name && c.name.toLowerCase().includes('talk'));
+
         if (idleClip) {
           const idleAction = mixer.clipAction(idleClip);
           idleAction.play();
           idleActionRef.current = idleAction;
         }
 
-        const talkClip = gltf.animations.find((clip) => clip.name.toLowerCase().includes('talk'));
         if (talkClip) {
           const talkingAction = mixer.clipAction(talkClip);
           talkingAction.loop = THREE.LoopRepeat;

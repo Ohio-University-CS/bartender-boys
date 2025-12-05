@@ -16,7 +16,6 @@ export type BartenderModelDefinition = {
   notes?: string;
   transform?: BartenderModelTransform;
 };
-
 const CLASSIC_MODEL_ASSET = require('../assets/models/luiz-h-c-nobre/source/bartender.glb');
 const LUISA_MODEL_ASSET = require('../assets/models/Luisa.glb');
 const MATT_MODEL_ASSET = require('../assets/models/MiiMatt.glb');
@@ -27,7 +26,6 @@ const MIKE_MODEL_ASSET = require('../assets/models/mike.glb.glb');
 const NOIR_MODEL_ASSET = require('../assets/models/noir.glb.glb');
 const ELIZABETH_MODEL_ASSET = require('../assets/models/elizabeth.glb');
 const MAKAYLA_MODEL_ASSET = require('../assets/models/Makayla.glb');
-
 export const BARTENDER_MODEL_REGISTRY: BartenderModelDefinition[] = [
   {
     id: 'classic',
@@ -103,7 +101,8 @@ export const BARTENDER_MODEL_REGISTRY: BartenderModelDefinition[] = [
     asset: NOIR_MODEL_ASSET,
     notes: 'Dark, moody bartender with classic vibes.',
     transform: {
-      position: { y: -0.05, z: -0.2 },
+      // Raised up and moved closer to the camera
+      position: { y: 0.28, z: -0.08 },
       scale: 0.9,
     },
   },
