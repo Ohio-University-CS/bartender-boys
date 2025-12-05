@@ -31,7 +31,7 @@ export default function TabLayout() {
         name="menu"
         options={{
           title: 'Menu',
-          tabBarIcon: ({ color }) => <IconSymbol size={24} name="list.bullet.rectangle" color={color} />,
+          tabBarIcon: ({ color }) => <IconSymbol size={24} name="wineglass.fill" color={color} />,
         }}
       />
       <Tabs.Screen

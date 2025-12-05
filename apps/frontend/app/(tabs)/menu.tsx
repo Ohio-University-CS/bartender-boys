@@ -59,7 +59,6 @@ export default function MenuScreen() {
   const placeholderColor = useThemeColor({}, 'placeholder');
   const badgeBg = useThemeColor({}, 'chipBackground');
   const badgeText = useThemeColor({}, 'mutedForeground');
-  const metaText = useThemeColor({}, 'muted');
   const accent = useThemeColor({}, 'tint');
   const onAccent = useThemeColor({}, 'onTint');
   const mutedForeground = useThemeColor({}, 'mutedForeground');
@@ -235,9 +234,16 @@ export default function MenuScreen() {
           <View style={styles.drinkDetails}>
             <View style={styles.drinkTopRow}>
               <View style={styles.drinkNameContainer}>
-                <ThemedText type="defaultSemiBold" style={styles.drinkName} numberOfLines={2}>
-                  {drink.name}
-                </ThemedText>
+                <View style={styles.drinkHeaderRow}>
+                  <ThemedText type="defaultSemiBold" style={styles.drinkName} numberOfLines={2}>
+                    {drink.name}
+                  </ThemedText>
+                  <View style={[styles.difficultyBadge, { backgroundColor: DIFFICULTY_COLORS[drink.difficulty] || accent }]}>
+                    <ThemedText style={[styles.difficultyText, { color: '#FFFFFF' }]}>
+                      {drink.difficulty}
+                    </ThemedText>
+                  </View>
+                </View>
                 <ThemedText style={styles.category} colorName="tint">{drink.category}</ThemedText>
               </View>
               <TouchableOpacity 
@@ -278,18 +284,11 @@ export default function MenuScreen() {
                 </TouchableOpacity>
               )}
             </View>
-
-            <View style={styles.metaRow}>
-              <ThemedText style={[styles.metaText, { color: metaText }]}>{drink.prepTime}</ThemedText>
-              <ThemedText style={[styles.metaText, { color: DIFFICULTY_COLORS[drink.difficulty] || accent, fontWeight: '700' }]}>
-                {drink.difficulty}
-              </ThemedText>
-            </View>
           </View>
         </View>
       </TouchableOpacity>
     );
-  }, [expanded, cardBg, borderColor, accent, danger, mutedForeground, badgeBg, badgeText, metaText, handleToggleFavorite, showDrinkDetails, toggleExpanded]);
+  }, [expanded, cardBg, borderColor, accent, danger, mutedForeground, badgeBg, badgeText, handleToggleFavorite, showDrinkDetails, toggleExpanded]);
 
   const renderFooter = useCallback(() => {
     if (!loadingMore) return null;
@@ -304,109 +303,8 @@ export default function MenuScreen() {
     <View style={[styles.container, { backgroundColor, paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
       <View style={styles.containerContent}>
         <TabHeader 
-          title="Full Menu" 
-          rightActionButtons={
-            <TouchableOpacity
-              onPress={() => setShowFilterMenu(true)}
-              style={styles.filterButton}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-              <Ionicons name="ellipsis-horizontal" size={24} color={textColor} />
-            </TouchableOpacity>
-          }
+          title="Drink Menu" 
         />
-
-      <ThemedView
-        style={[
-          styles.searchContainer,
-          { borderBottomColor: borderColor, backgroundColor: inputBg, borderColor: inputBorder },
-        ]}
-      >
-        <TextInput
-          style={[styles.searchInput, { color: textColor }]}
-          placeholder="Search drinks..."
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          placeholderTextColor={placeholderColor}
-        />
-      </ThemedView>
-
-      <ThemedView style={styles.toggleButtonsContainer}>
-        <View style={styles.toggleButtons}>
-          <TouchableOpacity
-            style={[
-              styles.toggleButton,
-              { backgroundColor: cardBg, borderColor },
-              selectedCategory === 'All' && { backgroundColor: accent, borderColor: accent },
-              webStyles.hoverable,
-              webStyles.transition,
-            ]}
-            onPress={() => setSelectedCategory('All')}
-          >
-            <ThemedText
-              style={[styles.toggleButtonText, { color: selectedCategory === 'All' ? onAccent : mutedForeground }]}
-            >
-              All
-            </ThemedText>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.toggleButton,
-              { backgroundColor: cardBg, borderColor },
-              selectedCategory === 'Favorites' && { backgroundColor: accent, borderColor: accent },
-              webStyles.hoverable,
-              webStyles.transition,
-            ]}
-            onPress={() => setSelectedCategory('Favorites')}
-          >
-            <ThemedText
-              style={[styles.toggleButtonText, { color: selectedCategory === 'Favorites' ? onAccent : mutedForeground }]}
-            >
-              Favorites
-            </ThemedText>
-          </TouchableOpacity>
-        </View>
-      </ThemedView>
-
-      <ThemedView style={styles.categoriesContainer}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.categoriesScroll}
-          contentContainerStyle={[
-            styles.categoriesContent,
-            Platform.OS === 'web' && styles.categoriesContentWeb
-          ]}
-        >
-          {categories.filter(cat => cat !== 'All' && cat !== 'Favorites').map((category) => {
-            const isActive = selectedCategory === category;
-            const customColor = CATEGORY_COLORS[category] || accent;
-            const textColorValue = isActive ? '#FFFFFF' : mutedForeground;
-            return (
-              <TouchableOpacity
-                key={category}
-                style={[
-                  styles.categoryButton,
-                  { backgroundColor: cardBg, borderColor },
-                  isActive && {
-                    backgroundColor: customColor,
-                    borderColor: customColor,
-                  },
-                  webStyles.hoverable,
-                  webStyles.transition,
-                ]}
-                onPress={() => setSelectedCategory(category)}
-              >
-                <ThemedText
-                  style={[styles.categoryText, isActive && styles.categoryTextActive, { color: textColorValue }]}
-                >
-                  {category}
-                </ThemedText>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-      </ThemedView>
 
       <Modal
         visible={showFilterMenu}
@@ -434,6 +332,39 @@ export default function MenuScreen() {
             </View>
 
             <ScrollView style={styles.filterMenuContent} showsVerticalScrollIndicator={false}>
+              <View style={styles.filterMenuSection}>
+                <ThemedText style={styles.filterMenuLabel} colorName="mutedForeground">Drink Type</ThemedText>
+                <View style={styles.filterOptions}>
+                  {categories.filter(cat => cat !== 'All' && cat !== 'Favorites').map((category) => {
+                    const isActive = selectedCategory === category;
+                    const customColor = CATEGORY_COLORS[category] || accent;
+                    return (
+                      <TouchableOpacity
+                        key={category}
+                        style={[
+                          styles.filterOption,
+                          { backgroundColor: chipBg, borderColor: chipBorder },
+                          isActive && { backgroundColor: customColor, borderColor: customColor },
+                          webStyles.hoverable,
+                          webStyles.transition,
+                        ]}
+                        onPress={() => {
+                          setSelectedCategory(category);
+                          setShowFilterMenu(false);
+                        }}
+                      >
+                        <ThemedText
+                          style={styles.filterOptionText}
+                          colorName={isActive ? 'onTint' : 'mutedForeground'}
+                        >
+                          {category}
+                        </ThemedText>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+
               <View style={styles.filterMenuSection}>
                 <ThemedText style={styles.filterMenuLabel} colorName="mutedForeground">Sort By</ThemedText>
                 <View style={styles.filterOptions}>
@@ -545,6 +476,68 @@ export default function MenuScreen() {
             contentContainerStyle={styles.drinksContainer}
             onEndReached={loadMore}
             onEndReachedThreshold={0.5}
+            ListHeaderComponent={
+              <>
+                <ThemedView
+                  style={[
+                    styles.searchContainer,
+                    { borderBottomColor: borderColor, backgroundColor: inputBg, borderColor: inputBorder },
+                  ]}
+                >
+                  <TextInput
+                    style={[styles.searchInput, { color: textColor }]}
+                    placeholder="Search drinks..."
+                    value={searchQuery}
+                    onChangeText={setSearchQuery}
+                    placeholderTextColor={placeholderColor}
+                  />
+                </ThemedView>
+
+                <ThemedView style={styles.toggleButtonsContainer}>
+                  <View style={styles.toggleButtons}>
+                    <TouchableOpacity
+                      style={[
+                        styles.toggleButton,
+                        { backgroundColor: cardBg, borderColor },
+                        selectedCategory === 'All' && { backgroundColor: accent, borderColor: accent },
+                        webStyles.hoverable,
+                        webStyles.transition,
+                      ]}
+                      onPress={() => setSelectedCategory('All')}
+                    >
+                      <ThemedText
+                        style={[styles.toggleButtonText, { color: selectedCategory === 'All' ? onAccent : mutedForeground }]}
+                      >
+                        All
+                      </ThemedText>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[
+                        styles.toggleButton,
+                        { backgroundColor: cardBg, borderColor },
+                        selectedCategory === 'Favorites' && { backgroundColor: accent, borderColor: accent },
+                        webStyles.hoverable,
+                        webStyles.transition,
+                      ]}
+                      onPress={() => setSelectedCategory('Favorites')}
+                    >
+                      <ThemedText
+                        style={[styles.toggleButtonText, { color: selectedCategory === 'Favorites' ? onAccent : mutedForeground }]}
+                      >
+                        Favorites
+                      </ThemedText>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => setShowFilterMenu(true)}
+                      style={[styles.filterButton, { backgroundColor: cardBg, borderColor }]}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    >
+                      <Ionicons name="ellipsis-horizontal" size={24} color={textColor} />
+                    </TouchableOpacity>
+                  </View>
+                </ThemedView>
+              </>
+            }
             ListFooterComponent={renderFooter}
             ListEmptyComponent={
               <ThemedView style={styles.emptyState}>
@@ -570,11 +563,10 @@ const styles = StyleSheet.create({
   },
   containerContent: {
     flex: 1,
-    alignItems: 'center',
+    width: '100%',
     ...Platform.select({
       web: {
         maxWidth: 1200,
-        width: '100%',
         marginHorizontal: 'auto',
       },
     }),
@@ -752,11 +744,25 @@ const styles = StyleSheet.create({
     maxWidth: 680,
     alignSelf: 'center',
   },
+  filterButtonContainer: {
+    width: '100%',
+    paddingHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 12,
+    alignItems: 'center',
+    ...Platform.select({
+      web: {
+        paddingHorizontal: 24,
+      },
+    }),
+  },
   filterButton: {
-    padding: 4,
+    padding: 8,
     borderRadius: 8,
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    minWidth: 40,
     ...Platform.select({
       web: {
         cursor: 'pointer',
@@ -822,6 +828,7 @@ const styles = StyleSheet.create({
   drinkCardContent: {
     flexDirection: 'row',
     gap: 12,
+    alignItems: 'center',
   },
   drinkImageContainer: {
     width: 100,
@@ -844,6 +851,7 @@ const styles = StyleSheet.create({
   drinkDetails: {
     flex: 1,
     gap: 8,
+    justifyContent: 'center',
   },
   drinkTopRow: {
     flexDirection: 'row',
@@ -854,15 +862,27 @@ const styles = StyleSheet.create({
   drinkNameContainer: {
     flex: 1,
   },
-  drinkHeader: {
+  drinkHeaderRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 4,
+    gap: 8,
+    marginBottom: 2,
+    flexWrap: 'wrap',
   },
   drinkName: {
     fontSize: 16,
     fontWeight: '600',
+    flex: 1,
+    minWidth: 0,
+  },
+  difficultyBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  difficultyText: {
+    fontSize: 11,
+    fontWeight: '700',
   },
   category: {
     fontSize: 13,
@@ -887,14 +907,6 @@ const styles = StyleSheet.create({
   moreText: {
     fontSize: 12,
     alignSelf: 'center',
-  },
-  metaRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 10,
-  },
-  metaText: {
-    fontSize: 12,
   },
   emptyState: {
     alignItems: 'center',

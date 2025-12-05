@@ -44,10 +44,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderBottomWidth: 1,
     position: 'relative',
+    width: '100%',
+    alignSelf: 'stretch',
     ...Platform.select({
       web: {
         paddingVertical: 16,
         paddingHorizontal: 24,
+        minWidth: '100%',
       },
     }),
   },

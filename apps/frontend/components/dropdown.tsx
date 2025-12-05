@@ -29,7 +29,9 @@ export function Dropdown<T = string>({
   renderValue,
 }: DropdownProps<T>) {
   const [isOpen, setIsOpen] = useState(false);
+  const [menuPosition, setMenuPosition] = useState<{ top: number; left: number; width: number } | null>(null);
   const containerRef = useRef<View>(null);
+  const triggerRef = useRef<View>(null);
   const textColor = useThemeColor({}, 'text');
   const surface = useThemeColor({}, 'surfaceElevated');
   const borderColor = useThemeColor({}, 'border');
@@ -37,6 +39,36 @@ export function Dropdown<T = string>({
   const inputBorder = useThemeColor({}, 'inputBorder');
   const accent = useThemeColor({}, 'tint');
   const onTint = useThemeColor({}, 'onTint');
+
+  // Calculate position for fixed positioning on web
+  useEffect(() => {
+    if (!isOpen || Platform.OS !== 'web' || !triggerRef.current) return;
+
+    const calculatePosition = () => {
+      const element = triggerRef.current as any;
+      if (element) {
+        const rect = element.getBoundingClientRect?.();
+        if (rect) {
+          setMenuPosition({
+            top: rect.bottom + 4,
+            left: rect.left,
+            width: rect.width,
+          });
+        }
+      }
+    };
+
+    calculatePosition();
+    
+    // Recalculate on scroll/resize
+    window.addEventListener('scroll', calculatePosition, true);
+    window.addEventListener('resize', calculatePosition);
+    
+    return () => {
+      window.removeEventListener('scroll', calculatePosition, true);
+      window.removeEventListener('resize', calculatePosition);
+    };
+  }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen || Platform.OS !== 'web') return;
@@ -76,10 +108,11 @@ export function Dropdown<T = string>({
 
   return (
     <View ref={containerRef} style={styles.container}>
-      <TouchableOpacity
-        style={[styles.trigger, webStyles.hoverable, { borderColor: inputBorder }]}
-        onPress={handleToggle}
-      >
+      <View ref={triggerRef}>
+        <TouchableOpacity
+          style={[styles.trigger, webStyles.hoverable, { borderColor: inputBorder }]}
+          onPress={handleToggle}
+        >
         <View style={styles.triggerContent}>
           {icon && (
             <Ionicons name={icon} size={24} color={textColor} style={styles.triggerIcon} />
@@ -103,6 +136,7 @@ export function Dropdown<T = string>({
           />
         </View>
       </TouchableOpacity>
+      </View>
 
       {isOpen && (
         <View
@@ -112,6 +146,13 @@ export function Dropdown<T = string>({
               backgroundColor: surface, 
               borderColor: borderColor,
               shadowColor: '#000',
+            },
+            Platform.OS === 'web' && menuPosition && {
+              position: 'fixed' as any,
+              top: menuPosition.top,
+              left: menuPosition.left,
+              width: menuPosition.width,
+              right: 'auto' as any,
             }
           ]}
         >
@@ -163,6 +204,11 @@ const styles = StyleSheet.create({
   container: {
     position: 'relative',
     zIndex: 1000,
+    ...Platform.select({
+      web: {
+        zIndex: 10000,
+      },
+    }),
   },
   trigger: {
     flexDirection: 'row',
@@ -214,12 +260,13 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     overflow: 'hidden',
-    zIndex: 1001,
+    zIndex: 9001,
     maxHeight: 300,
     ...Platform.select({
       web: {
         borderRadius: 10,
         boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+        zIndex: 10001,
       },
       default: {
         elevation: 8,

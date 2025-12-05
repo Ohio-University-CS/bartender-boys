@@ -6,7 +6,7 @@ import { type Drink } from '@/constants/drinks';
 import { useFavorites } from '@/contexts/favorites';
 import { CATEGORY_COLORS, DIFFICULTY_COLORS } from '@/constants/ui-palette';
 import { API_BASE_URL } from '@/environment';
-import { getDrinkById } from '@/utils/drinks-api';
+import { getDrinkById, deleteDrink } from '@/utils/drinks-api';
 import { useSettings } from '@/contexts/settings';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -32,11 +32,78 @@ export default function DrinkDetailScreen() {
   const [error, setError] = useState<string | null>(null);
   const [pouring, setPouring] = useState(false);
   const [pourSuccess, setPourSuccess] = useState(false);
+  const [canPour, setCanPour] = useState(true);
   const wineIconOpacity = useRef(new Animated.Value(1)).current;
   const checkmarkIconOpacity = useRef(new Animated.Value(0)).current;
   const wineIconScale = useRef(new Animated.Value(1)).current;
   const checkmarkIconScale = useRef(new Animated.Value(0.8)).current;
   const buttonOpacity = useRef(new Animated.Value(1)).current;
+
+  // Helper function to normalize ingredient names to snake_case (matching backend logic)
+  const normalizeToSnakeCase = useCallback((text: string): string => {
+    if (!text) return '';
+    // Convert to lowercase and replace spaces/special chars with underscores
+    let normalized = text.toLowerCase().trim();
+    // Replace spaces and special characters with underscores
+    normalized = normalized.replace(/[^\w\s-]/g, '');
+    normalized = normalized.replace(/[\s-]+/g, '_');
+    // Remove leading/trailing underscores
+    normalized = normalized.replace(/^_+|_+$/g, '');
+    return normalized;
+  }, []);
+
+  // Check if drink ingredients are available in pump config
+  const checkIngredientAvailability = useCallback(async (drinkData: Drink) => {
+    try {
+      const userId = await AsyncStorage.getItem('user_id');
+      if (!userId) {
+        // If no user_id, allow pouring (might be guest mode)
+        setCanPour(true);
+        return;
+      }
+
+      const baseUrl = apiBaseUrl || API_BASE_URL;
+      const response = await fetch(`${baseUrl}/iot/pump-config?user_id=${encodeURIComponent(userId)}`);
+      
+      if (!response.ok) {
+        // If pump config fetch fails, allow pouring (don't block on errors)
+        setCanPour(true);
+        return;
+      }
+
+      const config = await response.json();
+      
+      // Get available ingredients from pumps
+      const availableIngredients = new Set<string>();
+      if (config.pump1) availableIngredients.add(config.pump1);
+      if (config.pump2) availableIngredients.add(config.pump2);
+      if (config.pump3) availableIngredients.add(config.pump3);
+
+      // If no pumps are configured, allow pouring (might be intentional)
+      if (availableIngredients.size === 0) {
+        setCanPour(true);
+        return;
+      }
+
+      // Normalize drink ingredients to snake_case and check availability
+      const drinkIngredients = drinkData.ingredients || [];
+      const missingIngredients: string[] = [];
+
+      for (const ingredient of drinkIngredients) {
+        const normalizedIngredient = normalizeToSnakeCase(ingredient);
+        if (!availableIngredients.has(normalizedIngredient)) {
+          missingIngredients.push(ingredient);
+        }
+      }
+
+      // Disable button if any ingredients are missing
+      setCanPour(missingIngredients.length === 0);
+    } catch (error) {
+      console.error('Failed to check ingredient availability:', error);
+      // On error, allow pouring (don't block on validation errors)
+      setCanPour(true);
+    }
+  }, [apiBaseUrl, normalizeToSnakeCase]);
 
   // Set document title
   useEffect(() => {
@@ -58,6 +125,7 @@ export default function DrinkDetailScreen() {
         setLoading(true);
         setError(null);
         setPourSuccess(false);
+        setCanPour(true); // Reset to true while loading
         wineIconOpacity.setValue(1);
         checkmarkIconOpacity.setValue(0);
         wineIconScale.setValue(1);
@@ -65,6 +133,8 @@ export default function DrinkDetailScreen() {
         buttonOpacity.setValue(1);
         const drinkData = await getDrinkById(id, apiBaseUrl);
         setDrink(drinkData);
+        // Check ingredient availability after drink is loaded
+        await checkIngredientAvailability(drinkData);
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Failed to load drink';
         setError(errorMessage);
@@ -77,7 +147,7 @@ export default function DrinkDetailScreen() {
     fetchDrink();
     // Animation refs are stable and don't need to trigger re-runs
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, apiBaseUrl]);
+  }, [id, apiBaseUrl, checkIngredientAvailability]);
 
   // Animate icon transition when success state changes
   useEffect(() => {
@@ -136,17 +206,17 @@ export default function DrinkDetailScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pourSuccess]);
 
-  // Animate button opacity when pouring state changes
+  // Animate button opacity when pouring state or canPour state changes
   useEffect(() => {
-    if (pouring) {
-      // Gray out the button when pouring
+    if (pouring || !canPour) {
+      // Gray out the button when pouring or when ingredients are unavailable
       Animated.timing(buttonOpacity, {
         toValue: 0.5,
         duration: 300,
         useNativeDriver: true,
       }).start();
     } else {
-      // Restore full opacity when not pouring
+      // Restore full opacity when not pouring and ingredients are available
       Animated.timing(buttonOpacity, {
         toValue: 1,
         duration: 300,
@@ -155,7 +225,7 @@ export default function DrinkDetailScreen() {
     }
     // Animation refs are stable and don't need to trigger re-runs
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pouring]);
+  }, [pouring, canPour]);
 
   // Reset success state after 3 seconds
   useEffect(() => {
@@ -243,6 +313,46 @@ export default function DrinkDetailScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [drink, apiBaseUrl]);
 
+  const handleDelete = useCallback(async () => {
+    if (!drink) return;
+
+    Alert.alert(
+      'Delete Drink',
+      `Are you sure you want to delete "${drink.name}"? This action cannot be undone.`,
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteDrink(drink.id, apiBaseUrl);
+              Alert.alert('Success', 'Drink deleted successfully', [
+                {
+                  text: 'OK',
+                  onPress: () => {
+                    // Navigate back to menu
+                    if (typeof router.canGoBack === 'function' && router.canGoBack()) {
+                      router.back();
+                    } else {
+                      router.replace('/(tabs)/menu' as never);
+                    }
+                  },
+                },
+              ]);
+            } catch (error: any) {
+              const errorMessage = error?.message ?? 'Failed to delete drink';
+              Alert.alert('Error', errorMessage);
+            }
+          },
+        },
+      ]
+    );
+  }, [drink, apiBaseUrl, router]);
+
   if (loading) {
     return (
       <View style={styles.container}>
@@ -284,30 +394,40 @@ export default function DrinkDetailScreen() {
         <TouchableOpacity onPress={handleBack} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={24} color="#000" />
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => toggleFavorite(drink.id)} style={styles.favoriteBtn}>
-          <Ionicons
-            name={isFavorite(drink.id) ? 'heart' : 'heart-outline'}
-            size={28}
-            color={isFavorite(drink.id) ? '#FF4D4D' : '#FFA500'}
-          />
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity onPress={() => toggleFavorite(drink.id)} style={styles.favoriteBtn}>
+            <Ionicons
+              name={isFavorite(drink.id) ? 'heart' : 'heart-outline'}
+              size={28}
+              color={isFavorite(drink.id) ? '#FF4D4D' : '#FFA500'}
+            />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={handleDelete} style={styles.deleteBtn}>
+            <Ionicons
+              name="trash-outline"
+              size={24}
+              color="#FF4D4D"
+            />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        {/* Drink Image */}
-        <View style={styles.imageContainer}>
-          <Image
-            source={{ uri: drinkImageUrl }}
-            style={styles.drinkImage}
-            defaultSource={require('@/assets/images/icon.png')}
-          />
-          <View style={[styles.categoryBadge, { backgroundColor: CATEGORY_COLORS[drink.category] || '#FFA500' }]}>
-            <Text style={styles.categoryBadgeText}>{drink.category}</Text>
+        <View style={styles.mainContent}>
+          {/* Drink Image */}
+          <View style={styles.imageContainer}>
+            <Image
+              source={{ uri: drinkImageUrl }}
+              style={styles.drinkImage}
+              defaultSource={require('@/assets/images/icon.png')}
+            />
+            <View style={[styles.categoryBadge, { backgroundColor: CATEGORY_COLORS[drink.category] || '#FFA500' }]}>
+              <Text style={styles.categoryBadgeText}>{drink.category}</Text>
+            </View>
           </View>
-        </View>
 
-        {/* Drink Name & Info */}
-        <View style={styles.content}>
+          {/* Drink Name & Info */}
+          <View style={styles.content}>
           <Text style={styles.drinkName}>{drink.name}</Text>
           
           <View style={styles.metaRow}>
@@ -330,12 +450,20 @@ export default function DrinkDetailScreen() {
               <Text style={styles.sectionTitle}>Ingredients</Text>
             </View>
             <View style={styles.ingredientsList}>
-              {drink.ingredients.map((ingredient, index) => (
-                <View key={index} style={styles.ingredientItem}>
-                  <View style={styles.bulletPoint} />
-                  <Text style={styles.ingredientText}>{ingredient}</Text>
-                </View>
-              ))}
+              {drink.ingredients.map((ingredient, index) => {
+                const ratio = drink.ratios && drink.ratios[index] !== undefined 
+                  ? drink.ratios[index] 
+                  : null;
+                return (
+                  <View key={index} style={styles.ingredientItem}>
+                    <View style={styles.bulletPoint} />
+                    <Text style={styles.ingredientText}>
+                      {ingredient}
+                      {ratio !== null && ` (${ratio}%)`}
+                    </Text>
+                  </View>
+                );
+              })}
             </View>
           </View>
 
@@ -348,14 +476,36 @@ export default function DrinkDetailScreen() {
             <View style={styles.instructionsContainer}>
               {(() => {
                 // Handle various newline formats: \n, \\n, \r\n, etc.
-                const normalized = drink.instructions
+                let normalized = drink.instructions
                   .replace(/\\n/g, '\n')
                   .replace(/\\r\\n/g, '\n')
                   .replace(/\\r/g, '\n');
-                const lines = normalized.split(/\r?\n/);
-                return lines.map((line, index) => {
+                
+                // Split by newlines first
+                let allLines: string[] = [];
+                const initialLines = normalized.split(/\r?\n/);
+                
+                // Process each line - if it contains multiple numbered steps, split them
+                initialLines.forEach(line => {
                   const trimmed = line.trim();
-                  // Render non-empty lines, or a spacer for empty lines
+                  if (!trimmed) return;
+                  
+                  // Check if line contains numbered steps (pattern: number followed by period and space)
+                  const numberedStepPattern = /\d+\.\s/g;
+                  const matches = [...trimmed.matchAll(numberedStepPattern)];
+                  
+                  if (matches.length > 1) {
+                    // Split on numbered patterns, keeping the number and period
+                    const steps = trimmed.split(/(?=\d+\.\s)/);
+                    allLines.push(...steps.map(s => s.trim()).filter(s => s));
+                  } else {
+                    allLines.push(trimmed);
+                  }
+                });
+                
+                return allLines.map((line, index) => {
+                  const trimmed = line.trim();
+                  // Render non-empty lines
                   return trimmed ? (
                     <Text key={index} style={styles.instructionsText}>
                       {trimmed}
@@ -369,10 +519,10 @@ export default function DrinkDetailScreen() {
           {/* Pour Button */}
           <Animated.View style={{ opacity: buttonOpacity }}>
             <TouchableOpacity
-              style={[styles.pourButton, pouring && styles.pourButtonDisabled]}
+              style={[styles.pourButton, (pouring || !canPour) && styles.pourButtonDisabled]}
               activeOpacity={0.8}
               onPress={handlePour}
-              disabled={pouring}
+              disabled={pouring || !canPour}
             >
               <View style={styles.iconContainer}>
                 <Animated.View
@@ -402,10 +552,11 @@ export default function DrinkDetailScreen() {
                 </Animated.View>
               </View>
               <Text style={styles.pourButtonText}>
-                {pourSuccess ? 'Pour Successful!' : 'Pour This Drink'}
+                {pourSuccess ? 'Pour Successful!' : canPour ? 'Pour This Drink' : 'Ingredients Not Available'}
               </Text>
             </TouchableOpacity>
           </Animated.View>
+          </View>
         </View>
       </ScrollView>
     </View>
@@ -429,7 +580,17 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 10,
-    backgroundColor: 'rgba(12, 12, 12, 0.9)',
+    backgroundColor: '#0C0C0C',
+    borderBottomWidth: 1,
+    borderBottomColor: '#1a1a1a',
+    ...Platform.select({
+      web: {
+        position: 'relative',
+        paddingTop: 20,
+        borderBottomWidth: 1,
+        borderBottomColor: '#1a1a1a',
+      },
+    }),
   },
   backBtn: {
     padding: 8,
@@ -440,17 +601,48 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
   favoriteBtn: {
+    padding: 8,
+  },
+  deleteBtn: {
     padding: 8,
   },
   scrollView: {
     flex: 1,
   },
+  mainContent: {
+    marginTop: 80,
+    ...Platform.select({
+      web: {
+        marginTop: 0,
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        maxWidth: 1200,
+        alignSelf: 'center',
+        width: '100%',
+        paddingHorizontal: 40,
+        gap: 40,
+        paddingTop: 20,
+      },
+    }),
+  },
   imageContainer: {
     width: '100%',
     height: 300,
     position: 'relative',
-    marginTop: 80,
+    ...Platform.select({
+      web: {
+        width: 400,
+        height: 400,
+        flexShrink: 0,
+        marginTop: 0,
+      },
+    }),
   },
   drinkImage: {
     width: '100%',
@@ -473,6 +665,14 @@ const styles = StyleSheet.create({
   content: {
     padding: 20,
     alignItems: 'center',
+    ...Platform.select({
+      web: {
+        flex: 1,
+        padding: 0,
+        alignItems: 'flex-start',
+        maxWidth: 600,
+      },
+    }),
   },
   drinkName: {
     fontSize: 32,
@@ -480,12 +680,23 @@ const styles = StyleSheet.create({
     color: '#FFA500',
     marginBottom: 16,
     textAlign: 'center',
+    ...Platform.select({
+      web: {
+        textAlign: 'left',
+        fontSize: 36,
+      },
+    }),
   },
   metaRow: {
     flexDirection: 'row',
     gap: 24,
     marginBottom: 24,
     justifyContent: 'center',
+    ...Platform.select({
+      web: {
+        justifyContent: 'flex-start',
+      },
+    }),
   },
   metaItem: {
     flexDirection: 'row',
@@ -501,6 +712,11 @@ const styles = StyleSheet.create({
     marginBottom: 28,
     width: '100%',
     alignItems: 'center',
+    ...Platform.select({
+      web: {
+        alignItems: 'flex-start',
+      },
+    }),
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -508,16 +724,31 @@ const styles = StyleSheet.create({
     gap: 8,
     marginBottom: 12,
     justifyContent: 'center',
+    ...Platform.select({
+      web: {
+        justifyContent: 'flex-start',
+      },
+    }),
   },
   sectionTitle: {
     fontSize: 20,
     fontWeight: '700',
     color: '#eee',
     textAlign: 'center',
+    ...Platform.select({
+      web: {
+        textAlign: 'left',
+      },
+    }),
   },
   ingredientsList: {
     width: '100%',
     alignItems: 'center',
+    ...Platform.select({
+      web: {
+        alignItems: 'flex-start',
+      },
+    }),
   },
   ingredientItem: {
     flexDirection: 'row',
@@ -526,6 +757,12 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 400,
     justifyContent: 'center',
+    ...Platform.select({
+      web: {
+        justifyContent: 'flex-start',
+        maxWidth: '100%',
+      },
+    }),
   },
   bulletPoint: {
     width: 6,
@@ -546,6 +783,11 @@ const styles = StyleSheet.create({
     width: '100%',
     alignItems: 'center',
     maxWidth: 600,
+    ...Platform.select({
+      web: {
+        alignItems: 'flex-start',
+      },
+    }),
   },
   instructionsText: {
     color: '#ccc',
@@ -553,6 +795,11 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     textAlign: 'center',
     marginBottom: 8,
+    ...Platform.select({
+      web: {
+        textAlign: 'left',
+      },
+    }),
   },
   pourButton: {
     backgroundColor: '#FFA500',
@@ -571,6 +818,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.4,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 4 },
+    ...Platform.select({
+      web: {
+        alignSelf: 'flex-start',
+      },
+    }),
   },
   iconContainer: {
     width: 24,

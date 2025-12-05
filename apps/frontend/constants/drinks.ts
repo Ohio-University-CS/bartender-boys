@@ -3,6 +3,7 @@ export interface Drink {
   name: string;
   category: string;
   ingredients: string[];
+  ratios?: number[];
   instructions: string;
   difficulty: 'Easy' | 'Medium' | 'Hard';
   prepTime: string;

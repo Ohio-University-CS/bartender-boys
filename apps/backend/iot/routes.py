@@ -168,7 +168,62 @@ async def send_drink_to_firmware(request: PourRequest) -> PourResponse:
         )
 
     try:
-        drink_dict = request.drink.dict(by_alias=True, exclude_none=True)
+        # Generate hardware_steps from ratios if available
+        drink = request.drink
+        if drink.ratios and request.user_id:
+            try:
+                pump_config = await get_pump_config(request.user_id)
+                if pump_config:
+                    # Create ingredient to pump mapping
+                    ingredient_to_pump = {}
+                    for pump_key in ["pump1", "pump2", "pump3"]:
+                        pump_value = pump_config.get(pump_key)
+                        if pump_value:
+                            ingredient_to_pump[pump_value] = pump_key
+                    
+                    # Generate hardware steps from ratios
+                    # 100% = 5 seconds, so ratio% = (ratio / 100) * 5 seconds
+                    # All pumps run simultaneously for their respective durations
+                    from drinks.models import DispenseStep
+                    hardware_steps = []
+                    
+                    for i, ingredient in enumerate(drink.ingredients):
+                        normalized_ingredient = normalize_to_snake_case(ingredient)
+                        pump = ingredient_to_pump.get(normalized_ingredient)
+                        
+                        if pump and i < len(drink.ratios):
+                            ratio = drink.ratios[i]
+                            # Calculate seconds: 100% = 5 seconds
+                            seconds = (ratio / 100.0) * 5.0
+                            
+                            hardware_steps.append(DispenseStep(
+                                pump=pump,
+                                seconds=seconds,
+                                description=f"{ingredient} ({ratio}%)"
+                            ))
+                    
+                    # If we generated steps, add them to the drink
+                    if hardware_steps:
+                        drink.hardware_steps = hardware_steps
+                        # Create and store pump mapping for firmware
+                        # Map: ingredient (normalized) -> pump name
+                        pump_mapping = {}
+                        for i, ingredient in enumerate(drink.ingredients):
+                            normalized_ingredient = normalize_to_snake_case(ingredient)
+                            pump = ingredient_to_pump.get(normalized_ingredient)
+                            if pump:
+                                pump_mapping[normalized_ingredient] = pump
+                        # Store mapping on drink object (will be included in dict)
+                        drink._pump_mapping = pump_mapping
+                        logger.info(f"Generated {len(hardware_steps)} hardware steps from ratios for {drink.name}, pump mapping: {pump_mapping}")
+            except Exception as e:
+                logger.warning(f"Failed to generate hardware steps from ratios: {str(e)}")
+                # Continue without hardware steps
+        
+        drink_dict = drink.dict(by_alias=True, exclude_none=True)
+        # Add pump mapping if it was generated
+        if hasattr(drink, '_pump_mapping'):
+            drink_dict['pump_mapping'] = drink._pump_mapping
         result = await client.send_drink_request(drink_dict)
         return PourResponse(**result)
     except httpx.HTTPError as e:

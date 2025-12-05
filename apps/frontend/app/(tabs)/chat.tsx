@@ -310,6 +310,7 @@ const styles = StyleSheet.create({
   conversationTitle: {
     fontSize: 16,
     marginBottom: 4,
+    marginRight: 160,
   },
   conversationDate: {
     fontSize: 12,

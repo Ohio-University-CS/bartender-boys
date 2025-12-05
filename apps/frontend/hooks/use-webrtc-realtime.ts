@@ -294,6 +294,8 @@ export function useWebRTCRealtime(
             instructionsText += `The user has the following ingredients available in their pumps: ${ingredientsList}. `;
             instructionsText += 'Only suggest or generate drinks that can be made with these ingredients. ';
             instructionsText += 'If a user requests a drink with unavailable ingredients, politely suggest alternatives using only the available ingredients. ';
+            instructionsText += `When a user asks you to generate or create a drink, you MUST automatically use the generate_drink tool with the available_ingredients parameter set to these ingredients: ${ingredientsList}. Do NOT ask the user what ingredients they have - you already know from their pump configuration. `;
+            instructionsText += 'When using the generate_drink function, you MUST include the available_ingredients parameter with these ingredients. ';
           } else {
             instructionsText += 'The user has not configured their pumps yet, so you can suggest any drinks. ';
           }
@@ -343,6 +345,12 @@ export function useWebRTCRealtime(
                   user_id: {
                     type: 'string',
                     description: 'The user ID who is creating this drink (optional, defaults to "guest")',
+                  },
+                  available_ingredients: {
+                    type: 'array',
+                    items: { type: 'string' },
+                    maxItems: 3,
+                    description: `List of available ingredients in the user's configured pumps (max 3). These are in snake_case format (e.g., 'water', 'sprite', 'rc_cola'). You MUST only use ingredients from this list when creating the drink.${availableIngredients.length > 0 ? ` Current available ingredients: ${availableIngredients.slice(0, 3).join(', ')}.` : ' If not provided, you can use any ingredients.'}`,
                   },
                 },
                 required: ['name', 'category', 'ingredients', 'instructions', 'difficulty', 'prepTime'],

@@ -4,7 +4,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { ThemedText } from '@/components/themed-text';
 import { TabHeader } from '@/components/tab-header';
-import { Dropdown } from '@/components/dropdown';
 import { ACCENT_OPTIONS } from '@/constants/theme';
 import { useSettings, REALTIME_VOICES } from '@/contexts/settings';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -37,6 +36,7 @@ export default function SettingsScreen() {
   const inputBorder = useThemeColor({}, 'inputBorder');
   const placeholderColor = useThemeColor({}, 'placeholder');
   const accent = useThemeColor({}, 'tint');
+  const onTint = useThemeColor({}, 'onTint');
   const mutedForeground = useThemeColor({}, 'mutedForeground');
   const danger = useThemeColor({}, 'danger');
 
@@ -56,6 +56,10 @@ export default function SettingsScreen() {
   const [savingPumpConfig, setSavingPumpConfig] = useState<boolean>(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showPumpConfig, setShowPumpConfig] = useState(false);
+  const [showTheme, setShowTheme] = useState(false);
+  const [showAccentColor, setShowAccentColor] = useState(false);
+  const [showVoice, setShowVoice] = useState(false);
+  const [showBartenderModel, setShowBartenderModel] = useState(false);
 
   useEffect(() => setApiUrlInput(apiBaseUrl || API_BASE_URL), [apiBaseUrl]);
 
@@ -205,55 +209,125 @@ export default function SettingsScreen() {
           <ThemedText style={styles.sectionHeader}>Appearance</ThemedText>
           
           {/* Theme Mode */}
-          <View style={styles.settingRow}>
+          <TouchableOpacity 
+            style={[styles.settingRow, webStyles.hoverable]}
+            onPress={() => setShowTheme(!showTheme)}
+          >
             <View style={styles.settingLeft}>
               <Ionicons name="color-palette-outline" size={24} color={textColor} style={styles.settingIcon} />
               <ThemedText style={styles.settingLabel}>Theme</ThemedText>
             </View>
             <View style={styles.settingRight}>
-              <Dropdown
-                options={[
-                  { value: 'system' as const, label: 'System' },
-                  { value: 'light' as const, label: 'Light' },
-                  { value: 'dark' as const, label: 'Dark' },
-                ]}
-                value={theme}
-                onValueChange={(value) => setTheme(value)}
+              <ThemedText style={styles.settingValue} colorName="mutedForeground">
+                {theme.charAt(0).toUpperCase() + theme.slice(1)}
+              </ThemedText>
+              <Ionicons 
+                name={showTheme ? "chevron-up" : "chevron-down"} 
+                size={20} 
+                color={mutedForeground} 
               />
             </View>
-          </View>
+          </TouchableOpacity>
+
+          {showTheme && (
+            <View style={styles.expandedContent}>
+              {[
+                { value: 'system' as const, label: 'System' },
+                { value: 'light' as const, label: 'Light' },
+                { value: 'dark' as const, label: 'Dark' },
+              ].map((option) => {
+                const isSelected = theme === option.value;
+                return (
+                  <TouchableOpacity
+                    key={option.value}
+                    style={[
+                      styles.optionButton,
+                      { backgroundColor: inputBg, borderColor: inputBorder },
+                      isSelected && { backgroundColor: accent, borderColor: accent },
+                      webStyles.hoverable,
+                    ]}
+                    onPress={() => {
+                      setTheme(option.value);
+                    }}
+                  >
+                    <ThemedText
+                      style={styles.optionButtonText}
+                      colorName={isSelected ? 'onTint' : 'text'}
+                    >
+                      {option.label}
+                    </ThemedText>
+                    {isSelected && (
+                      <Ionicons name="checkmark" size={20} color={onTint} />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
 
           {/* Accent Color */}
-          <View style={styles.settingRow}>
+          <TouchableOpacity 
+            style={[styles.settingRow, webStyles.hoverable]}
+            onPress={() => setShowAccentColor(!showAccentColor)}
+          >
             <View style={styles.settingLeft}>
               <Ionicons name="brush-outline" size={24} color={textColor} style={styles.settingIcon} />
               <ThemedText style={styles.settingLabel}>Accent Color</ThemedText>
             </View>
             <View style={styles.settingRight}>
-              <Dropdown
-                options={ACCENT_OPTIONS.map(option => ({
-                  value: option.key,
-                  label: option.label,
-                  preview: (
-                    <View style={[styles.accentPreview, { backgroundColor: option.preview || accent }]} />
-                  ),
-                }))}
-                value={accentColor}
-                onValueChange={(value) => setAccentColor(value)}
-                renderValue={(value) => {
-                  const option = ACCENT_OPTIONS.find(o => o.key === value);
-                  return (
-                    <View style={styles.settingRight}>
-                      <View style={[styles.accentPreview, { backgroundColor: option?.preview || accent }]} />
-                      <ThemedText style={styles.settingValue} colorName="mutedForeground">
-                        {option?.label || 'Sunset Citrus'}
-                      </ThemedText>
-                    </View>
-                  );
-                }}
+              {(() => {
+                const option = ACCENT_OPTIONS.find(o => o.key === accentColor);
+                return (
+                  <>
+                    <View style={[styles.accentPreview, { backgroundColor: option?.preview || accent }]} />
+                    <ThemedText style={styles.settingValue} colorName="mutedForeground">
+                      {option?.label || 'Sunset Citrus'}
+                    </ThemedText>
+                  </>
+                );
+              })()}
+              <Ionicons 
+                name={showAccentColor ? "chevron-up" : "chevron-down"} 
+                size={20} 
+                color={mutedForeground} 
               />
             </View>
-          </View>
+          </TouchableOpacity>
+
+          {showAccentColor && (
+            <View style={styles.expandedContent}>
+              {ACCENT_OPTIONS.map((option) => {
+                const isSelected = accentColor === option.key;
+                return (
+                  <TouchableOpacity
+                    key={option.key}
+                    style={[
+                      styles.optionButton,
+                      { backgroundColor: inputBg, borderColor: inputBorder },
+                      isSelected && { backgroundColor: accent, borderColor: accent },
+                      webStyles.hoverable,
+                    ]}
+                    onPress={() => {
+                      setAccentColor(option.key);
+                    }}
+                  >
+                    <View style={styles.settingRight}>
+                      <View style={[styles.accentPreview, { backgroundColor: option.preview || accent }]} />
+                      <ThemedText
+                        style={styles.optionButtonText}
+                        colorName={isSelected ? 'onTint' : 'text'}
+                      >
+                        {option.label}
+                      </ThemedText>
+                    </View>
+                    {isSelected && (
+                      <Ionicons name="checkmark" size={20} color={onTint} />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
         </View>
 
         {/* Personalization Section */}
@@ -261,40 +335,110 @@ export default function SettingsScreen() {
           <ThemedText style={styles.sectionHeader}>Personalization</ThemedText>
           
           {/* Realtime Voice */}
-          <View style={styles.settingRow}>
+          <TouchableOpacity 
+            style={[styles.settingRow, webStyles.hoverable]}
+            onPress={() => setShowVoice(!showVoice)}
+          >
             <View style={styles.settingLeft}>
               <Ionicons name="mic-outline" size={24} color={textColor} style={styles.settingIcon} />
               <ThemedText style={styles.settingLabel}>Voice</ThemedText>
             </View>
             <View style={styles.settingRight}>
-              <Dropdown
-                options={REALTIME_VOICES.map(voice => ({
-                  value: voice,
-                  label: voice.charAt(0).toUpperCase() + voice.slice(1),
-                }))}
-                value={realtimeVoice}
-                onValueChange={(value) => setRealtimeVoice(value)}
+              <ThemedText style={styles.settingValue} colorName="mutedForeground">
+                {realtimeVoice.charAt(0).toUpperCase() + realtimeVoice.slice(1)}
+              </ThemedText>
+              <Ionicons 
+                name={showVoice ? "chevron-up" : "chevron-down"} 
+                size={20} 
+                color={mutedForeground} 
               />
             </View>
-          </View>
+          </TouchableOpacity>
+
+          {showVoice && (
+            <View style={styles.expandedContent}>
+              {REALTIME_VOICES.map((voice) => {
+                const isSelected = realtimeVoice === voice;
+                return (
+                  <TouchableOpacity
+                    key={voice}
+                    style={[
+                      styles.optionButton,
+                      { backgroundColor: inputBg, borderColor: inputBorder },
+                      isSelected && { backgroundColor: accent, borderColor: accent },
+                      webStyles.hoverable,
+                    ]}
+                    onPress={() => {
+                      setRealtimeVoice(voice);
+                    }}
+                  >
+                    <ThemedText
+                      style={styles.optionButtonText}
+                      colorName={isSelected ? 'onTint' : 'text'}
+                    >
+                      {voice.charAt(0).toUpperCase() + voice.slice(1)}
+                    </ThemedText>
+                    {isSelected && (
+                      <Ionicons name="checkmark" size={20} color={onTint} />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
 
           {/* Bartender Model */}
-          <View style={styles.settingRow}>
+          <TouchableOpacity 
+            style={[styles.settingRow, webStyles.hoverable]}
+            onPress={() => setShowBartenderModel(!showBartenderModel)}
+          >
             <View style={styles.settingLeft}>
               <Ionicons name="person-outline" size={24} color={textColor} style={styles.settingIcon} />
               <ThemedText style={styles.settingLabel}>Bartender Model</ThemedText>
             </View>
             <View style={styles.settingRight}>
-              <Dropdown
-                options={BARTENDER_MODEL_OPTIONS.map(option => ({
-                  value: option.id,
-                  label: option.label,
-                }))}
-                value={bartenderModel}
-                onValueChange={(value) => setBartenderModel(value)}
+              <ThemedText style={styles.settingValue} colorName="mutedForeground">
+                {BARTENDER_MODEL_OPTIONS.find(o => o.id === bartenderModel)?.label || bartenderModel}
+              </ThemedText>
+              <Ionicons 
+                name={showBartenderModel ? "chevron-up" : "chevron-down"} 
+                size={20} 
+                color={mutedForeground} 
               />
             </View>
-          </View>
+          </TouchableOpacity>
+
+          {showBartenderModel && (
+            <View style={styles.expandedContent}>
+              {BARTENDER_MODEL_OPTIONS.map((option) => {
+                const isSelected = bartenderModel === option.id;
+                return (
+                  <TouchableOpacity
+                    key={option.id}
+                    style={[
+                      styles.optionButton,
+                      { backgroundColor: inputBg, borderColor: inputBorder },
+                      isSelected && { backgroundColor: accent, borderColor: accent },
+                      webStyles.hoverable,
+                    ]}
+                    onPress={() => {
+                      setBartenderModel(option.id);
+                    }}
+                  >
+                    <ThemedText
+                      style={styles.optionButtonText}
+                      colorName={isSelected ? 'onTint' : 'text'}
+                    >
+                      {option.label}
+                    </ThemedText>
+                    {isSelected && (
+                      <Ionicons name="checkmark" size={20} color={onTint} />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
         </View>
 
         {/* Equipment Section */}
@@ -665,5 +809,28 @@ const styles = StyleSheet.create({
         cursor: 'not-allowed' as any,
       },
     }),
+  },
+  optionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    marginBottom: 8,
+    ...Platform.select({
+      web: {
+        paddingVertical: 14,
+        paddingHorizontal: 20,
+        borderRadius: 10,
+        cursor: 'pointer',
+      },
+    }),
+  },
+  optionButtonText: {
+    fontSize: 16,
+    fontWeight: '400',
+    flex: 1,
   },
 });

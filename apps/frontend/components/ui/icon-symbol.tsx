@@ -18,6 +18,7 @@ const MAPPING: { [key: string]: string } = {
   'chevron.right': 'chevron-right',
   // Tab navigation icons
   'list.bullet.rectangle': 'restaurant-menu',
+  'wineglass.fill': 'local-bar',
   'bubble.left.and.bubble.right': 'chat',
   'gear': 'settings',
   'heart.fill': 'favorite',
