@@ -7,8 +7,13 @@ from .models import (
     PourResponse,
     PumpConfigRequest,
     PumpConfigResponse,
+    SelectedPump,
 )
-from .utils import FirmwareClient
+from .utils import (
+    FirmwareClient,
+    build_firmware_command,
+    get_hardware_profile,
+)
 from data.pump_config import (
     get_pump_config,
     create_or_update_pump_config,
@@ -20,6 +25,11 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/iot", tags=["IoT"])
 
 _firmware_client: FirmwareClient | None = None
+try:
+    _hardware_profile = get_hardware_profile()
+except RuntimeError as exc:  # pragma: no cover - configuration issues
+    logger.error("Hardware profile load failed: %s", exc)
+    _hardware_profile = None
 
 
 def get_firmware_client() -> FirmwareClient | None:
@@ -115,6 +125,8 @@ async def send_drink_to_firmware(request: PourRequest) -> PourResponse:
     Returns:
         Response from firmware API, or error if ingredients are missing
     """
+    global _hardware_profile  # noqa: PLW0603 - used for caching hardware profile
+    
     # Validate ingredients if user_id is provided
     if request.user_id:
         try:
@@ -151,94 +163,151 @@ async def send_drink_to_firmware(request: PourRequest) -> PourResponse:
                     return PourResponse(
                         status="error",
                         message=error_message,
+                        selected_pump=None,
                     )
         except Exception as e:
             logger.error(f"Error validating pump config: {str(e)}")
             # Continue with pour if validation fails (don't block on config errors)
             logger.warning("Continuing with pour despite pump config validation error")
-
-    client = get_firmware_client()
-    if client is None:
-        logger.warning(
-            "Firmware API URL not configured. Request will succeed without hardware dispense."
-        )
-        return PourResponse(
-            status="ok",
-            message="Firmware API not configured - request accepted but not dispensed",
-        )
-
-    try:
-        # Generate hardware_steps from ratios if available
-        drink = request.drink
-        if drink.ratios and request.user_id:
-            try:
-                pump_config = await get_pump_config(request.user_id)
-                if pump_config:
-                    # Create ingredient to pump mapping
-                    ingredient_to_pump = {}
-                    for pump_key in ["pump1", "pump2", "pump3"]:
-                        pump_value = pump_config.get(pump_key)
-                        if pump_value:
-                            ingredient_to_pump[pump_value] = pump_key
+    
+    # Generate hardware_steps from ratios if available (before building payload)
+    drink = request.drink
+    if drink.ratios and request.user_id:
+        try:
+            pump_config = await get_pump_config(request.user_id)
+            if pump_config:
+                # Create ingredient to pump mapping
+                ingredient_to_pump = {}
+                for pump_key in ["pump1", "pump2", "pump3"]:
+                    pump_value = pump_config.get(pump_key)
+                    if pump_value:
+                        ingredient_to_pump[pump_value] = pump_key
+                
+                # Generate hardware steps from ratios
+                # 100% = 5 seconds, so ratio% = (ratio / 100) * 5 seconds
+                # All pumps run simultaneously for their respective durations
+                from drinks.models import DispenseStep
+                hardware_steps = []
+                
+                for i, ingredient in enumerate(drink.ingredients):
+                    normalized_ingredient = normalize_to_snake_case(ingredient)
+                    pump = ingredient_to_pump.get(normalized_ingredient)
                     
-                    # Generate hardware steps from ratios
-                    # 100% = 5 seconds, so ratio% = (ratio / 100) * 5 seconds
-                    # All pumps run simultaneously for their respective durations
-                    from drinks.models import DispenseStep
-                    hardware_steps = []
-                    
+                    if pump and i < len(drink.ratios):
+                        ratio = drink.ratios[i]
+                        # Calculate seconds: 100% = 5 seconds
+                        seconds = (ratio / 100.0) * 5.0
+                        
+                        hardware_steps.append(DispenseStep(
+                            pump=pump,
+                            seconds=seconds,
+                            description=f"{ingredient} ({ratio}%)"
+                        ))
+                
+                # If we generated steps, add them to the drink
+                if hardware_steps:
+                    drink.hardware_steps = hardware_steps
+                    # Create and store pump mapping for firmware
+                    # Map: ingredient (normalized) -> pump name
+                    pump_mapping = {}
                     for i, ingredient in enumerate(drink.ingredients):
                         normalized_ingredient = normalize_to_snake_case(ingredient)
                         pump = ingredient_to_pump.get(normalized_ingredient)
-                        
-                        if pump and i < len(drink.ratios):
-                            ratio = drink.ratios[i]
-                            # Calculate seconds: 100% = 5 seconds
-                            seconds = (ratio / 100.0) * 5.0
-                            
-                            hardware_steps.append(DispenseStep(
-                                pump=pump,
-                                seconds=seconds,
-                                description=f"{ingredient} ({ratio}%)"
-                            ))
-                    
-                    # If we generated steps, add them to the drink
-                    if hardware_steps:
-                        drink.hardware_steps = hardware_steps
-                        # Create and store pump mapping for firmware
-                        # Map: ingredient (normalized) -> pump name
-                        pump_mapping = {}
-                        for i, ingredient in enumerate(drink.ingredients):
-                            normalized_ingredient = normalize_to_snake_case(ingredient)
-                            pump = ingredient_to_pump.get(normalized_ingredient)
-                            if pump:
-                                pump_mapping[normalized_ingredient] = pump
-                        # Store mapping on drink object (will be included in dict)
-                        drink._pump_mapping = pump_mapping
-                        logger.info(f"Generated {len(hardware_steps)} hardware steps from ratios for {drink.name}, pump mapping: {pump_mapping}")
-            except Exception as e:
-                logger.warning(f"Failed to generate hardware steps from ratios: {str(e)}")
-                # Continue without hardware steps
-        
-        drink_dict = drink.dict(by_alias=True, exclude_none=True)
-        # Add pump mapping if it was generated
-        if hasattr(drink, '_pump_mapping'):
-            drink_dict['pump_mapping'] = drink._pump_mapping
-        result = await client.send_drink_request(drink_dict)
-        return PourResponse(**result)
-    except httpx.HTTPError as e:
+                        if pump:
+                            pump_mapping[normalized_ingredient] = pump
+                    # Store mapping on drink object (will be included in dict)
+                    drink._pump_mapping = pump_mapping
+                    logger.info(f"Generated {len(hardware_steps)} hardware steps from ratios for {drink.name}, pump mapping: {pump_mapping}")
+        except Exception as e:
+            logger.warning(f"Failed to generate hardware steps from ratios: {str(e)}")
+            # Continue without hardware steps
+    
+    # Get hardware profile and select pump
+    if _hardware_profile is None:
         logger.warning(
-            f"Firmware API is unresponsive: {str(e)}. Request will succeed without hardware dispense."
+            "Hardware profile unavailable. Defaulting to simulated pump selection."
+        )
+        try:
+            profile = get_hardware_profile()
+            selection = profile.choose_random_pump()
+            global _hardware_profile  # noqa: PLW0603 - update cache after recovery
+            _hardware_profile = profile
+        except RuntimeError as exc:  # pragma: no cover - config missing
+            raise HTTPException(
+                status_code=500,
+                detail="Pi pump configuration not found. Ensure pi_mapping.json exists.",
+            ) from exc
+    else:
+        selection = _hardware_profile.choose_random_pump()
+    selected_pump = SelectedPump(**selection.to_response_dict())
+    
+    # Build drink payload (after potential hardware_steps generation)
+    drink_payload = (
+        drink.model_dump()
+        if hasattr(drink, "model_dump")
+        else drink.dict(by_alias=True, exclude_none=True)
+    )
+    # Add pump mapping if it was generated
+    if hasattr(drink, '_pump_mapping'):
+        drink_payload['pump_mapping'] = drink._pump_mapping
+    
+    # Build firmware command payload
+    command_payload = build_firmware_command(drink_payload, selection)
+    
+    client = get_firmware_client()
+    if client is None:
+        logger.warning(
+            "Firmware API URL not configured. Simulating pour via pump %s.",
+            selected_pump.id,
         )
         return PourResponse(
             status="ok",
-            message="Firmware API unresponsive - request accepted but not dispensed",
+            message=(
+                "Firmware API not configured - simulated dispense using "
+                f"{selected_pump.label}"
+            ),
+            selected_pump=selected_pump,
         )
-    except Exception as e:
+
+    try:
+        result = await client.send_drink_request(command_payload)
+        status = result.get("status", "ok")
+        message = result.get("message") or f"Dispensing via {selected_pump.label}."
+
+        if status != "ok":
+            return PourResponse(
+                status="error",
+                message=message,
+                selected_pump=selected_pump,
+            )
+
+        return PourResponse(status="ok", message=message, selected_pump=selected_pump)
+    except Exception as exc:
+        # Prefer to surface HTTP-specific errors if httpx is available
+        try:
+            if isinstance(exc, httpx.HTTPError):
+                logger.warning(
+                    "Firmware communication HTTP error (%s). Returning simulated success.", exc
+                )
+                return PourResponse(
+                    status="ok",
+                    message=(
+                        "Firmware communication error - request accepted using "
+                        f"{selected_pump.label}, but hardware may not have dispensed."
+                    ),
+                    selected_pump=selected_pump,
+                )
+        except Exception:
+            pass
+
         logger.warning(
-            f"Unexpected error communicating with firmware: {str(e)}. Request will succeed without hardware dispense."
+            "Firmware communication error (%s). Returning simulated success.", exc
         )
         return PourResponse(
             status="ok",
-            message="Firmware communication error - request accepted but not dispensed",
+            message=(
+                "Firmware communication error - request accepted using "
+                f"{selected_pump.label}, but hardware may not have dispensed."
+            ),
+            selected_pump=selected_pump,
         )

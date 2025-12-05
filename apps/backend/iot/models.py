@@ -11,11 +11,22 @@ class PourRequest(BaseModel):
     user_id: Optional[str] = None
 
 
+class SelectedPump(BaseModel):
+    """Details about the pump that was selected for dispensing."""
+
+    id: str
+    label: str
+    gpio_pin: int
+    liquid: Optional[str] = None
+    target_volume_ml: Optional[float] = None
+
+
 class PourResponse(BaseModel):
     """Response from firmware API after receiving a drink request."""
 
     status: Literal["ok", "error"]
     message: str
+    selected_pump: Optional[SelectedPump] = None
 
 
 class PumpConfig(BaseModel):

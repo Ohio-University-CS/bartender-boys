@@ -5,7 +5,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { ThemedText } from '@/components/themed-text';
 import { TabHeader } from '@/components/tab-header';
 import { ACCENT_OPTIONS } from '@/constants/theme';
-import { useSettings, REALTIME_VOICES } from '@/contexts/settings';
+import { useSettings, REALTIME_VOICES, isRealtimeVoice } from '@/contexts/settings';
+import type { RealtimeVoice } from '@/contexts/settings';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { router, useFocusEffect } from 'expo-router';
@@ -193,9 +194,24 @@ export default function SettingsScreen() {
       console.error('[Settings] Logout error:', error);
       Alert.alert('Error', 'Failed to log out. Please try again.');
     }
-  };
+    };
 
-  return (
+    // Map bartender model ids to a realtime voice key (displayed on model buttons).
+    // Selecting a model will also set the associated realtime voice.
+    const MODEL_VOICE_MAP: Record<string, RealtimeVoice> = {
+      classic: 'alloy',
+      luisa: 'ash',
+      elizabeth: 'ballad',
+      mike: 'coral',
+      robo: 'echo',
+      ironman: 'sage',
+      makayla: 'shimmer',
+      martin: 'verse',
+      matt: 'marin',
+      noir: 'cedar',
+    };
+
+    return (
     <View style={[styles.container, { backgroundColor, paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}> 
       <TabHeader title="Settings" />
 
