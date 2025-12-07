@@ -105,18 +105,24 @@ async def receive_drink_request(
     
     This endpoint accepts pour requests with a list of pump_id and ratio pairs.
     All pumps run simultaneously, each for a duration based on its ratio.
-    Base duration: 100% = 5 seconds, so ratio% = (ratio / 100) * 5 seconds.
+    Base duration: 100% = 30 seconds, so ratio% = (ratio / 100) * 30 seconds.
+    Pump 2 runs twice as long as pumps 1 and 3.
     """
     # Flicker onboard LED to indicate request received
     logger.info(f"Received pour request with {len(request.steps)} steps")
     await flicker_onboard_led(times=3, duration=0.1)
     
-    # Base duration: 100% = 5 seconds
-    BASE_DURATION_SECONDS = 5.0
+    # Base duration: 100% = 30 seconds
+    BASE_DURATION_SECONDS = 30.0
     
     if not GPIO_AVAILABLE:
         logger.warning("GPIO not available - simulating pour action")
-        step_summary = ", ".join([f"pump {s.pump_id} ({s.ratio}%)" for s in request.steps])
+        step_summaries = []
+        for s in request.steps:
+            base_dur = (s.ratio / 100.0) * BASE_DURATION_SECONDS
+            actual_dur = base_dur * 2.0 if s.pump_id == 2 else base_dur
+            step_summaries.append(f"pump {s.pump_id} ({s.ratio}%, {actual_dur:.1f}s)")
+        step_summary = ", ".join(step_summaries)
         return DrinkResponse(
             status="ok",
             message=f"GPIO not available (development mode). Would dispense: {step_summary}",
@@ -135,7 +141,13 @@ async def receive_drink_request(
                 continue
             
             gpio_pin = GPIO_PIN_MAP[step.pump_id]
-            duration = (step.ratio / 100.0) * BASE_DURATION_SECONDS
+            # Calculate base duration: 100% = 30 seconds
+            base_duration = (step.ratio / 100.0) * BASE_DURATION_SECONDS
+            # Pump 2 runs twice as long as pumps 1 and 3
+            if step.pump_id == 2:
+                duration = base_duration * 2.0
+            else:
+                duration = base_duration
             
             if duration > 0:
                 pins_to_control.add(gpio_pin)
