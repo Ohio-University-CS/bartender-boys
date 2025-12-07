@@ -20,6 +20,7 @@ const MAPPING: { [key: string]: string } = {
   'list.bullet.rectangle': 'restaurant-menu',
   'wineglass.fill': 'local-bar',
   'bubble.left.and.bubble.right': 'chat',
+  'person.fill': 'person',
   'gear': 'settings',
   'heart.fill': 'favorite',
 };

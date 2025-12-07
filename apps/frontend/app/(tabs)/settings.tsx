@@ -5,13 +5,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { ThemedText } from '@/components/themed-text';
 import { TabHeader } from '@/components/tab-header';
 import { ACCENT_OPTIONS } from '@/constants/theme';
-import { useSettings, REALTIME_VOICES, isRealtimeVoice } from '@/contexts/settings';
-import type { RealtimeVoice } from '@/contexts/settings';
+import { useSettings } from '@/contexts/settings';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { router, useFocusEffect } from 'expo-router';
 import { API_BASE_URL } from '@/environment';
-import { BARTENDER_MODEL_OPTIONS } from '@/constants/bartender-models';
 import { webStyles } from '@/utils/web-styles';
 
 export default function SettingsScreen() {
@@ -23,10 +21,6 @@ export default function SettingsScreen() {
     setApiBaseUrl,
     accentColor,
     setAccentColor,
-    realtimeVoice,
-    setRealtimeVoice,
-    bartenderModel,
-    setBartenderModel,
   } = useSettings();
 
   // Theme colors
@@ -59,8 +53,6 @@ export default function SettingsScreen() {
   const [showPumpConfig, setShowPumpConfig] = useState(false);
   const [showTheme, setShowTheme] = useState(false);
   const [showAccentColor, setShowAccentColor] = useState(false);
-  const [showVoice, setShowVoice] = useState(false);
-  const [showBartenderModel, setShowBartenderModel] = useState(false);
 
   useEffect(() => setApiUrlInput(apiBaseUrl || API_BASE_URL), [apiBaseUrl]);
 
@@ -196,21 +188,6 @@ export default function SettingsScreen() {
     }
     };
 
-    // Map bartender model ids to a realtime voice key (displayed on model buttons).
-    // Selecting a model will also set the associated realtime voice.
-    const MODEL_VOICE_MAP: Record<string, RealtimeVoice> = {
-      classic: 'alloy',
-      luisa: 'ash',
-      elizabeth: 'ballad',
-      mike: 'coral',
-      robo: 'echo',
-      ironman: 'sage',
-      makayla: 'shimmer',
-      martin: 'verse',
-      matt: 'marin',
-      noir: 'cedar',
-    };
-
     return (
     <View style={[styles.container, { backgroundColor, paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}> 
       <TabHeader title="Settings" />
@@ -336,117 +313,6 @@ export default function SettingsScreen() {
                         {option.label}
                       </ThemedText>
                     </View>
-                    {isSelected && (
-                      <Ionicons name="checkmark" size={20} color={onTint} />
-                    )}
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          )}
-        </View>
-
-        {/* Personalization Section */}
-        <View style={styles.section}>
-          <ThemedText style={styles.sectionHeader}>Personalization</ThemedText>
-          
-          {/* Realtime Voice */}
-          <TouchableOpacity 
-            style={[styles.settingRow, webStyles.hoverable]}
-            onPress={() => setShowVoice(!showVoice)}
-          >
-            <View style={styles.settingLeft}>
-              <Ionicons name="mic-outline" size={24} color={textColor} style={styles.settingIcon} />
-              <ThemedText style={styles.settingLabel}>Voice</ThemedText>
-            </View>
-            <View style={styles.settingRight}>
-              <ThemedText style={styles.settingValue} colorName="mutedForeground">
-                {realtimeVoice.charAt(0).toUpperCase() + realtimeVoice.slice(1)}
-              </ThemedText>
-              <Ionicons 
-                name={showVoice ? "chevron-up" : "chevron-down"} 
-                size={20} 
-                color={mutedForeground} 
-              />
-            </View>
-          </TouchableOpacity>
-
-          {showVoice && (
-            <View style={styles.expandedContent}>
-              {REALTIME_VOICES.map((voice) => {
-                const isSelected = realtimeVoice === voice;
-                return (
-                  <TouchableOpacity
-                    key={voice}
-                    style={[
-                      styles.optionButton,
-                      { backgroundColor: inputBg, borderColor: inputBorder },
-                      isSelected && { backgroundColor: accent, borderColor: accent },
-                      webStyles.hoverable,
-                    ]}
-                    onPress={() => {
-                      setRealtimeVoice(voice);
-                    }}
-                  >
-                    <ThemedText
-                      style={styles.optionButtonText}
-                      colorName={isSelected ? 'onTint' : 'text'}
-                    >
-                      {voice.charAt(0).toUpperCase() + voice.slice(1)}
-                    </ThemedText>
-                    {isSelected && (
-                      <Ionicons name="checkmark" size={20} color={onTint} />
-                    )}
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          )}
-
-          {/* Bartender Model */}
-          <TouchableOpacity 
-            style={[styles.settingRow, webStyles.hoverable]}
-            onPress={() => setShowBartenderModel(!showBartenderModel)}
-          >
-            <View style={styles.settingLeft}>
-              <Ionicons name="person-outline" size={24} color={textColor} style={styles.settingIcon} />
-              <ThemedText style={styles.settingLabel}>Bartender Model</ThemedText>
-            </View>
-            <View style={styles.settingRight}>
-              <ThemedText style={styles.settingValue} colorName="mutedForeground">
-                {BARTENDER_MODEL_OPTIONS.find(o => o.id === bartenderModel)?.label || bartenderModel}
-              </ThemedText>
-              <Ionicons 
-                name={showBartenderModel ? "chevron-up" : "chevron-down"} 
-                size={20} 
-                color={mutedForeground} 
-              />
-            </View>
-          </TouchableOpacity>
-
-          {showBartenderModel && (
-            <View style={styles.expandedContent}>
-              {BARTENDER_MODEL_OPTIONS.map((option) => {
-                const isSelected = bartenderModel === option.id;
-                return (
-                  <TouchableOpacity
-                    key={option.id}
-                    style={[
-                      styles.optionButton,
-                      { backgroundColor: inputBg, borderColor: inputBorder },
-                      isSelected && { backgroundColor: accent, borderColor: accent },
-                      webStyles.hoverable,
-                    ]}
-                    onPress={() => {
-                      setBartenderModel(option.id);
-                    }}
-                  >
-                    <ThemedText
-                      style={styles.optionButtonText}
-                      colorName={isSelected ? 'onTint' : 'text'}
-                    >
-                      {option.label}
-                    </ThemedText>
                     {isSelected && (
                       <Ionicons name="checkmark" size={20} color={onTint} />
                     )}

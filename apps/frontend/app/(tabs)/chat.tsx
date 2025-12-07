@@ -187,6 +187,9 @@ export default function ChatScreen() {
   }, [cardBg, borderColor, metaText, mutedForeground, handleConversationPress, deletingId, confirmDeleteConversation]);
 
   const handleBartenderPress = useCallback(() => {
+    // Navigate to the voice assistant screen (not the bartender selection tab)
+    // Use href to explicitly target the stack route, not the tab route
+    // The voice assistant is at /bartender (stack route), not /(tabs)/bartender (tab route)
     router.push('/bartender' as any);
   }, [router]);
 

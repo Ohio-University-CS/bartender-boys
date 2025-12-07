@@ -285,28 +285,28 @@ async def send_drink_to_firmware(request: PourRequest) -> PourResponse:
         # Prefer to surface HTTP-specific errors if httpx is available
         try:
             if isinstance(exc, httpx.HTTPError):
-                logger.warning(
-                    "Firmware communication HTTP error (%s). Returning simulated success.", exc
+                logger.error(
+                    "Firmware communication HTTP error (%s). Returning error status.", exc
                 )
                 return PourResponse(
-                    status="ok",
+                    status="error",
                     message=(
-                        "Firmware communication error - request accepted using "
-                        f"{selected_pump.label}, but hardware may not have dispensed."
+                        f"Failed to communicate with firmware: {str(exc)}. "
+                        f"Requested pump: {selected_pump.label}."
                     ),
                     selected_pump=selected_pump,
                 )
         except Exception:
             pass
 
-        logger.warning(
-            "Firmware communication error (%s). Returning simulated success.", exc
+        logger.error(
+            "Firmware communication error (%s). Returning error status.", exc
         )
         return PourResponse(
-            status="ok",
+            status="error",
             message=(
-                "Firmware communication error - request accepted using "
-                f"{selected_pump.label}, but hardware may not have dispensed."
+                f"Failed to communicate with firmware: {str(exc)}. "
+                f"Requested pump: {selected_pump.label}."
             ),
             selected_pump=selected_pump,
         )

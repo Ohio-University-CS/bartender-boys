@@ -32,11 +32,14 @@ export default function DrinkDetailScreen() {
   const [error, setError] = useState<string | null>(null);
   const [pouring, setPouring] = useState(false);
   const [pourSuccess, setPourSuccess] = useState(false);
+  const [pourFail, setPourFail] = useState(false);
   const [canPour, setCanPour] = useState(true);
   const wineIconOpacity = useRef(new Animated.Value(1)).current;
   const checkmarkIconOpacity = useRef(new Animated.Value(0)).current;
+  const xIconOpacity = useRef(new Animated.Value(0)).current;
   const wineIconScale = useRef(new Animated.Value(1)).current;
   const checkmarkIconScale = useRef(new Animated.Value(0.8)).current;
+  const xIconScale = useRef(new Animated.Value(0.8)).current;
   const buttonOpacity = useRef(new Animated.Value(1)).current;
 
   // Helper function to normalize ingredient names to snake_case (matching backend logic)
@@ -125,11 +128,14 @@ export default function DrinkDetailScreen() {
         setLoading(true);
         setError(null);
         setPourSuccess(false);
+        setPourFail(false);
         setCanPour(true); // Reset to true while loading
         wineIconOpacity.setValue(1);
         checkmarkIconOpacity.setValue(0);
+        xIconOpacity.setValue(0);
         wineIconScale.setValue(1);
         checkmarkIconScale.setValue(0.8);
+        xIconScale.setValue(0.8);
         buttonOpacity.setValue(1);
         const drinkData = await getDrinkById(id, apiBaseUrl);
         setDrink(drinkData);
@@ -149,7 +155,7 @@ export default function DrinkDetailScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, apiBaseUrl, checkIngredientAvailability]);
 
-  // Animate icon transition when success state changes
+  // Animate icon transition when success or fail state changes
   useEffect(() => {
     if (pourSuccess) {
       // Fade out wine icon and fade in checkmark
@@ -169,15 +175,60 @@ export default function DrinkDetailScreen() {
           duration: 300,
           useNativeDriver: true,
         }),
+        Animated.timing(xIconOpacity, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: true,
+        }),
         Animated.spring(checkmarkIconScale, {
           toValue: 1,
           tension: 50,
           friction: 7,
           useNativeDriver: true,
         }),
+        Animated.timing(xIconScale, {
+          toValue: 0.8,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else if (pourFail) {
+      // Fade out wine icon and fade in X icon
+      Animated.parallel([
+        Animated.timing(wineIconOpacity, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        Animated.timing(wineIconScale, {
+          toValue: 0.8,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        Animated.timing(xIconOpacity, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        Animated.timing(checkmarkIconOpacity, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        Animated.spring(xIconScale, {
+          toValue: 1,
+          tension: 50,
+          friction: 7,
+          useNativeDriver: true,
+        }),
+        Animated.timing(checkmarkIconScale, {
+          toValue: 0.8,
+          duration: 300,
+          useNativeDriver: true,
+        }),
       ]).start();
     } else {
-      // Fade in wine icon and fade out checkmark
+      // Fade in wine icon and fade out checkmark/X
       Animated.parallel([
         Animated.timing(wineIconOpacity, {
           toValue: 1,
@@ -195,7 +246,17 @@ export default function DrinkDetailScreen() {
           duration: 300,
           useNativeDriver: true,
         }),
+        Animated.timing(xIconOpacity, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: true,
+        }),
         Animated.timing(checkmarkIconScale, {
+          toValue: 0.8,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        Animated.timing(xIconScale, {
           toValue: 0.8,
           duration: 300,
           useNativeDriver: true,
@@ -204,7 +265,7 @@ export default function DrinkDetailScreen() {
     }
     // Animation refs are stable and don't need to trigger re-runs
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pourSuccess]);
+  }, [pourSuccess, pourFail]);
 
   // Animate button opacity when pouring state or canPour state changes
   useEffect(() => {
@@ -237,17 +298,30 @@ export default function DrinkDetailScreen() {
     }
   }, [pourSuccess]);
 
+  // Reset fail state after 3 seconds
+  useEffect(() => {
+    if (pourFail) {
+      const timer = setTimeout(() => {
+        setPourFail(false);
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [pourFail]);
+
   const handlePour = useCallback(async () => {
     if (!drink) return;
 
     try {
       setPouring(true);
       setPourSuccess(false);
+      setPourFail(false);
       // Reset animation values immediately
       wineIconOpacity.setValue(1);
       checkmarkIconOpacity.setValue(0);
+      xIconOpacity.setValue(0);
       wineIconScale.setValue(1);
       checkmarkIconScale.setValue(0.8);
+      xIconScale.setValue(0.8);
       buttonOpacity.setValue(1);
       
       // Get user_id from AsyncStorage
@@ -300,11 +374,13 @@ export default function DrinkDetailScreen() {
         Alert.alert('Dispensing started', result.message || 'Your drink is on the way!');
       } else {
         // Handle error status from backend (e.g., missing ingredients)
+        setPourFail(true);
         Alert.alert('Dispense failed', result.message || 'Unknown error');
       }
     } catch (error: any) {
       // Display user-friendly error message
       const errorMessage = error?.message ?? 'Unknown error occurred';
+      setPourFail(true);
       Alert.alert('Dispense failed', errorMessage);
     } finally {
       setPouring(false);
@@ -550,9 +626,23 @@ export default function DrinkDetailScreen() {
                     <Ionicons name="checkmark" size={20} color="#000000" />
                   </View>
                 </Animated.View>
+                <Animated.View
+                  style={[
+                    styles.iconWrapper,
+                    styles.iconAbsolute,
+                    {
+                      opacity: xIconOpacity,
+                      transform: [{ scale: xIconScale }],
+                    },
+                  ]}
+                >
+                  <View style={styles.xBubble}>
+                    <Ionicons name="close" size={20} color="#000000" />
+                  </View>
+                </Animated.View>
               </View>
               <Text style={styles.pourButtonText}>
-                {pourSuccess ? 'Pour Successful!' : canPour ? 'Pour This Drink' : 'Ingredients Not Available'}
+                {pourSuccess ? 'Pour Successful!' : pourFail ? 'Pour Failed' : canPour ? 'Pour This Drink' : 'Ingredients Not Available'}
               </Text>
             </TouchableOpacity>
           </Animated.View>
@@ -839,6 +929,14 @@ const styles = StyleSheet.create({
   },
   checkmarkBubble: {
     backgroundColor: '#00FF00',
+    borderRadius: 12,
+    width: 24,
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  xBubble: {
+    backgroundColor: '#FF4D4D',
     borderRadius: 12,
     width: 24,
     height: 24,
