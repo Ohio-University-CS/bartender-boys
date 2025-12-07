@@ -8,8 +8,10 @@ import Markdown from 'react-native-markdown-display';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { API_BASE_URL } from '@/environment';
+import { FontFamilies } from '@/constants/theme';
 import { useSettings } from '@/contexts/settings';
 import { getConversationChats, createChat, type ChatMessage } from '@/utils/chat-api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function ConversationScreen() {
   const router = useRouter();
@@ -22,6 +24,7 @@ export default function ConversationScreen() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [generatingDrink, setGeneratingDrink] = useState(false);
   const talkingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const flatListRef = useRef<FlatList>(null);
   const dotAnimations = useRef([
@@ -29,6 +32,12 @@ export default function ConversationScreen() {
     new Animated.Value(0),
     new Animated.Value(0),
   ]).current;
+
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      document.title = 'BrewBot - Conversation';
+    }
+  }, []);
 
   const stopTalkingImmediately = useCallback(() => {
     if (talkingTimeoutRef.current) {
@@ -97,14 +106,27 @@ export default function ConversationScreen() {
     };
   }, []);
 
-  // Scroll to bottom when new messages arrive
+  // Scroll to bottom when new messages arrive or content changes (for streaming)
+  const lastMessageContent = messages.length > 0 ? messages[messages.length - 1]?.content : '';
   useEffect(() => {
     if (messages.length > 0) {
-      setTimeout(() => {
+      // Use a small timeout to ensure the content has rendered
+      const timeoutId = setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: false });
+      }, 50);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [messages.length, lastMessageContent]);
+
+  // Scroll to bottom when generating drink status appears
+  useEffect(() => {
+    if (generatingDrink) {
+      const timeoutId = setTimeout(() => {
         flatListRef.current?.scrollToEnd({ animated: true });
       }, 100);
+      return () => clearTimeout(timeoutId);
     }
-  }, [messages.length]);
+  }, [generatingDrink]);
 
   const onSend = useCallback(async () => {
     const text = input.trim();
@@ -139,14 +161,15 @@ export default function ConversationScreen() {
       // Add the new user message
       openAIMessages.push({ role: 'user', content: text });
       
-      const payload = {
-        messages: [
-          { role: 'system', content: 'You are a helpful bartender assistant. Provide concise cocktail advice, recipes, and substitutions. Keep answers short.' },
-          ...openAIMessages,
-        ],
-      };
+      // Get user_id from AsyncStorage if available
+      let userId: string | null = null;
+      try {
+        userId = await AsyncStorage.getItem('user_id');
+      } catch (error) {
+        console.error('Failed to get user_id:', error);
+      }
       
-      // Prefer EventSource (web native or react-native-sse on native)
+      // Use fetch with ReadableStream for POST requests (avoids huge query params)
       if (Platform.OS === 'web') {
         const aiId = `${Date.now()}-ai`;
         const tempAiMessage: ChatMessage = {
@@ -158,9 +181,6 @@ export default function ConversationScreen() {
         };
         setMessages((m) => [...m, tempAiMessage]);
 
-        const url = new URL(`${baseUrl}/chat/respond_stream`);
-        url.searchParams.set('q', JSON.stringify(payload));
-
         let aiText = '';
         let completed = false;
         const markComplete = () => {
@@ -176,63 +196,94 @@ export default function ConversationScreen() {
           }
         };
 
-        const es = new window.EventSource(url.toString());
+        try {
+          const response = await fetch(`${baseUrl}/chat/respond?stream=true`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'text/event-stream',
+            },
+            body: JSON.stringify({
+              messages: openAIMessages,
+              user_id: userId || undefined,
+            }),
+          });
 
-        es.addEventListener('open', () => {
-          console.log('[conversation] SSE open');
-        });
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
 
-        es.addEventListener('message', (event: any) => {
-          try {
-            const data = JSON.parse(event.data);
-            if (data.delta) {
-              aiText += String(data.delta);
-              setMessages((m) =>
-                m.map((msg) => (msg.id === aiId ? { ...msg, content: aiText } : msg))
-              );
-            }
-            if (data.done) {
-              console.log('[conversation] SSE done');
+          const reader = response.body?.getReader();
+          const decoder = new TextDecoder();
+          let buffer = '';
+
+          if (!reader) {
+            throw new Error('No response body reader available');
+          }
+
+          console.log('[conversation] Stream started');
+
+          while (true) {
+            const { done, value } = await reader.read();
+            
+            if (done) {
+              console.log('[conversation] Stream done');
               markComplete();
-              es.close();
+              break;
             }
-            if (data.error) {
-              throw new Error(String(data.error));
-            }
-          } catch (err: any) {
-            console.log('[conversation] SSE parse error', err?.message || String(err));
-          }
-        });
 
-        // Wait for completion before resolving onSend
-        await new Promise<void>((resolve) => {
-          function cleanup() {
-            es.removeEventListener('message', doneListener);
-            es.removeEventListener('error', errorListener);
-          }
-          function doneListener(event: any) {
-            try {
-              const data = JSON.parse(event.data);
-              if (data.done) {
-                markComplete();
-                cleanup();
-                es.close();
-                resolve();
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+
+            for (const line of lines) {
+              if (line.startsWith('data: ')) {
+                try {
+                  const data = JSON.parse(line.slice(6));
+                  if (data.status === "generating_drink") {
+                    setGeneratingDrink(true);
+                    // Scroll to show the status indicator
+                    setTimeout(() => {
+                      flatListRef.current?.scrollToEnd({ animated: true });
+                    }, 100);
+                    continue; // Don't process this as content
+                  }
+                  if (data.delta) {
+                    aiText += String(data.delta);
+                    setMessages((m) =>
+                      m.map((msg) => (msg.id === aiId ? { ...msg, content: aiText } : msg))
+                    );
+                    // Clear generating status when content starts arriving
+                    setGeneratingDrink(false);
+                    // Force scroll to bottom on each delta for real-time streaming
+                    requestAnimationFrame(() => {
+                      flatListRef.current?.scrollToEnd({ animated: false });
+                    });
+                  }
+                  if (data.done) {
+                    console.log('[conversation] Stream complete');
+                    setGeneratingDrink(false);
+                    markComplete();
+                    return;
+                  }
+                  if (data.error) {
+                    console.error('[conversation] Stream error:', data.error);
+                    setGeneratingDrink(false);
+                    throw new Error(String(data.error));
+                  }
+                } catch (err: any) {
+                  console.error('[conversation] Parse error', err?.message || String(err), 'Line:', line);
+                }
               }
-            } catch {}
+            }
           }
-          function errorListener(event: any) {
-            console.log('[conversation] SSE connection error', event?.message);
-            stopTalkingImmediately();
-            cleanup();
-            es.close();
-            resolve();
-          }
-          es.addEventListener('message', doneListener);
-          es.addEventListener('error', errorListener);
-        });
+        } catch (err: any) {
+          console.error('[conversation] Stream error', err);
+          stopTalkingImmediately();
+          throw err;
+        }
       } else {
-        // Native: use react-native-sse dynamically
+        // Native: use fetch with ReadableStream (same as web, avoids huge query params)
         const aiId = `${Date.now()}-ai`;
         const tempAiMessage: ChatMessage = {
           id: aiId,
@@ -242,9 +293,7 @@ export default function ConversationScreen() {
           created_at: new Date().toISOString(),
         };
         setMessages((m) => [...m, tempAiMessage]);
-        
-        const url = `${baseUrl}/chat/respond_stream?q=${encodeURIComponent(JSON.stringify(payload))}`;
-        const { default: EventSourceRN } = await import('react-native-sse');
+
         let aiText = '';
         let completed = false;
         const markComplete = () => {
@@ -260,53 +309,92 @@ export default function ConversationScreen() {
           }
         };
 
-        const es = new EventSourceRN(url);
-        es.addEventListener('open', () => {
-          // no-op
-        });
-        es.addEventListener('message', (event: any) => {
-          try {
-            const data = JSON.parse(event.data);
-            if (data.delta) {
-              aiText += String(data.delta);
-              setMessages((m) =>
-                m.map((msg) => (msg.id === aiId ? { ...msg, content: aiText } : msg))
-              );
-            }
-            if (data.done) {
+        try {
+          const response = await fetch(`${baseUrl}/chat/respond?stream=true`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'text/event-stream',
+            },
+            body: JSON.stringify({
+              messages: openAIMessages,
+              user_id: userId || undefined,
+            }),
+          });
+
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+
+          const reader = response.body?.getReader();
+          const decoder = new TextDecoder();
+          let buffer = '';
+
+          if (!reader) {
+            throw new Error('No response body reader available');
+          }
+
+          console.log('[conversation] Stream started (native)');
+
+          while (true) {
+            const { done, value } = await reader.read();
+            
+            if (done) {
+              console.log('[conversation] Stream done (native)');
               markComplete();
-              es.close();
+              break;
             }
-            if (data.error) {
-              throw new Error(String(data.error));
-            }
-          } catch {}
-        });
-        await new Promise<void>((resolve) => {
-          function cleanup() {
-            es.removeEventListener('message', doneListener);
-            es.removeEventListener('error', errorListener);
-          }
-          function doneListener(event: any) {
-            try {
-              const data = JSON.parse(event.data);
-              if (data.done) {
-                markComplete();
-                cleanup();
-                es.close();
-                resolve();
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+
+            for (const line of lines) {
+              if (line.startsWith('data: ')) {
+                try {
+                  const data = JSON.parse(line.slice(6));
+                  if (data.status === "generating_drink") {
+                    setGeneratingDrink(true);
+                    // Scroll to show the status indicator
+                    setTimeout(() => {
+                      flatListRef.current?.scrollToEnd({ animated: true });
+                    }, 100);
+                    continue; // Don't process this as content
+                  }
+                  if (data.delta) {
+                    aiText += String(data.delta);
+                    setMessages((m) =>
+                      m.map((msg) => (msg.id === aiId ? { ...msg, content: aiText } : msg))
+                    );
+                    // Clear generating status when content starts arriving
+                    setGeneratingDrink(false);
+                    // Force scroll to bottom on each delta for real-time streaming
+                    requestAnimationFrame(() => {
+                      flatListRef.current?.scrollToEnd({ animated: false });
+                    });
+                  }
+                  if (data.done) {
+                    console.log('[conversation] Stream complete (native)');
+                    setGeneratingDrink(false);
+                    markComplete();
+                    return;
+                  }
+                  if (data.error) {
+                    console.error('[conversation] Stream error (native):', data.error);
+                    setGeneratingDrink(false);
+                    throw new Error(String(data.error));
+                  }
+                } catch (err: any) {
+                  console.error('[conversation] Parse error (native)', err?.message || String(err), 'Line:', line);
+                }
               }
-            } catch {}
+            }
           }
-          function errorListener(event: any) {
-            stopTalkingImmediately();
-            cleanup();
-            es.close();
-            resolve();
-          }
-          es.addEventListener('message', doneListener);
-          es.addEventListener('error', errorListener);
-        });
+        } catch (err: any) {
+          console.error('[conversation] Stream error (native)', err);
+          stopTalkingImmediately();
+          throw err;
+        }
       }
     } catch (e: any) {
       const msg = e?.response?.data?.detail || e?.message || 'Network error.';
@@ -387,7 +475,12 @@ export default function ConversationScreen() {
         ) : (
           <Markdown
             style={{
-              body: { color: bubbleText, fontSize: 15, lineHeight: 22 },
+              body: { 
+                color: bubbleText, 
+                fontSize: 15, 
+                lineHeight: 22,
+                fontFamily: FontFamilies.regular,
+              },
               paragraph: { marginBottom: 8 },
               code_inline: {
                 backgroundColor: aiBubbleBg,
@@ -395,7 +488,7 @@ export default function ConversationScreen() {
                 paddingVertical: 2,
                 borderRadius: 4,
                 fontSize: 13,
-                fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace' }),
+                fontFamily: FontFamilies.mono,
               },
               fence: { backgroundColor: aiBubbleBg, padding: 12, borderRadius: 4, marginVertical: 8 },
               code_block: { backgroundColor: aiBubbleBg, padding: 12, borderRadius: 4, marginVertical: 8 },
@@ -403,6 +496,14 @@ export default function ConversationScreen() {
               strong: { fontWeight: '700' },
               em: { fontStyle: 'italic' },
               link: { color: accent },
+              image: {
+                width: '100%',
+                maxWidth: 300,
+                height: 200,
+                borderRadius: 8,
+                marginVertical: 12,
+                alignSelf: 'center',
+              },
             }}
           >
             {item.content}
@@ -414,13 +515,11 @@ export default function ConversationScreen() {
 
   if (loading) {
     return (
-      <View style={[styles.container, { backgroundColor, paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}>
+      <View style={[styles.container, { backgroundColor, paddingTop: insets.top, paddingLeft: 24, paddingRight: 24 }]}>
         <ThemedView colorName="surface" style={[styles.header, { borderBottomColor: borderColor }]}>
           <TouchableOpacity onPress={() => router.back()}>
             <Ionicons name="arrow-back" size={24} color={textColor} />
           </TouchableOpacity>
-          <ThemedText type="title" colorName="tint" style={styles.title}>Conversation</ThemedText>
-          <View style={{ width: 24 }} />
         </ThemedView>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={accent} />
@@ -437,8 +536,6 @@ export default function ConversationScreen() {
           <TouchableOpacity onPress={() => router.back()}>
             <Ionicons name="arrow-back" size={24} color={textColor} />
           </TouchableOpacity>
-          <ThemedText type="title" colorName="tint" style={styles.title}>Conversation</ThemedText>
-          <View style={{ width: 24 }} />
         </ThemedView>
         <View style={styles.errorContainer}>
           <ThemedText style={styles.errorText} colorName="danger">{error}</ThemedText>
@@ -456,8 +553,6 @@ export default function ConversationScreen() {
         <TouchableOpacity onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={24} color={textColor} />
         </TouchableOpacity>
-        <ThemedText type="title" colorName="tint" style={styles.title}>Conversation</ThemedText>
-        <View style={{ width: 24 }} />
       </ThemedView>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <FlatList
@@ -466,11 +561,21 @@ export default function ConversationScreen() {
           keyExtractor={(it) => it.id}
           renderItem={renderItem}
           contentContainerStyle={styles.list}
+          removeClippedSubviews={false}
+          extraData={[lastMessageContent, generatingDrink]}
           ListEmptyComponent={
             <View style={styles.emptyState}>
               <ThemedText style={styles.emptyText} colorName="muted">No messages yet</ThemedText>
               <ThemedText style={styles.emptySubtext} colorName="muted">Start the conversation below</ThemedText>
             </View>
+          }
+          ListFooterComponent={
+            generatingDrink ? (
+              <View style={styles.statusIndicator}>
+                <ActivityIndicator size="small" color={accent} style={{ marginRight: 8 }} />
+                <ThemedText style={styles.statusText} colorName="muted">Generating Drink...</ThemedText>
+              </View>
+            ) : null
           }
         />
         <View style={[styles.inputRow, { borderTopColor: borderColor }]}>
@@ -501,11 +606,7 @@ const styles = StyleSheet.create({
     padding: 16,
     borderBottomWidth: 1,
   },
-  title: {
-    fontSize: 20,
-    fontWeight: '700',
-  },
-  list: { padding: 12, paddingBottom: 120 },
+  list: { paddingHorizontal: 50, paddingVertical: 12, paddingBottom: 120 },
   bubble: { maxWidth: '80%', padding: 12, borderRadius: 12, marginBottom: 8 },
   userBubble: { alignSelf: 'flex-end' },
   aiBubble: { alignSelf: 'flex-start', borderWidth: 1 },
@@ -560,6 +661,16 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
+  },
+  statusIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+  },
+  statusText: {
+    fontSize: 14,
   },
 });
 

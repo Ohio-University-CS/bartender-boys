@@ -89,6 +89,15 @@ async def ensure_indexes(db: AsyncIOMotorDatabase) -> None:
     except Exception as e:
         logger.warning("Failed ensuring chats indexes: %s", e)
 
+    # Ensure pumpConfig collection indexes
+    pump_config = db["pumpConfig"]
+    try:
+        # Index on user_id for efficient queries by user
+        await pump_config.create_index("user_id", unique=True)
+        logger.info("Ensured unique index on pumpConfig.user_id")
+    except Exception as e:
+        logger.warning("Failed ensuring pumpConfig indexes: %s", e)
+
     return None
 
 

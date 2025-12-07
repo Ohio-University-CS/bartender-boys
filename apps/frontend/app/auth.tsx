@@ -136,8 +136,12 @@ export default function AuthScreen() {
           // Store user information in AsyncStorage
           try {
             await AsyncStorage.setItem('isVerified', 'true');
+            // Always update user_id if drivers_license_number is available
             if (apiResponse.data.drivers_license_number) {
               await AsyncStorage.setItem('user_id', apiResponse.data.drivers_license_number);
+              console.log('[Auth] Stored user_id:', apiResponse.data.drivers_license_number);
+            } else {
+              console.warn('[Auth] No drivers_license_number in response:', apiResponse.data);
             }
             if (apiResponse.data.name) {
               await AsyncStorage.setItem('user_name', apiResponse.data.name);

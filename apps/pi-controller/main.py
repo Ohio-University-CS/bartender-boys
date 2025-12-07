@@ -7,7 +7,7 @@ import json
 import logging
 import os
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -50,33 +50,25 @@ def load_mapping_config() -> Dict[str, Any]:
 # Pydantic models for requests / responses
 # ---------------------------------------------------------------------------
 
+# GPIO pin mapping: pump 1 = 4, pump 2 = 17, pump 3 = 27
+GPIO_PIN_MAP = {1: 4, 2: 17, 3: 27}
 
-class PumpPayload(BaseModel):
-    id: str
-    label: str
-    gpio_pin: int
-    duration_seconds: float = Field(gt=0, description="Main dispense duration")
-    prime_seconds: float = Field(default=0.0, ge=0.0)
-    post_dispense_delay_seconds: float = Field(default=0.0, ge=0.0)
-    cooldown_seconds: float = Field(default=0.0, ge=0.0)
-    target_volume_ml: Optional[float] = Field(default=None, ge=0.0)
-    liquid: Optional[str] = None
-    flow_rate_ml_per_second: Optional[float] = Field(default=None, ge=0.0)
-    active_low: Optional[bool] = None
-    correction_factor: Optional[float] = Field(default=None, ge=0.0)
-    last_calibrated: Optional[str] = None
+
+class PourStep(BaseModel):
+    """A single pump step with pump ID and ratio percentage."""
+    pump_id: int = Field(..., ge=1, le=3, description="Pump ID (1, 2, or 3)")
+    ratio: int = Field(..., ge=0, le=100, description="Percentage ratio (0-100)")
 
 
 class PourRequest(BaseModel):
-    drink: Dict[str, Any]
-    pump: PumpPayload
+    """Simplified pour request with list of pump steps."""
+    steps: List[PourStep] = Field(..., min_items=1, description="List of pump steps to execute")
 
 
 class PourResponse(BaseModel):
     status: str
     message: str
-    selected_pump: Dict[str, Any]
-    timing: Dict[str, float]
+    steps_executed: List[Dict[str, Any]]
 
 
 # ---------------------------------------------------------------------------
@@ -92,23 +84,9 @@ class PumpController:
         self.max_run_seconds: float = float(defaults.get("max_run_seconds", 15.0))
         self.simulate: bool = simulate or (GPIO is None)
         self._lock: asyncio.Lock = asyncio.Lock()
-        self._pumps: Dict[str, Dict[str, Any]] = {}
-
-        pumps_section = config.get("pumps", {})
-        if not isinstance(pumps_section, dict):
-            raise RuntimeError("pumps section in pi_mapping.json must be an object")
-
-        for pump_id, raw in pumps_section.items():
-            if isinstance(raw, dict):
-                pin = int(raw.get("gpio_pin"))
-                label = raw.get("label") or pump_id.replace("_", " ").title()
-            else:
-                pin = int(raw)
-                label = pump_id.replace("_", " ").title()
-            self._pumps[pump_id] = {"gpio_pin": pin, "label": label}
-
-        if not self._pumps:
-            raise RuntimeError("No pumps defined in configuration")
+        
+        # Hardcoded GPIO pins: pump 1 = 4, pump 2 = 17, pump 3 = 27
+        self._gpio_pins = GPIO_PIN_MAP.copy()
 
         if self.simulate:
             self._engaged_level = 0
@@ -119,110 +97,105 @@ class PumpController:
             GPIO.setmode(GPIO.BCM)
             self._engaged_level = GPIO.LOW if self.active_low else GPIO.HIGH
             self._inactive_level = GPIO.HIGH if self.active_low else GPIO.LOW
-            for pump in self._pumps.values():
-                GPIO.setup(pump["gpio_pin"], GPIO.OUT, initial=self._inactive_level)
-            logger.info("Pump controller initialised with real GPIO access")
+            for pin in self._gpio_pins.values():
+                GPIO.setup(pin, GPIO.OUT, initial=self._inactive_level)
+            logger.info("Pump controller initialised with real GPIO access (pins: %s)", self._gpio_pins)
 
     def cleanup(self) -> None:
         if self.simulate:
             return
         assert GPIO is not None  # nosec
-        for pump in self._pumps.values():
-            GPIO.output(pump["gpio_pin"], self._inactive_level)
+        for pin in self._gpio_pins.values():
+            GPIO.output(pin, self._inactive_level)
         GPIO.cleanup()
         logger.info("GPIO cleaned up")
 
-    def _require_pump(self, payload: PumpPayload) -> Dict[str, Any]:
-        pump_cfg = self._pumps.get(payload.id)
-        if not pump_cfg:
-            raise HTTPException(status_code=400, detail=f"Unknown pump id {payload.id}")
-        if pump_cfg["gpio_pin"] != payload.gpio_pin:
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    f"GPIO pin mismatch for pump {payload.id}: expected "
-                    f"{pump_cfg['gpio_pin']} got {payload.gpio_pin}"
-                ),
-            )
-        return pump_cfg
-
-    async def start_dispense(self, payload: PumpPayload) -> Dict[str, float]:
-        pump_cfg = self._require_pump(payload)
-
-        prime = max(payload.prime_seconds, 0.0)
-        duration = max(payload.duration_seconds, 0.0)
-        if prime + duration <= 0:
-            raise HTTPException(status_code=400, detail="Dispense duration must be positive")
-
-        allowed_duration = max(self.max_run_seconds - prime, 0.0)
-        if allowed_duration <= 0:
-            raise HTTPException(
-                status_code=400,
-                detail="Prime time exceeds maximum run seconds configured",
-            )
-        if duration > allowed_duration:
-            logger.warning(
-                "Requested duration %.2fs exceeds limit; clamping to %.2fs",
-                duration,
-                allowed_duration,
-            )
-            duration = allowed_duration
-
-        post_delay = max(payload.post_dispense_delay_seconds, 0.0)
-        cooldown = max(payload.cooldown_seconds, self.default_cooldown, 0.0)
-
+    async def start_multi_pump_dispense(self, steps: List[PourStep]) -> List[Dict[str, Any]]:
+        """Start dispense for multiple pumps based on ratios.
+        
+        All pumps run simultaneously. Each pump runs for a duration based on its ratio.
+        Base duration is 5 seconds, so ratio% = (ratio / 100) * 5 seconds.
+        """
         if self._lock.locked():
             raise HTTPException(status_code=409, detail="Pump controller is busy")
 
-        asyncio.create_task(
-            self._dispense_task(
-                pump_cfg["gpio_pin"],
-                pump_cfg["label"],
-                prime,
-                duration,
-                post_delay,
-                cooldown,
-            )
-        )
+        # Base duration: 100% = 5 seconds
+        BASE_DURATION_SECONDS = 5.0
+        
+        # Calculate duration for each pump based on ratio
+        pump_tasks = []
+        steps_executed = []
+        
+        for step in steps:
+            if step.pump_id not in self._gpio_pins:
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"Invalid pump_id: {step.pump_id}. Must be 1, 2, or 3."
+                )
+            
+            gpio_pin = self._gpio_pins[step.pump_id]
+            duration = (step.ratio / 100.0) * BASE_DURATION_SECONDS
+            
+            # Clamp duration to max_run_seconds
+            if duration > self.max_run_seconds:
+                logger.warning(
+                    "Pump %d duration %.2fs exceeds limit; clamping to %.2fs",
+                    step.pump_id,
+                    duration,
+                    self.max_run_seconds,
+                )
+                duration = self.max_run_seconds
+            
+            if duration > 0:
+                steps_executed.append({
+                    "pump_id": step.pump_id,
+                    "gpio_pin": gpio_pin,
+                    "ratio": step.ratio,
+                    "duration_seconds": duration,
+                })
+                pump_tasks.append(
+                    self._single_pump_dispense_task(gpio_pin, step.pump_id, duration)
+                )
+        
+        if not pump_tasks:
+            raise HTTPException(status_code=400, detail="No valid pump steps to execute")
 
-        return {
-            "prime_seconds": prime,
-            "duration_seconds": duration,
-            "post_dispense_delay_seconds": post_delay,
-            "cooldown_seconds": cooldown,
-        }
+        # Start all pumps simultaneously
+        asyncio.create_task(self._multi_pump_dispense_task(pump_tasks))
+        
+        return steps_executed
 
-    async def _dispense_task(
+    async def _multi_pump_dispense_task(self, pump_tasks: List[asyncio.Task]) -> None:
+        """Run multiple pump tasks concurrently."""
+        async with self._lock:
+            # Wait for all pumps to complete
+            await asyncio.gather(*pump_tasks)
+        
+        # Cooldown after all pumps finish
+        if self.default_cooldown > 0:
+            logger.info("Cooldown for %.2fs", self.default_cooldown)
+            await asyncio.sleep(self.default_cooldown)
+
+    async def _single_pump_dispense_task(
         self,
         gpio_pin: int,
-        label: str,
-        prime: float,
+        pump_id: int,
         duration: float,
-        post_delay: float,
-        cooldown: float,
     ) -> None:
-        async with self._lock:
-            logger.info(
-                "Starting dispense on %s (GPIO %s) | prime=%.2fs | duration=%.2fs",
-                label,
-                gpio_pin,
-                prime,
-                duration,
-            )
-            self._set_gpio(gpio_pin, True)
-            try:
-                if prime > 0:
-                    await asyncio.sleep(prime)
-                if duration > 0:
-                    await asyncio.sleep(duration)
-            finally:
-                self._set_gpio(gpio_pin, False)
-                logger.info("Stopped dispense on %s", label)
-            if post_delay > 0:
-                await asyncio.sleep(post_delay)
-        if cooldown > 0:
-            logger.info("Cooldown for %.2fs", cooldown)
-            await asyncio.sleep(cooldown)
+        """Dispense from a single pump for the specified duration."""
+        logger.info(
+            "Starting dispense on pump %d (GPIO %s) for %.2fs",
+            pump_id,
+            gpio_pin,
+            duration,
+        )
+        self._set_gpio(gpio_pin, True)
+        try:
+            await asyncio.sleep(duration)
+        finally:
+            self._set_gpio(gpio_pin, False)
+            logger.info("Stopped dispense on pump %d", pump_id)
+
 
     def _set_gpio(self, gpio_pin: int, active: bool) -> None:
         if self.simulate:
@@ -241,7 +214,13 @@ class PumpController:
 # FastAPI application
 # ---------------------------------------------------------------------------
 
-CONFIG = load_mapping_config()
+# Load config if available, but use defaults if not
+try:
+    CONFIG = load_mapping_config()
+except Exception as e:
+    logger.warning("Could not load config, using defaults: %s", e)
+    CONFIG = {"defaults": {}}
+
 SIMULATE = os.getenv("SIMULATE_GPIO", "0").lower() in {"1", "true", "yes", "on"}
 PUMP_CONTROLLER = PumpController(CONFIG, simulate=SIMULATE)
 
@@ -266,27 +245,20 @@ async def health() -> Dict[str, Any]:  # pragma: no cover - simple endpoint
 
 @app.post("/iot/drink", response_model=PourResponse)
 async def pour_drink(request: PourRequest) -> PourResponse:
-    timing = await PUMP_CONTROLLER.start_dispense(request.pump)
-
-    volume = request.pump.target_volume_ml
-    if volume and volume > 0:
-        message = f"Dispensing {volume:.0f} ml via {request.pump.label}."
-    else:
-        message = f"Dispensing via {request.pump.label}."
-
-    selected_pump = {
-        "id": request.pump.id,
-        "label": request.pump.label,
-        "gpio_pin": request.pump.gpio_pin,
-        "liquid": request.pump.liquid,
-        "target_volume_ml": request.pump.target_volume_ml,
-    }
+    """Handle pour request with simplified step-based format."""
+    steps_executed = await PUMP_CONTROLLER.start_multi_pump_dispense(request.steps)
+    
+    # Build message describing what was executed
+    step_descriptions = [
+        f"pump {s['pump_id']} ({s['ratio']}% for {s['duration_seconds']:.2f}s)"
+        for s in steps_executed
+    ]
+    message = f"Dispensing via {', '.join(step_descriptions)}."
 
     return PourResponse(
         status="ok",
         message=message,
-        selected_pump=selected_pump,
-        timing=timing,
+        steps_executed=steps_executed,
     )
 
 

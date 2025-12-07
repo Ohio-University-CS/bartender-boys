@@ -3,6 +3,7 @@ export interface Drink {
   name: string;
   category: string;
   ingredients: string[];
+  ratios?: number[];
   instructions: string;
   difficulty: 'Easy' | 'Medium' | 'Hard';
   prepTime: string;
@@ -10,6 +11,7 @@ export interface Drink {
   image_url?: string;
   favorited?: boolean;
   hardwareSteps?: { pump: string; seconds: number }[];
+  created_at?: string;
 }
 
 export const DRINKS: Drink[] = [];

@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Literal, Optional
 
 from pydantic import BaseModel, Field, validator
@@ -50,6 +51,10 @@ class Drink(BaseModel):
     name: str
     category: str
     ingredients: list[str]
+    ratios: Optional[list[int]] = Field(
+        None,
+        description="Percentage ratios for each ingredient (must sum to 100). Each ratio corresponds to the ingredient at the same index.",
+    )
     instructions: str
     difficulty: Literal["Easy", "Medium", "Hard"]
     prepTime: str
@@ -69,6 +74,20 @@ class Drink(BaseModel):
     favorited: Optional[bool] = Field(
         None, description="Whether the drink is favorited (optional, defaults to false)"
     )
+    created_at: Optional[datetime] = Field(
+        None, description="Date and time when the drink was created"
+    )
+
+    @validator("ratios")
+    def ratios_must_sum_to_100(cls, v, values):
+        """Validate that ratios sum to 100 if provided."""
+        if v is not None:
+            ingredients = values.get("ingredients", [])
+            if ingredients and len(v) != len(ingredients):
+                raise ValueError("ratios must have the same length as ingredients")
+            if sum(v) != 100:
+                raise ValueError("ratios must sum to 100")
+        return v
 
     class Config:
         allow_population_by_field_name = True
@@ -110,6 +129,10 @@ class GenerateDrinkRequest(BaseModel):
     name: str
     category: str
     ingredients: list[str]
+    ratios: Optional[list[int]] = Field(
+        None,
+        description="Percentage ratios for each ingredient (must sum to 100). If not provided, will be auto-generated.",
+    )
     instructions: str
     difficulty: Literal["Easy", "Medium", "Hard"]
     prepTime: str

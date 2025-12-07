@@ -108,3 +108,28 @@ export async function toggleFavorite(
   return response.json();
 }
 
+/**
+ * Delete a drink by ID
+ */
+export async function deleteDrink(
+  drinkId: string,
+  apiBaseUrl?: string
+): Promise<void> {
+  const baseUrl = apiBaseUrl || API_BASE_URL;
+  
+  const response = await fetch(`${baseUrl}/drinks/${drinkId}`, {
+    method: 'DELETE',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+  
+  if (!response.ok) {
+    if (response.status === 404) {
+      throw new Error('Drink not found');
+    }
+    const errorText = await response.text();
+    throw new Error(`Failed to delete drink: ${response.status} - ${errorText}`);
+  }
+}
+

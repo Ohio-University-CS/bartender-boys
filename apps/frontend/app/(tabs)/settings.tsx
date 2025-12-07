@@ -1,17 +1,16 @@
-import React, { useEffect, useState } from 'react';
-import { StyleSheet, ScrollView, View, Switch, TouchableOpacity, Alert, Platform, TextInput } from 'react-native';
+import React, { useEffect, useState, useCallback } from 'react';
+import { StyleSheet, ScrollView, View, TouchableOpacity, Alert, Platform, TextInput } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import SegmentedControl from '@react-native-segmented-control/segmented-control';
+import { Ionicons } from '@expo/vector-icons';
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
+import { TabHeader } from '@/components/tab-header';
 import { ACCENT_OPTIONS } from '@/constants/theme';
-import { useSettings, REALTIME_VOICES, isRealtimeVoice } from '@/contexts/settings';
-import type { RealtimeVoice } from '@/contexts/settings';
+import { useSettings } from '@/contexts/settings';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useThemeColor } from '@/hooks/use-theme-color';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { API_BASE_URL } from '@/environment';
-import { BARTENDER_MODEL_OPTIONS } from '@/constants/bartender-models';
+import { webStyles } from '@/utils/web-styles';
 
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
@@ -22,52 +21,136 @@ export default function SettingsScreen() {
     setApiBaseUrl,
     accentColor,
     setAccentColor,
-    animationsEnabled,
-    setAnimationsEnabled,
-    realtimeVoice,
-    setRealtimeVoice,
-    bartenderModel,
-    setBartenderModel,
   } = useSettings();
 
   // Theme colors
   const backgroundColor = useThemeColor({}, 'background');
   const surface = useThemeColor({}, 'surfaceElevated');
-  const borderColor = useThemeColor({}, 'border');
-  const chipBg = useThemeColor({}, 'chipBackground');
-  const chipBorder = useThemeColor({}, 'chipBorder');
-  const segmentBg = useThemeColor({}, 'surfaceAlt');
   const textColor = useThemeColor({}, 'text');
   const inputBg = useThemeColor({}, 'inputBackground');
   const inputBorder = useThemeColor({}, 'inputBorder');
   const placeholderColor = useThemeColor({}, 'placeholder');
   const accent = useThemeColor({}, 'tint');
-  const onAccent = useThemeColor({}, 'onTint');
+  const onTint = useThemeColor({}, 'onTint');
   const mutedForeground = useThemeColor({}, 'mutedForeground');
   const danger = useThemeColor({}, 'danger');
+
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      document.title = 'BrewBot - Settings';
+    }
+  }, []);
 
   const [apiUrlInput, setApiUrlInput] = useState(apiBaseUrl || API_BASE_URL);
   const [userName, setUserName] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
+  const [pump1, setPump1] = useState<string>('');
+  const [pump2, setPump2] = useState<string>('');
+  const [pump3, setPump3] = useState<string>('');
+  const [loadingPumpConfig, setLoadingPumpConfig] = useState<boolean>(false);
+  const [savingPumpConfig, setSavingPumpConfig] = useState<boolean>(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showPumpConfig, setShowPumpConfig] = useState(false);
+  const [showTheme, setShowTheme] = useState(false);
+  const [showAccentColor, setShowAccentColor] = useState(false);
 
   useEffect(() => setApiUrlInput(apiBaseUrl || API_BASE_URL), [apiBaseUrl]);
 
   // Load user information from AsyncStorage
+  const loadUserInfo = useCallback(async () => {
+    try {
+      const [name, id] = await Promise.all([
+        AsyncStorage.getItem('user_name'),
+        AsyncStorage.getItem('user_id'),
+      ]);
+      setUserName(name);
+      setUserId(id);
+    } catch (error) {
+      console.error('Failed to load user info:', error);
+    }
+  }, []);
+
   useEffect(() => {
-    const loadUserInfo = async () => {
+    loadUserInfo();
+  }, [loadUserInfo]);
+
+  // Refresh user info when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      loadUserInfo();
+    }, [loadUserInfo])
+  );
+
+  // Load pump configuration
+  useEffect(() => {
+    const loadPumpConfig = async () => {
+      if (!userId) return;
+      
+      setLoadingPumpConfig(true);
       try {
-        const [name, id] = await Promise.all([
-          AsyncStorage.getItem('user_name'),
-          AsyncStorage.getItem('user_id'),
-        ]);
-        setUserName(name);
-        setUserId(id);
+        const baseUrl = apiBaseUrl || API_BASE_URL;
+        const response = await fetch(`${baseUrl}/iot/pump-config?user_id=${encodeURIComponent(userId)}`);
+        
+        if (response.ok) {
+          const config = await response.json();
+          setPump1(config.pump1 || '');
+          setPump2(config.pump2 || '');
+          setPump3(config.pump3 || '');
+        } else {
+          // If no config exists, that's fine - start with empty values
+          setPump1('');
+          setPump2('');
+          setPump3('');
+        }
       } catch (error) {
-        console.error('Failed to load user info:', error);
+        console.error('Failed to load pump config:', error);
+        // Start with empty values on error
+        setPump1('');
+        setPump2('');
+        setPump3('');
+      } finally {
+        setLoadingPumpConfig(false);
       }
     };
-    loadUserInfo();
-  }, []);
+    
+    loadPumpConfig();
+  }, [userId, apiBaseUrl]);
+
+  const handleSavePumpConfig = async () => {
+    if (!userId) {
+      Alert.alert('Error', 'Please log in to configure pumps');
+      return;
+    }
+
+    setSavingPumpConfig(true);
+    try {
+      const baseUrl = apiBaseUrl || API_BASE_URL;
+      const response = await fetch(`${baseUrl}/iot/pump-config`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          user_id: userId,
+          pump1: pump1.trim() || null,
+          pump2: pump2.trim() || null,
+          pump3: pump3.trim() || null,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || `Backend returned ${response.status}`);
+      }
+
+      Alert.alert('Success', 'Pump configuration saved successfully');
+    } catch (error: any) {
+      console.error('Failed to save pump config:', error);
+      Alert.alert('Error', error?.message || 'Failed to save pump configuration');
+    } finally {
+      setSavingPumpConfig(false);
+    }
+  };
 
 
   const handleLogout = async () => {
@@ -105,354 +188,531 @@ export default function SettingsScreen() {
     }
     };
 
-    // Map bartender model ids to a realtime voice key (displayed on model buttons).
-    // Selecting a model will also set the associated realtime voice.
-    const MODEL_VOICE_MAP: Record<string, RealtimeVoice> = {
-      classic: 'alloy',
-      luisa: 'ash',
-      elizabeth: 'ballad',
-      mike: 'coral',
-      robo: 'echo',
-      ironman: 'sage',
-      makayla: 'shimmer',
-      martin: 'verse',
-      matt: 'marin',
-      noir: 'cedar',
-    };
-
     return (
     <View style={[styles.container, { backgroundColor, paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}> 
-      <ScrollView contentContainerStyle={styles.containerContent}> 
-        <View style={{ alignItems: 'center', flexDirection: 'column', marginBottom: 8 }}>
-          <ThemedText type="title" colorName="tint" style={{ fontSize: 24 }}>Settings</ThemedText>
+      <TabHeader title="Settings" />
+
+      <ScrollView 
+        contentContainerStyle={styles.containerContent}
+        style={webStyles.smoothScroll}
+      >
+
+        {/* Appearance Section */}
+        <View style={styles.section}>
+          <ThemedText style={styles.sectionHeader}>Appearance</ThemedText>
+          
+          {/* Theme Mode */}
+          <TouchableOpacity 
+            style={[styles.settingRow, webStyles.hoverable]}
+            onPress={() => setShowTheme(!showTheme)}
+          >
+            <View style={styles.settingLeft}>
+              <Ionicons name="color-palette-outline" size={24} color={textColor} style={styles.settingIcon} />
+              <ThemedText style={styles.settingLabel}>Theme</ThemedText>
+            </View>
+            <View style={styles.settingRight}>
+              <ThemedText style={styles.settingValue} colorName="mutedForeground">
+                {theme.charAt(0).toUpperCase() + theme.slice(1)}
+              </ThemedText>
+              <Ionicons 
+                name={showTheme ? "chevron-up" : "chevron-down"} 
+                size={20} 
+                color={mutedForeground} 
+              />
+            </View>
+          </TouchableOpacity>
+
+          {showTheme && (
+            <View style={styles.expandedContent}>
+              {[
+                { value: 'system' as const, label: 'System' },
+                { value: 'light' as const, label: 'Light' },
+                { value: 'dark' as const, label: 'Dark' },
+              ].map((option) => {
+                const isSelected = theme === option.value;
+                return (
+                  <TouchableOpacity
+                    key={option.value}
+                    style={[
+                      styles.optionButton,
+                      { backgroundColor: inputBg, borderColor: inputBorder },
+                      isSelected && { backgroundColor: accent, borderColor: accent },
+                      webStyles.hoverable,
+                    ]}
+                    onPress={() => {
+                      setTheme(option.value);
+                    }}
+                  >
+                    <ThemedText
+                      style={styles.optionButtonText}
+                      colorName={isSelected ? 'onTint' : 'text'}
+                    >
+                      {option.label}
+                    </ThemedText>
+                    {isSelected && (
+                      <Ionicons name="checkmark" size={20} color={onTint} />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
+
+          {/* Accent Color */}
+          <TouchableOpacity 
+            style={[styles.settingRow, webStyles.hoverable]}
+            onPress={() => setShowAccentColor(!showAccentColor)}
+          >
+            <View style={styles.settingLeft}>
+              <Ionicons name="brush-outline" size={24} color={textColor} style={styles.settingIcon} />
+              <ThemedText style={styles.settingLabel}>Accent Color</ThemedText>
+            </View>
+            <View style={styles.settingRight}>
+              {(() => {
+                const option = ACCENT_OPTIONS.find(o => o.key === accentColor);
+                return (
+                  <>
+                    <View style={[styles.accentPreview, { backgroundColor: option?.preview || accent }]} />
+                    <ThemedText style={styles.settingValue} colorName="mutedForeground">
+                      {option?.label || 'Sunset Citrus'}
+                    </ThemedText>
+                  </>
+                );
+              })()}
+              <Ionicons 
+                name={showAccentColor ? "chevron-up" : "chevron-down"} 
+                size={20} 
+                color={mutedForeground} 
+              />
+            </View>
+          </TouchableOpacity>
+
+          {showAccentColor && (
+            <View style={styles.expandedContent}>
+              {ACCENT_OPTIONS.map((option) => {
+                const isSelected = accentColor === option.key;
+                return (
+                  <TouchableOpacity
+                    key={option.key}
+                    style={[
+                      styles.optionButton,
+                      { backgroundColor: inputBg, borderColor: inputBorder },
+                      isSelected && { backgroundColor: accent, borderColor: accent },
+                      webStyles.hoverable,
+                    ]}
+                    onPress={() => {
+                      setAccentColor(option.key);
+                    }}
+                  >
+                    <View style={styles.settingRight}>
+                      <View style={[styles.accentPreview, { backgroundColor: option.preview || accent }]} />
+                      <ThemedText
+                        style={styles.optionButtonText}
+                        colorName={isSelected ? 'onTint' : 'text'}
+                      >
+                        {option.label}
+                      </ThemedText>
+                    </View>
+                    {isSelected && (
+                      <Ionicons name="checkmark" size={20} color={onTint} />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
         </View>
-      <ThemedView colorName="surfaceElevated" style={[styles.section, { borderColor }]}> 
-        <ThemedText type="subtitle" colorName="tint" style={styles.sectionTitle}>Appearance</ThemedText>
-        <ThemedText style={styles.help} colorName="muted">Select a theme mode</ThemedText>
-        {Platform.OS === 'ios' ? (
-          <SegmentedControl
-            values={["System", "Light", "Dark"]}
-            selectedIndex={theme === 'system' ? 0 : theme === 'light' ? 1 : 2}
-            onChange={(e) => {
-              const index = e.nativeEvent.selectedSegmentIndex;
-              const selected = index === 0 ? 'system' : index === 1 ? 'light' : 'dark';
-              setTheme(selected);
-            }}
-            tintColor={accent}
-            backgroundColor={segmentBg}
-            fontStyle={{ color: mutedForeground, fontWeight: '500' }}
-            activeFontStyle={{ color: onAccent, fontWeight: '700' }}
-          />
-        ) : (
-          <View style={[styles.row, { justifyContent: 'space-around' }]}>
-            {([
-              { key: 'system', label: 'System' },
-              { key: 'light', label: 'Light' },
-              { key: 'dark', label: 'Dark' },
-            ] as const).map((opt) => (
-              <TouchableOpacity
-                key={opt.key}
-                style={[
-                  styles.chip,
-                  { backgroundColor: chipBg, borderColor: chipBorder },
-                  theme === opt.key && [
-                    styles.chipActive,
-                    { backgroundColor: accent, borderColor: accent },
-                  ]
-                ]}
-                onPress={() => setTheme(opt.key)}
-              >
-                <ThemedText
-                  style={styles.chipText}
-                  colorName={theme === opt.key ? 'onTint' : 'mutedForeground'}
-                >
-                  {opt.label}
+
+        {/* Equipment Section */}
+        <View style={styles.section}>
+          <ThemedText style={styles.sectionHeader}>Equipment</ThemedText>
+          
+          <TouchableOpacity 
+            style={[styles.settingRow, webStyles.hoverable]}
+            onPress={() => setShowPumpConfig(!showPumpConfig)}
+          >
+            <View style={styles.settingLeft}>
+              <Ionicons name="settings-outline" size={24} color={textColor} style={styles.settingIcon} />
+              <ThemedText style={styles.settingLabel}>Pump Configuration</ThemedText>
+            </View>
+            <View style={styles.settingRight}>
+              <Ionicons 
+                name={showPumpConfig ? "chevron-up" : "chevron-down"} 
+                size={20} 
+                color={mutedForeground} 
+              />
+            </View>
+          </TouchableOpacity>
+
+          {showPumpConfig && (
+            <View style={styles.expandedContent}>
+              {loadingPumpConfig ? (
+                <ThemedText style={styles.expandedText} colorName="muted">Loading...</ThemedText>
+              ) : (
+                <>
+                  <View style={styles.inputGroup}>
+                    <ThemedText style={styles.inputLabel} colorName="mutedForeground">Pump 1</ThemedText>
+                    <TextInput
+                      placeholder="e.g., water, sprite, cola"
+                      value={pump1}
+                      onChangeText={setPump1}
+                      style={[styles.input, { backgroundColor: inputBg, borderColor: inputBorder, color: textColor }]}
+                      placeholderTextColor={placeholderColor}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                    />
+                  </View>
+                  
+                  <View style={styles.inputGroup}>
+                    <ThemedText style={styles.inputLabel} colorName="mutedForeground">Pump 2</ThemedText>
+                    <TextInput
+                      placeholder="e.g., water, sprite, cola"
+                      value={pump2}
+                      onChangeText={setPump2}
+                      style={[styles.input, { backgroundColor: inputBg, borderColor: inputBorder, color: textColor }]}
+                      placeholderTextColor={placeholderColor}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                    />
+                  </View>
+                  
+                  <View style={styles.inputGroup}>
+                    <ThemedText style={styles.inputLabel} colorName="mutedForeground">Pump 3</ThemedText>
+                    <TextInput
+                      placeholder="e.g., water, sprite, cola"
+                      value={pump3}
+                      onChangeText={setPump3}
+                      style={[styles.input, { backgroundColor: inputBg, borderColor: inputBorder, color: textColor }]}
+                      placeholderTextColor={placeholderColor}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                    />
+                  </View>
+                  
+                  <TouchableOpacity
+                    style={[
+                      styles.saveButton, 
+                      { backgroundColor: accent },
+                      webStyles.hoverable,
+                      webStyles.shadow,
+                      (savingPumpConfig || !userId) && styles.buttonDisabled,
+                    ]}
+                    onPress={handleSavePumpConfig}
+                    disabled={savingPumpConfig || !userId}
+                  >
+                    <ThemedText style={styles.saveButtonText} colorName="onTint">
+                      {savingPumpConfig ? 'Saving...' : 'Save'}
+                    </ThemedText>
+                  </TouchableOpacity>
+                  
+                  {!userId && (
+                    <ThemedText style={styles.expandedText} colorName="muted">
+                      Please log in to configure pumps
+                    </ThemedText>
+                  )}
+                </>
+              )}
+            </View>
+          )}
+        </View>
+
+        {/* Account Section */}
+        <View style={styles.section}>
+          <ThemedText style={styles.sectionHeader}>Account</ThemedText>
+          
+          {userName && (
+            <View style={styles.settingRow}>
+              <View style={styles.settingLeft}>
+                <Ionicons name="person-outline" size={24} color={textColor} style={styles.settingIcon} />
+                <ThemedText style={styles.settingLabel}>Name</ThemedText>
+              </View>
+              <ThemedText style={styles.settingValue} colorName="mutedForeground">
+                {userName}
+              </ThemedText>
+            </View>
+          )}
+          
+          {userId && (
+            <View style={styles.settingRow}>
+              <View style={styles.settingLeft}>
+                <Ionicons name="id-card-outline" size={24} color={textColor} style={styles.settingIcon} />
+                <ThemedText style={styles.settingLabel}>
+                  {userId === 'guest' ? 'User ID' : "Driver's License"}
                 </ThemedText>
-              </TouchableOpacity>
-            ))}
+              </View>
+              <ThemedText style={styles.settingValue} colorName="mutedForeground">
+                {userId === 'guest' ? 'Guest' : userId}
+              </ThemedText>
+            </View>
+          )}
+
+          <TouchableOpacity
+            style={[styles.settingRow, webStyles.hoverable]}
+            onPress={handleLogout}
+          >
+            <View style={styles.settingLeft}>
+              <Ionicons name="log-out-outline" size={24} color={danger} style={styles.settingIcon} />
+              <ThemedText style={[styles.settingLabel, { color: danger }]}>Log Out</ThemedText>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={mutedForeground} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Development Section */}
+        <TouchableOpacity 
+          style={[styles.settingRow, webStyles.hoverable]}
+          onPress={() => setShowAdvanced(!showAdvanced)}
+        >
+          <View style={styles.settingLeft}>
+            <Ionicons name="code-outline" size={24} color={textColor} style={styles.settingIcon} />
+            <ThemedText style={styles.settingLabel}>Development</ThemedText>
           </View>
-        )}
-        <ThemedText style={[styles.help, styles.helpInset]} colorName="muted">Accent color</ThemedText>
-        <View style={styles.accentRow}>
-          {ACCENT_OPTIONS.map((option) => {
-            const isActive = accentColor === option.key;
-            return (
+          <View style={styles.settingRight}>
+            <Ionicons 
+              name={showAdvanced ? "chevron-up" : "chevron-down"} 
+              size={20} 
+              color={mutedForeground} 
+            />
+          </View>
+        </TouchableOpacity>
+
+        {showAdvanced && (
+          <View style={[styles.section, styles.expandedContent]}>
+            <ThemedText style={styles.inputLabel} colorName="mutedForeground">API URL</ThemedText>
+            <ThemedText style={styles.expandedText} colorName="muted">
+              Current: {apiBaseUrl || API_BASE_URL}
+            </ThemedText>
+            <TextInput
+              placeholder={`http://${Platform.OS === 'ios' ? 'YOUR_MAC_IP' : 'localhost'}:8000`}
+              value={apiUrlInput}
+              onChangeText={setApiUrlInput}
+              style={[styles.input, { backgroundColor: inputBg, borderColor: inputBorder, color: textColor }]}
+              placeholderTextColor={placeholderColor}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="url"
+            />
+            <View style={styles.buttonRow}>
               <TouchableOpacity
-                key={option.key}
-                style={styles.accentChoice}
-                onPress={() => setAccentColor(option.key)}
-              >
-                <View
-                  style={[
-                    styles.accentSwatch,
-                    { backgroundColor: option.preview },
-                    isActive && [styles.accentSwatchActive, { borderColor: accent }],
-                  ]}
-                />
-                <ThemedText
-                  style={styles.accentLabel}
-                  colorName={isActive ? 'tint' : 'mutedForeground'}
-                >
-                  {option.label}
-                </ThemedText>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      </ThemedView>
-
-      <ThemedView colorName="surfaceElevated" style={[styles.section, { borderColor }]}> 
-        <ThemedText type="subtitle" colorName="tint" style={styles.sectionTitle}>Personalization</ThemedText>
-        <View style={styles.row}>
-          <ThemedText>Animations</ThemedText>
-          <Switch
-            value={animationsEnabled}
-            onValueChange={setAnimationsEnabled}
-            trackColor={{ false: mutedForeground, true: accent }}
-            thumbColor={Platform.OS === 'android' ? onAccent : undefined}
-          />
-        </View>
-        <ThemedText style={[styles.help, styles.helpInset]} colorName="muted">Enable smooth animations throughout the app</ThemedText>
-
-        {/* Realtime voice selection removed — voices are now tied to bartender models. */}
-
-        {/* Model->voice mapping moved to component scope */}
-
-        <ThemedText style={[styles.help, { marginTop: 16 }]} colorName="muted">Bartender Model</ThemedText>
-        <ThemedText style={[styles.help, styles.helpInset]} colorName="muted">Switch between available bartender avatars</ThemedText>
-        <View style={styles.accentRow}>
-          {BARTENDER_MODEL_OPTIONS.map((option) => {
-            const isActive = bartenderModel === option.id;
-            const mappedVoice = MODEL_VOICE_MAP[option.id];
-            const displayLabel = mappedVoice && isRealtimeVoice(mappedVoice)
-              ? `${option.label} (${mappedVoice.charAt(0).toUpperCase() + mappedVoice.slice(1)})`
-              : option.label;
-
-            return (
-              <TouchableOpacity
-                key={option.id}
                 style={[
-                  styles.chip,
-                  { backgroundColor: chipBg, borderColor: chipBorder },
-                  isActive && [
-                    styles.chipActive,
-                    { backgroundColor: accent, borderColor: accent },
-                  ]
+                  styles.saveButton, 
+                  { backgroundColor: accent },
+                  webStyles.hoverable,
+                  webStyles.shadow,
                 ]}
                 onPress={() => {
-                  setBartenderModel(option.id);
-                  if (mappedVoice && isRealtimeVoice(mappedVoice)) {
-                    setRealtimeVoice(mappedVoice);
+                  const trimmed = apiUrlInput.trim();
+                  if (trimmed) {
+                    setApiBaseUrl(trimmed);
+                    Alert.alert('Saved', 'API URL updated. Restart the app if connection issues persist.');
+                  } else {
+                    setApiBaseUrl('');
+                    Alert.alert('Cleared', 'Using default API URL');
                   }
                 }}
               >
-                <ThemedText
-                  style={styles.chipText}
-                  colorName={isActive ? 'onTint' : 'mutedForeground'}
-                >
-                  {displayLabel}
-                </ThemedText>
+                <ThemedText style={styles.saveButtonText} colorName="onTint">Save</ThemedText>
               </TouchableOpacity>
-            );
-          })}
-        </View>
-      </ThemedView>
-
-      <ThemedView colorName="surfaceElevated" style={[styles.section, { borderColor }]}> 
-        <ThemedText type="subtitle" colorName="tint" style={styles.sectionTitle}>Development</ThemedText>
-        <ThemedText style={styles.help} colorName="muted">Backend API URL (for development)</ThemedText>
-        <ThemedText style={[styles.help, styles.helpInset]} colorName="muted">
-          Current: {apiBaseUrl || API_BASE_URL}
-        </ThemedText>
-        <TextInput
-          placeholder={`http://${Platform.OS === 'ios' ? 'YOUR_MAC_IP' : 'localhost'}:8000`}
-          value={apiUrlInput}
-          onChangeText={setApiUrlInput}
-          style={[styles.input, { backgroundColor: inputBg, borderColor: inputBorder, color: textColor }]}
-          placeholderTextColor={placeholderColor}
-          autoCapitalize="none"
-          autoCorrect={false}
-          keyboardType="url"
-        />
-        <View style={styles.rowGap}>
-          <TouchableOpacity
-            style={[styles.button, { backgroundColor: accent }]}
-            onPress={() => {
-              const trimmed = apiUrlInput.trim();
-              if (trimmed) {
-                setApiBaseUrl(trimmed);
-                Alert.alert('Saved', 'API URL updated. Restart the app if connection issues persist.');
-              } else {
-                setApiBaseUrl('');
-                Alert.alert('Cleared', 'Using default API URL');
-              }
-            }}
-          >
-            <ThemedText style={styles.buttonText} colorName="onTint">Save API URL</ThemedText>
-          </TouchableOpacity>
-          {apiBaseUrl && (
-            <TouchableOpacity
-              style={[styles.button, styles.secondary, { backgroundColor: surface, borderColor: inputBorder }]}
-              onPress={() => {
-                setApiBaseUrl('');
-                setApiUrlInput(API_BASE_URL);
-                Alert.alert('Reset', 'Using default API URL');
-              }}
-            >
-              <ThemedText style={styles.secondaryText} colorName="tint">Reset to Default</ThemedText>
-            </TouchableOpacity>
-          )}
-        </View>
-      </ThemedView>
-
-      <ThemedView colorName="surfaceElevated" style={[styles.section, { borderColor }]}> 
-        <ThemedText type="subtitle" colorName="tint" style={styles.sectionTitle}>Account</ThemedText>
-        
-        {userName || userId ? (
-          <View style={styles.rowGap}>
-            {userName && (
-              <View style={styles.accountRow}>
-                <ThemedText style={styles.accountLabel} colorName="mutedForeground">Name</ThemedText>
-                <ThemedText style={styles.accountValue} colorName="text">{userName}</ThemedText>
-              </View>
-            )}
-            {userId && userId !== 'guest' && (
-              <View style={styles.accountRow}>
-                <ThemedText style={styles.accountLabel} colorName="mutedForeground">Driver&apos;s License (User ID)</ThemedText>
-                <ThemedText style={styles.accountValue} colorName="text">{userId}</ThemedText>
-              </View>
-            )}
-            {userId === 'guest' && (
-              <View style={styles.accountRow}>
-                <ThemedText style={styles.accountLabel} colorName="mutedForeground">User ID</ThemedText>
-                <ThemedText style={styles.accountValue} colorName="text">Guest</ThemedText>
-              </View>
-            )}
+              {apiBaseUrl && (
+                <TouchableOpacity
+                  style={[
+                    styles.saveButton, 
+                    { backgroundColor: surface, borderColor: inputBorder, borderWidth: 1 },
+                    webStyles.hoverable,
+                  ]}
+                  onPress={() => {
+                    setApiBaseUrl('');
+                    setApiUrlInput(API_BASE_URL);
+                    Alert.alert('Reset', 'Using default API URL');
+                  }}
+                >
+                  <ThemedText style={styles.saveButtonText} colorName="text">Reset</ThemedText>
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
-        ) : (
-          <ThemedText style={styles.help} colorName="muted">No account information available. Verify your ID to link your account.</ThemedText>
         )}
 
-        <View style={[styles.rowGap, { marginTop: userName || userId ? 16 : 8 }]}>
-          <TouchableOpacity
-            style={[styles.button, { backgroundColor: danger }]}
-            onPress={handleLogout}
-          >
-            <ThemedText style={styles.buttonText} colorName="onDanger">Log Out</ThemedText>
-          </TouchableOpacity>
-        </View>
-      </ThemedView>
       </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  containerContent: { alignItems: 'center', paddingTop: 16, paddingBottom: 24 },
-  section: {
-    borderWidth: 1,
-    margin: 12,
-    padding: 16,
-    borderRadius: 12,
-    width: '95%',
-    maxWidth: 680,
-    alignSelf: 'center',
+  container: { 
+    flex: 1,
   },
-  sectionTitle: { fontSize: 18, marginBottom: 8, textAlign: 'center', fontWeight: '700' },
-  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8, width: '100%' },
-  rowGap: { gap: 8, paddingTop: 4 },
-  input: { borderWidth: 1, borderRadius: 8, padding: 10, marginTop: 8, textAlign: 'left' },
-  textArea: { borderWidth: 1, borderRadius: 8, padding: 12, marginTop: 8, minHeight: 96, textAlign: 'left' },
-  button: { paddingVertical: 10, borderRadius: 8, alignItems: 'center' },
-  buttonText: { fontWeight: '700' },
-  secondary: { borderWidth: 1 },
-  secondaryText: { fontWeight: '600' },
-  help: { marginBottom: 8, textAlign: 'center' },
-  helpInset: { marginTop: 4 },
-  meta: { fontSize: 12, marginTop: 12, textAlign: 'center' },
-  chip: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 16,
-    borderWidth: 1,
-  },
-  chipActive: {
+  containerContent: { 
+    paddingBottom: 24,
     ...Platform.select({
       web: {
-        boxShadow: '0 3px 6px rgba(0, 0, 0, 0.18)',
-      },
-      default: {
-        shadowColor: '#000',
-        shadowOpacity: 0.18,
-        shadowRadius: 6,
-        shadowOffset: { width: 0, height: 3 },
-        elevation: 3,
+        paddingBottom: 40,
+        maxWidth: 800,
+        width: '100%',
+        alignSelf: 'center',
       },
     }),
   },
-  chipText: { fontWeight: '600' },
-  accentRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 16,
-    justifyContent: 'center',
-    paddingTop: 12,
+  section: {
+    marginTop: 24,
+    ...Platform.select({
+      web: {
+        marginTop: 32,
+        maxWidth: 800,
+        width: '100%',
+        alignSelf: 'center',
+      },
+    }),
   },
-  accentChoice: {
+  sectionHeader: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 12,
+    paddingHorizontal: 16,
+    color: '#9BA1A6',
+    ...Platform.select({
+      web: {
+        fontSize: 14,
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+        marginBottom: 8,
+      },
+    }),
+  },
+  settingRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    width: 96,
-  },
-  accentSwatch: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    borderWidth: 2,
-    borderColor: 'transparent',
-    marginBottom: 6,
-  },
-  accentSwatchActive: {
-    borderWidth: 3,
-  },
-  accentLabel: {
-    fontSize: 12,
-    textAlign: 'center',
-  },
-  quietHoursRow: {
-    flexDirection: 'row',
     justifyContent: 'space-between',
-    gap: 12,
-    marginTop: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    ...Platform.select({
+      web: {
+        paddingVertical: 16,
+        paddingHorizontal: 20,
+        cursor: 'pointer',
+      },
+    }),
   },
-  quietField: {
+  settingLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
     flex: 1,
   },
-  quietLabel: {
-    marginBottom: 6,
-    fontWeight: '600',
+  settingIcon: {
+    marginRight: 12,
   },
-  quietInput: {
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
+  settingLabel: {
+    fontSize: 16,
+    fontWeight: '400',
   },
-  accountRow: {
+  settingRight: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+    gap: 8,
   },
-  accountLabel: {
+  settingValue: {
+    fontSize: 16,
+    fontWeight: '400',
+  },
+  accentPreview: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    marginRight: 4,
+  },
+  expandedContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    ...Platform.select({
+      web: {
+        paddingHorizontal: 20,
+        paddingBottom: 20,
+      },
+    }),
+  },
+  expandedText: {
     fontSize: 14,
+    marginBottom: 12,
+  },
+  inputGroup: {
+    marginBottom: 16,
+  },
+  inputLabel: {
+    fontSize: 14,
+    marginBottom: 8,
     fontWeight: '500',
   },
-  accountValue: {
-    fontSize: 14,
+  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8, width: '100%' },
+  rowGap: { gap: 8, paddingTop: 4 },
+  input: { 
+    borderWidth: 1, 
+    borderRadius: 8, 
+    padding: 12, 
+    fontSize: 16,
+    ...Platform.select({
+      web: {
+        padding: 14,
+        borderRadius: 10,
+        fontSize: 15,
+        outline: 'none',
+        transition: 'border-color 0.2s ease-in-out',
+      },
+    }),
+  },
+  textArea: { borderWidth: 1, borderRadius: 8, padding: 12, marginTop: 8, minHeight: 96, textAlign: 'left' },
+  saveButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    alignItems: 'center',
+    ...Platform.select({
+      web: {
+        paddingVertical: 14,
+        paddingHorizontal: 28,
+        borderRadius: 10,
+        cursor: 'pointer',
+        userSelect: 'none',
+      },
+    }),
+  },
+  saveButtonText: {
     fontWeight: '600',
+    fontSize: 16,
+  },
+  buttonRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 8,
+  },
+  buttonDisabled: {
+    opacity: 0.6,
+    ...Platform.select({
+      web: {
+        cursor: 'not-allowed' as any,
+      },
+    }),
+  },
+  optionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    marginBottom: 8,
+    ...Platform.select({
+      web: {
+        paddingVertical: 14,
+        paddingHorizontal: 20,
+        borderRadius: 10,
+        cursor: 'pointer',
+      },
+    }),
+  },
+  optionButtonText: {
+    fontSize: 16,
+    fontWeight: '400',
     flex: 1,
-    textAlign: 'right',
   },
 });

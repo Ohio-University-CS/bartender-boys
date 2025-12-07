@@ -12,6 +12,7 @@ class Message(BaseModel):
 
 class ChatRequest(BaseModel):
     messages: List[Message]
+    user_id: Optional[str] = None
 
 
 class ChatResponse(BaseModel):

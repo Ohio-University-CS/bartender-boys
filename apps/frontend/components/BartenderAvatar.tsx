@@ -66,6 +66,8 @@ export function BartenderAvatar({
   const baseScaleRef = useRef(new THREE.Vector3(1, 1, 1));
   const bobAmplitudeRef = useRef<number | null>(null);
   const loadTokenRef = useRef(0);
+  const isMountedRef = useRef(true);
+  const glContextRef = useRef<any>(null);
 
   const resetTransformDefaults = () => {
     positionOffsetRef.current.set(0, 0, 0);
@@ -168,12 +170,18 @@ export function BartenderAvatar({
     token: number,
   ) => {
     try {
+      // Check if component is still mounted and context is valid
+      if (!isMountedRef.current || !glContextRef.current || !rendererRef.current) {
+        console.log('[BartenderAvatar] Skipping model load, component unmounted or context lost');
+        return;
+      }
+
       const asset = Asset.fromModule(moduleRef as number);
       console.log('[BartenderAvatar] resolved asset metadata', asset);
       await asset.downloadAsync();
 
-      if (loadTokenRef.current !== token) {
-        console.log('[BartenderAvatar] Skipping model load, a newer request is in flight');
+      if (loadTokenRef.current !== token || !isMountedRef.current) {
+        console.log('[BartenderAvatar] Skipping model load, a newer request is in flight or component unmounted');
         return;
       }
 
@@ -195,8 +203,8 @@ export function BartenderAvatar({
         throw new Error('Model scene missing');
       }
 
-      if (loadTokenRef.current !== token) {
-        console.log('[BartenderAvatar] Skipping model load, GLTF parse superseded');
+      if (loadTokenRef.current !== token || !isMountedRef.current || !rendererRef.current) {
+        console.log('[BartenderAvatar] Skipping model load, GLTF parse superseded or context lost');
         return;
       }
 
@@ -248,8 +256,8 @@ export function BartenderAvatar({
         baseScaleRef.current.z,
       );
 
-      if (loadTokenRef.current !== token) {
-        console.log('[BartenderAvatar] Skipping model load, transform application superseded');
+      if (loadTokenRef.current !== token || !isMountedRef.current || !rendererRef.current) {
+        console.log('[BartenderAvatar] Skipping model load, transform application superseded or context lost');
         return;
       }
 
@@ -294,6 +302,18 @@ export function BartenderAvatar({
   };
 
   const onContextCreate = async (gl: any) => {
+    if (!isMountedRef.current) {
+      return;
+    }
+
+    glContextRef.current = gl;
+    
+    // Check if GL context is valid
+    if (!gl || gl.isContextLost && gl.isContextLost()) {
+      console.warn('[BartenderAvatar] GL context is lost');
+      return;
+    }
+
     const renderer = new Renderer({ gl });
     rendererRef.current = renderer;
     renderer.setSize(gl.drawingBufferWidth, gl.drawingBufferHeight);
@@ -336,6 +356,17 @@ export function BartenderAvatar({
     }
 
     const render = () => {
+      // Check if component is still mounted and context is valid
+      if (!isMountedRef.current || !rendererRef.current || !glContextRef.current) {
+        return;
+      }
+
+      // Check if GL context is lost
+      if (gl.isContextLost && gl.isContextLost()) {
+        console.warn('[BartenderAvatar] GL context lost, stopping render loop');
+        return;
+      }
+
       animationFrameRef.current = requestAnimationFrame(render);
 
       const delta = clockRef.current?.getDelta() ?? 0.016;
@@ -385,18 +416,68 @@ export function BartenderAvatar({
         }
       }
 
-      renderer.render(scene, camera);
-      gl.endFrameEXP();
+      try {
+        renderer.render(scene, camera);
+        gl.endFrameEXP();
+      } catch (error) {
+        // If rendering fails (e.g., context lost), stop the render loop
+        console.warn('[BartenderAvatar] Render error, stopping loop:', error);
+        if (animationFrameRef.current) {
+          cancelAnimationFrame(animationFrameRef.current);
+          animationFrameRef.current = null;
+        }
+      }
     };
 
     render();
   };
 
   useEffect(() => {
+    isMountedRef.current = true;
     return () => {
+      isMountedRef.current = false;
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
       }
+      
+      // Cleanup Three.js resources
+      if (mixerRef.current) {
+        mixerRef.current.stopAllAction();
+        mixerRef.current = null;
+      }
+      
+      if (meshRef.current) {
+        meshRef.current.traverse((child: any) => {
+          if (child.isMesh) {
+            if (child.geometry) child.geometry.dispose();
+            if (child.material) {
+              if (Array.isArray(child.material)) {
+                child.material.forEach((mat: any) => {
+                  if (mat.map) mat.map.dispose();
+                  if (mat.normalMap) mat.normalMap.dispose();
+                  if (mat.roughnessMap) mat.roughnessMap.dispose();
+                  if (mat.metalnessMap) mat.metalnessMap.dispose();
+                  mat.dispose();
+                });
+              } else {
+                if (child.material.map) child.material.map.dispose();
+                if (child.material.normalMap) child.material.normalMap.dispose();
+                if (child.material.roughnessMap) child.material.roughnessMap.dispose();
+                if (child.material.metalnessMap) child.material.metalnessMap.dispose();
+                child.material.dispose();
+              }
+            }
+          }
+        });
+        if (sceneRef.current && meshRef.current) {
+          sceneRef.current.remove(meshRef.current);
+        }
+        meshRef.current = null;
+      }
+      
+      rendererRef.current = null;
+      glContextRef.current = null;
     };
   }, []);
 

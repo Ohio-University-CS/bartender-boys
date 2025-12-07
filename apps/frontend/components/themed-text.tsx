@@ -1,6 +1,6 @@
 import { StyleSheet, Text, type TextProps } from 'react-native';
 
-import { Colors } from '@/constants/theme';
+import { Colors, FontFamilies } from '@/constants/theme';
 import { useThemeColor } from '@/hooks/use-theme-color';
 
 type ThemeColorName = keyof typeof Colors.light;
@@ -43,21 +43,21 @@ const styles = StyleSheet.create({
   default: {
     fontSize: 16,
     lineHeight: 24,
-    fontFamily: 'Montserrat-Regular',
+    fontFamily: FontFamilies.regular,
   },
   title: {
     fontSize: 32,
-    fontFamily: 'Montserrat-Bold',
+    fontFamily: FontFamilies.bold,
     lineHeight: 32,
   },
   subtitle: {
     fontSize: 20,
-    fontFamily: 'Montserrat-Bold',
+    fontFamily: FontFamilies.bold,
   },
   link: {
     lineHeight: 30,
     fontSize: 16,
-    fontFamily: 'Montserrat-Bold',
+    fontFamily: FontFamilies.bold,
   },
   // ...existing code...
 });

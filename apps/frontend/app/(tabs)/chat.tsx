@@ -6,9 +6,10 @@ import { useSettings } from '@/contexts/settings';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
+import { TabHeader } from '@/components/tab-header';
 import { getConversations, createConversation, deleteConversation, type Conversation } from '@/utils/chat-api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { webStyles } from '@/utils/web-styles';
 
 export default function ChatScreen() {
   const router = useRouter();
@@ -19,6 +20,12 @@ export default function ChatScreen() {
   const [error, setError] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      document.title = 'BrewBot - Chat';
+    }
+  }, []);
 
   // Theme colors
   const backgroundColor = useThemeColor({}, 'background');
@@ -142,8 +149,11 @@ export default function ChatScreen() {
   const renderConversation = useCallback(({ item }: { item: Conversation }) => {
     const isDeleting = deletingId === item.id;
     return (
-      <View style={[styles.conversationCard, { backgroundColor: cardBg, borderColor }]}>
-        <TouchableOpacity style={styles.conversationContent} onPress={() => handleConversationPress(item.id)}>
+      <View style={[styles.conversationCard, { backgroundColor: cardBg, borderColor }, webStyles.shadow]}>
+        <TouchableOpacity 
+          style={[styles.conversationContent, webStyles.hoverable, webStyles.transition]} 
+          onPress={() => handleConversationPress(item.id)}
+        >
           <ThemedText type="defaultSemiBold" style={styles.conversationTitle}>
             {item.title || 'New Conversation'}
           </ThemedText>
@@ -154,14 +164,14 @@ export default function ChatScreen() {
         <View style={styles.cardActions}>
           <TouchableOpacity
             onPress={() => handleConversationPress(item.id)}
-            style={styles.iconButton}
+            style={[styles.iconButton, webStyles.hoverable, webStyles.transition]}
             accessibilityLabel="Open conversation"
           >
             <Ionicons name="chevron-forward" size={20} color={mutedForeground} />
           </TouchableOpacity>
           <TouchableOpacity
             onPress={() => confirmDeleteConversation(item)}
-            style={styles.iconButton}
+            style={[styles.iconButton, webStyles.hoverable, webStyles.transition]}
             disabled={isDeleting}
             accessibilityLabel="Delete conversation"
           >
@@ -177,28 +187,42 @@ export default function ChatScreen() {
   }, [cardBg, borderColor, metaText, mutedForeground, handleConversationPress, deletingId, confirmDeleteConversation]);
 
   const handleBartenderPress = useCallback(() => {
+    // Navigate to the voice assistant screen (not the bartender selection tab)
+    // Use href to explicitly target the stack route, not the tab route
+    // The voice assistant is at /bartender (stack route), not /(tabs)/bartender (tab route)
     router.push('/bartender' as any);
   }, [router]);
 
   return (
     <View style={[styles.container, { backgroundColor, paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}> 
-      <ThemedView colorName="surface" style={[styles.header, { borderBottomColor: borderColor }]}> 
-        <ThemedText type="title" colorName="tint" style={styles.title}>Chats</ThemedText>
-        <View style={styles.headerButtons}>
-          <TouchableOpacity
-            style={[styles.headerButton, { backgroundColor: accent }]}
-            onPress={handleBartenderPress}
-          >
-            <Ionicons name="mic" size={20} color="#FFFFFF" />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.headerButton, { backgroundColor: accent }]}
-            onPress={handleCreateConversation}
-          >
-            <Ionicons name="add" size={20} color="#FFFFFF" />
-          </TouchableOpacity>
-        </View>
-      </ThemedView>
+      <TabHeader 
+        centerActionButtons={
+          <>
+            <TouchableOpacity
+              style={[
+                styles.headerButton, 
+                { backgroundColor: accent },
+                webStyles.hoverable,
+                webStyles.shadow,
+              ]}
+              onPress={handleBartenderPress}
+            >
+              <Ionicons name="mic" size={20} color="#FFFFFF" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.headerButton, 
+                { backgroundColor: accent },
+                webStyles.hoverable,
+                webStyles.shadow,
+              ]}
+              onPress={handleCreateConversation}
+            >
+              <Ionicons name="add" size={20} color="#FFFFFF" />
+            </TouchableOpacity>
+          </>
+        }
+      />
 
       {loading ? (
         <View style={styles.loadingContainer}>
@@ -233,21 +257,11 @@ export default function ChatScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: '700',
-  },
-  headerButtons: {
-    flexDirection: 'row',
-    gap: 8,
+    ...Platform.select({
+      web: {
+        alignItems: 'center',
+      },
+    }),
   },
   headerButton: {
     width: 36,
@@ -255,9 +269,26 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
+    ...Platform.select({
+      web: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        cursor: 'pointer',
+        userSelect: 'none',
+      },
+    }),
   },
   list: {
     padding: 12,
+    ...Platform.select({
+      web: {
+        padding: 16,
+        maxWidth: 800,
+        width: '100%',
+        alignSelf: 'center',
+      },
+    }),
   },
   conversationCard: {
     flexDirection: 'row',
@@ -267,6 +298,13 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     borderRadius: 12,
     borderWidth: 1,
+    ...Platform.select({
+      web: {
+        borderRadius: 14,
+        padding: 18,
+        cursor: 'pointer',
+      },
+    }),
   },
   conversationContent: {
     flex: 1,
@@ -275,6 +313,7 @@ const styles = StyleSheet.create({
   conversationTitle: {
     fontSize: 16,
     marginBottom: 4,
+    marginRight: 160,
   },
   conversationDate: {
     fontSize: 12,
