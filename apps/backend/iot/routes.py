@@ -222,24 +222,6 @@ async def send_drink_to_firmware(request: PourRequest) -> PourResponse:
             logger.warning(f"Failed to generate hardware steps from ratios: {str(e)}")
             # Continue without hardware steps
     
-    # Get hardware profile and select pump
-    if _hardware_profile is None:
-        logger.warning(
-            "Hardware profile unavailable. Defaulting to simulated pump selection."
-        )
-        try:
-            profile = get_hardware_profile()
-            selection = profile.choose_random_pump()
-            _hardware_profile = profile
-        except RuntimeError as exc:  # pragma: no cover - config missing
-            raise HTTPException(
-                status_code=500,
-                detail="Pi pump configuration not found. Ensure pi_mapping.json exists.",
-            ) from exc
-    else:
-        selection = _hardware_profile.choose_random_pump()
-    selected_pump = SelectedPump(**selection.to_response_dict())
-    
     # Build drink payload (after potential hardware_steps generation)
     drink_payload = (
         drink.model_dump()
@@ -250,37 +232,58 @@ async def send_drink_to_firmware(request: PourRequest) -> PourResponse:
     if hasattr(drink, '_pump_mapping'):
         drink_payload['pump_mapping'] = drink._pump_mapping
     
-    # Build firmware command payload
-    command_payload = build_firmware_command(drink_payload, selection)
+    # Validate that we have ratios and pump mapping
+    if not drink_payload.get("ratios"):
+        return PourResponse(
+            status="error",
+            message="Drink must have ratios to pour",
+            selected_pump=None,
+        )
+    
+    if not drink_payload.get("pump_mapping"):
+        return PourResponse(
+            status="error",
+            message="No pump mapping available. Please configure your pumps in settings.",
+            selected_pump=None,
+        )
+    
+    # Build simplified firmware command payload
+    try:
+        command_payload = build_firmware_command(drink_payload)
+    except ValueError as e:
+        return PourResponse(
+            status="error",
+            message=str(e),
+            selected_pump=None,
+        )
     
     client = get_firmware_client()
     if client is None:
         logger.warning(
-            "Firmware API URL not configured. Simulating pour via pump %s.",
-            selected_pump.id,
+            "Firmware API URL not configured. Simulating pour."
         )
+        step_summary = ", ".join([f"pump {s['pump_id']} ({s['ratio']}%)" for s in command_payload["steps"]])
         return PourResponse(
             status="ok",
             message=(
-                "Firmware API not configured - simulated dispense using "
-                f"{selected_pump.label}"
+                f"Firmware API not configured - simulated dispense: {step_summary}"
             ),
-            selected_pump=selected_pump,
+            selected_pump=None,
         )
 
     try:
         result = await client.send_drink_request(command_payload)
         status = result.get("status", "ok")
-        message = result.get("message") or f"Dispensing via {selected_pump.label}."
+        message = result.get("message") or "Dispensing started."
 
         if status != "ok":
             return PourResponse(
                 status="error",
                 message=message,
-                selected_pump=selected_pump,
+                selected_pump=None,
             )
 
-        return PourResponse(status="ok", message=message, selected_pump=selected_pump)
+        return PourResponse(status="ok", message=message, selected_pump=None)
     except Exception as exc:
         # Prefer to surface HTTP-specific errors if httpx is available
         try:

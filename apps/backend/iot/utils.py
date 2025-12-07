@@ -206,28 +206,62 @@ def get_hardware_profile() -> HardwareProfile:
     return HardwareProfile(data)
 
 
-def build_firmware_command(drink: dict, selection: PumpSelection) -> Dict[str, Any]:
-    pump_payload: Dict[str, Any] = {
-        "id": selection.pump.id,
-        "label": selection.pump.label,
-        "gpio_pin": selection.pump.gpio_pin,
-        "duration_seconds": selection.duration_seconds,
-        "prime_seconds": selection.prime_seconds,
-        "post_dispense_delay_seconds": selection.post_dispense_delay_seconds,
-        "cooldown_seconds": selection.cooldown_seconds,
-        "target_volume_ml": selection.target_volume_ml,
-        "liquid": selection.pump.liquid,
-        "flow_rate_ml_per_second": selection.pump.adjusted_flow_rate,
-        "active_low": selection.defaults.active_low,
-    }
-
-    if selection.pump.last_calibrated:
-        pump_payload["last_calibrated"] = selection.pump.last_calibrated
-    pump_payload["correction_factor"] = selection.pump.correction_factor
-
+def build_firmware_command(drink: dict) -> Dict[str, Any]:
+    """Build simplified firmware command from drink with ratios and pump mapping.
+    
+    Args:
+        drink: Drink dict with ratios and pump_mapping
+        
+    Returns:
+        Simplified payload with steps: [{"pump_id": 1, "ratio": 50}, ...]
+    """
+    import re
+    
+    def normalize_to_snake_case(text: str) -> str:
+        """Normalize a string to snake_case (matching pump_config.py)."""
+        if not text:
+            return ""
+        text = text.lower().strip()
+        text = re.sub(r'[^\w\s-]', '', text)
+        text = re.sub(r'[\s-]+', '_', text)
+        text = text.strip('_')
+        return text
+    
+    steps = []
+    
+    # Extract ratios and pump_mapping from drink
+    ratios = drink.get("ratios", [])
+    pump_mapping = drink.get("pump_mapping", {})
+    ingredients = drink.get("ingredients", [])
+    
+    # Map pump names (pump1, pump2, pump3) to pump IDs (1, 2, 3)
+    pump_name_to_id = {"pump1": 1, "pump2": 2, "pump3": 3}
+    
+    # Build steps from ingredients and ratios
+    for i, ingredient in enumerate(ingredients):
+        if i >= len(ratios):
+            break
+            
+        ratio = ratios[i]
+        if ratio <= 0:
+            continue
+            
+        # Find which pump this ingredient is mapped to (using same normalization as routes.py)
+        normalized_ingredient = normalize_to_snake_case(ingredient)
+        pump_name = pump_mapping.get(normalized_ingredient)
+        
+        if pump_name and pump_name in pump_name_to_id:
+            pump_id = pump_name_to_id[pump_name]
+            steps.append({
+                "pump_id": pump_id,
+                "ratio": ratio,
+            })
+    
+    if not steps:
+        raise ValueError("No valid pump steps could be generated from drink ratios and pump mapping")
+    
     return {
-        "drink": drink,
-        "pump": pump_payload,
+        "steps": steps,
     }
 
 class FirmwareClient:
