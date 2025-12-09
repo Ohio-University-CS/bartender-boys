@@ -161,8 +161,8 @@ export default function AuthScreen() {
       <Text style={styles.title}>Verify your ID</Text>
       <Text style={styles.subtitle}>Align your ID inside the frame and take a photo</Text>
 
-      <View style={styles.cameraContainer}>
-        <View style={styles.viewfinder}>
+      <View style={styles.cameraContainer} pointerEvents="box-none">
+        <View style={styles.viewfinder} pointerEvents="box-none">
           {permission?.granted ? (
             capturedImage ? (
               <Image source={{ uri: capturedImage }} style={StyleSheet.absoluteFill} resizeMode="cover" />
@@ -185,7 +185,7 @@ export default function AuthScreen() {
         </View>
       </View>
 
-      <View style={styles.controls}>
+      <View style={styles.controls} pointerEvents="box-none">
         {isProcessing ? (
           <View style={styles.processingContainer}>
             <ActivityIndicator size="large" color="#fff" />
@@ -197,6 +197,8 @@ export default function AuthScreen() {
               style={[styles.captureButton, isCapturing && styles.captureButtonActive]}
               onPress={onCapture}
               disabled={isCapturing}
+              activeOpacity={0.8}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
               {isCapturing ? (
                 <ActivityIndicator color="#000" />
@@ -231,6 +233,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    maxHeight: '70%', // Limit height to prevent overlap with button
   },
   viewfinder: {
     ...Platform.select({
@@ -262,6 +265,8 @@ const styles = StyleSheet.create({
   controls: {
     gap: 12,
     paddingBottom: 40,
+    zIndex: 10,
+    elevation: 10, // Android
   },
   permissionFallback: {
     flex: 1,

@@ -3,6 +3,7 @@ import { StyleSheet, FlatList, ScrollView, TouchableOpacity, TextInput, View, Pl
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -72,14 +73,47 @@ export default function MenuScreen() {
 
   const handleToggleFavorite = useCallback(async (drinkId: string) => {
     try {
-      const updatedDrink = await toggleFavoriteApi(drinkId, apiBaseUrl);
-      // Update the drink in the local state
-      setAllDrinks(prev => prev.map(d => d.id === drinkId ? updatedDrink : d));
+      // Get user_id from AsyncStorage
+      const userId = await AsyncStorage.getItem('user_id');
+      if (!userId) {
+        console.error('[MenuScreen] No user_id found, cannot toggle favorite');
+        return;
+      }
+      
+      // Find the current drink to get its current favorite state
+      const currentDrink = allDrinks.find(d => d.id === drinkId);
+      if (!currentDrink) {
+        console.error('[MenuScreen] Drink not found:', drinkId);
+        return;
+      }
+      
+      // Optimistically update the UI immediately
+      const newFavoritedState = !currentDrink.favorited;
+      setAllDrinks(prev => prev.map(d => 
+        d.id === drinkId 
+          ? { ...d, favorited: newFavoritedState }
+          : d
+      ));
+      
+      // Call the API in the background
+      try {
+        const updatedDrink = await toggleFavoriteApi(drinkId, userId, apiBaseUrl);
+        // Update with the actual response (in case server has different state)
+        setAllDrinks(prev => prev.map(d => d.id === drinkId ? updatedDrink : d));
+      } catch (apiError) {
+        // Revert the optimistic update on error
+        console.error('[MenuScreen] Error toggling favorite:', apiError);
+        setAllDrinks(prev => prev.map(d => 
+          d.id === drinkId 
+            ? { ...d, favorited: currentDrink.favorited }
+            : d
+        ));
+        // Optionally show an error message to the user
+      }
     } catch (err) {
-      console.error('[MenuScreen] Error toggling favorite:', err);
-      // Optionally show an error message to the user
+      console.error('[MenuScreen] Error in handleToggleFavorite:', err);
     }
-  }, [apiBaseUrl]);
+  }, [apiBaseUrl, allDrinks]);
 
   const categories = ['All', 'Favorites', 'Cocktail', 'Whiskey', 'Rum', 'Gin', 'Vodka', 'Tequila', 'Brandy'];
   const sortOptions: { key: SortOption; label: string }[] = [
@@ -104,6 +138,16 @@ export default function MenuScreen() {
   // Fetch drinks from API
   const fetchDrinks = useCallback(async (skip: number = 0, reset: boolean = false) => {
     try {
+      // Get user_id from AsyncStorage
+      const userId = await AsyncStorage.getItem('user_id');
+      if (!userId) {
+        console.error('[MenuScreen] No user_id found, cannot fetch drinks');
+        setError('User not authenticated');
+        setLoading(false);
+        setLoadingMore(false);
+        return;
+      }
+      
       if (reset) {
         setLoading(true);
         setError(null);
@@ -119,6 +163,7 @@ export default function MenuScreen() {
         {
           skip,
           limit: PAGE_SIZE,
+          user_id: userId,
           category,
           favorited,
         },
@@ -225,7 +270,37 @@ export default function MenuScreen() {
     const isExpanded = !!expanded[drink.id];
     const shownIngredients = isExpanded ? drink.ingredients : drink.ingredients.slice(0, 3);
     const remaining = drink.ingredients.length - shownIngredients.length;
-    const drinkImageUrl = drink.image_url || `https://via.placeholder.com/120x120/1a1a1a/FFA500?text=${encodeURIComponent(drink.name.substring(0, 2))}`;
+    // Use image_data (base64) if available, otherwise use image_url
+    // On mobile, prefer image_data to avoid network issues
+    let drinkImageUrl: string;
+    if (drink.image_data) {
+      // Use base64 data URI directly - works everywhere, no network needed
+      drinkImageUrl = drink.image_data;
+    } else if (drink.image_url) {
+      // On mobile, avoid URLs with 127.0.0.1 (won't work)
+      if (Platform.OS !== 'web' && drink.image_url.includes('127.0.0.1')) {
+        // On mobile with 127.0.0.1 URL, use placeholder instead
+        drinkImageUrl = `https://via.placeholder.com/120x120/1a1a1a/FFA500?text=${encodeURIComponent(drink.name.substring(0, 2))}`;
+      } else {
+        // Handle relative URLs and fix absolute URLs with 127.0.0.1
+        drinkImageUrl = drink.image_url;
+        if (apiBaseUrl) {
+          // If it's a relative URL (starts with /), prepend API base URL
+          if (drinkImageUrl.startsWith('/')) {
+            const correctBaseUrl = apiBaseUrl.replace(/\/$/, ''); // Remove trailing slash
+            drinkImageUrl = `${correctBaseUrl}${drinkImageUrl}`;
+          }
+          // If it contains 127.0.0.1, replace with correct API base URL
+          else if (drinkImageUrl.includes('127.0.0.1')) {
+            const correctBaseUrl = apiBaseUrl.replace(/\/$/, ''); // Remove trailing slash
+            drinkImageUrl = drinkImageUrl.replace(/http:\/\/127\.0\.0\.1:\d+/, correctBaseUrl);
+          }
+        }
+      }
+    } else {
+      // Fallback to placeholder
+      drinkImageUrl = `https://via.placeholder.com/120x120/1a1a1a/FFA500?text=${encodeURIComponent(drink.name.substring(0, 2))}`;
+    }
     
     return (
       <TouchableOpacity
@@ -242,7 +317,12 @@ export default function MenuScreen() {
             <Image
               source={{ uri: drinkImageUrl }}
               style={styles.drinkImage}
-              defaultSource={require('@/assets/images/icon.png')}
+              onError={(error) => {
+                console.error('[Menu] Failed to load image for drink', drink.id, ':', drinkImageUrl, error.nativeEvent?.error || 'Unknown error');
+              }}
+              onLoad={() => {
+                console.log('[Menu] Successfully loaded image for drink', drink.id);
+              }}
             />
           </View>
           <View style={styles.drinkDetails}>
@@ -302,7 +382,7 @@ export default function MenuScreen() {
         </View>
       </TouchableOpacity>
     );
-  }, [expanded, cardBg, borderColor, accent, danger, mutedForeground, badgeBg, badgeText, handleToggleFavorite, showDrinkDetails, toggleExpanded]);
+  }, [expanded, cardBg, borderColor, accent, danger, mutedForeground, badgeBg, badgeText, handleToggleFavorite, showDrinkDetails, toggleExpanded, apiBaseUrl]);
 
   const renderFooter = useCallback(() => {
     if (!loadingMore) return null;
@@ -326,13 +406,15 @@ export default function MenuScreen() {
         animationType="fade"
         onRequestClose={() => setShowFilterMenu(false)}
       >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowFilterMenu(false)}
-        >
+        <View style={styles.modalOverlay} pointerEvents="box-none">
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={() => setShowFilterMenu(false)}
+          />
           <ThemedView
             style={[styles.filterMenu, { backgroundColor: cardBg, borderColor }]}
+            pointerEvents="auto"
             onStartShouldSetResponder={() => true}
           >
             <View style={[styles.filterMenuHeader, { borderBottomColor: borderColor }]}>
@@ -362,7 +444,8 @@ export default function MenuScreen() {
                           webStyles.hoverable,
                           webStyles.transition,
                         ]}
-                        onPress={() => {
+                        onPress={(e) => {
+                          e.stopPropagation();
                           setSelectedCategory(category);
                           setShowFilterMenu(false);
                         }}
@@ -394,7 +477,10 @@ export default function MenuScreen() {
                           webStyles.hoverable,
                           webStyles.transition,
                         ]}
-                        onPress={() => setSortBy(option.key)}
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          setSortBy(option.key);
+                        }}
                       >
                         <ThemedText
                           style={styles.filterOptionText}
@@ -423,7 +509,10 @@ export default function MenuScreen() {
                           webStyles.hoverable,
                           webStyles.transition,
                         ]}
-                        onPress={() => setPrepTimeFilter(option.key)}
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          setPrepTimeFilter(option.key);
+                        }}
                       >
                         <ThemedText
                           style={styles.filterOptionText}
@@ -452,7 +541,10 @@ export default function MenuScreen() {
                           webStyles.hoverable,
                           webStyles.transition,
                         ]}
-                        onPress={() => setIngredientCountFilter(option.key)}
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          setIngredientCountFilter(option.key);
+                        }}
                       >
                         <ThemedText
                           style={styles.filterOptionText}
@@ -467,7 +559,7 @@ export default function MenuScreen() {
               </View>
             </ScrollView>
           </ThemedView>
-        </TouchableOpacity>
+        </View>
       </Modal>
 
         {loading && allDrinks.length === 0 ? (

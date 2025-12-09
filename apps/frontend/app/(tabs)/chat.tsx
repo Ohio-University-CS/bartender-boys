@@ -101,7 +101,15 @@ export default function ChatScreen() {
     const proceed = async () => {
       setDeletingId(conversation.id);
       try {
-        await deleteConversation(conversation.id, apiBaseUrl);
+        // Get user_id from AsyncStorage
+        const userId = await AsyncStorage.getItem('user_id');
+        if (!userId) {
+          Alert.alert('Error', 'User not authenticated');
+          setDeletingId(null);
+          return;
+        }
+        
+        await deleteConversation(conversation.id, userId, apiBaseUrl);
         setConversations((prev) => prev.filter((c) => c.id !== conversation.id));
       } catch (err: any) {
         const message = err?.message || 'Failed to delete conversation. Please try again.';

@@ -1,15 +1,42 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Platform } from 'react-native';
 import { Audio } from 'expo-av';
-import InCallManager from 'react-native-incall-manager';
-import {
-  mediaDevices,
-  RTCPeerConnection,
-  MediaStream,
-} from 'react-native-webrtc-web-shim';
+import Constants from 'expo-constants';
 import { getRealtimeToken } from '@/utils/realtime';
 import { useSettings } from '@/contexts/settings';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+
+// Conditionally import native modules - they're not available in Expo Go
+let InCallManager: any = null;
+let mediaDevices: any = null;
+let RTCPeerConnection: any = null;
+let MediaStream: any = null;
+
+// Check if we're in Expo Go (native modules won't be available)
+const isExpoGo = Constants.executionEnvironment === 'storeClient';
+
+if (!isExpoGo) {
+  try {
+    // Try to import native modules - will fail in Expo Go
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    InCallManager = require('react-native-incall-manager').default;
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const webrtcShim = require('react-native-webrtc-web-shim');
+    mediaDevices = webrtcShim.mediaDevices;
+    RTCPeerConnection = webrtcShim.RTCPeerConnection;
+    MediaStream = webrtcShim.MediaStream;
+  } catch {
+    // Native modules not available - this is expected in Expo Go
+    console.warn('[useWebRTCRealtime] Native modules not available (likely running in Expo Go). WebRTC features will be limited to web platform.');
+  }
+}
+
+// On web, use browser WebRTC APIs directly (only if in browser environment)
+if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof navigator !== 'undefined') {
+  mediaDevices = navigator.mediaDevices;
+  RTCPeerConnection = window.RTCPeerConnection || (window as any).webkitRTCPeerConnection;
+  MediaStream = window.MediaStream || (window as any).webkitMediaStream;
+}
 
 export interface UseWebRTCRealtimeOptions {
   onTranscript?: (transcript: string) => void;
@@ -35,10 +62,10 @@ export function useWebRTCRealtime(
   const { realtimeVoice, apiBaseUrl } = useSettings();
   
   const [isSessionActive, setIsSessionActive] = useState(false);
-  const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
-  const dataChannelRef = useRef<ReturnType<RTCPeerConnection['createDataChannel']> | null>(null);
-  const localMediaStreamRef = useRef<MediaStream | null>(null);
-  const remoteMediaStreamRef = useRef<MediaStream>(new MediaStream());
+  const peerConnectionRef = useRef<any>(null);
+  const dataChannelRef = useRef<any>(null);
+  const localMediaStreamRef = useRef<any>(null);
+  const remoteMediaStreamRef = useRef<any>(null);
   const audioTrackRef = useRef<any>(null);
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
   const audioLevelIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -52,6 +79,16 @@ export function useWebRTCRealtime(
   }, []);
 
   const startSession = useCallback(async () => {
+    // Check if WebRTC is available
+    if (!RTCPeerConnection || !mediaDevices || !MediaStream) {
+      const errorMsg = Platform.OS === 'web' 
+        ? 'WebRTC is not supported in this browser'
+        : 'WebRTC native modules are not available. Please use a development build instead of Expo Go.';
+      console.error('[useWebRTCRealtime]', errorMsg);
+      onError?.(new Error(errorMsg));
+      return;
+    }
+
     try {
       // Get ephemeral token from backend with selected voice
       const tokenData = await getRealtimeToken(realtimeVoice);
@@ -79,8 +116,13 @@ export function useWebRTCRealtime(
         console.log('[useWebRTCRealtime] ICE connection state:', pc.iceConnectionState);
       });
 
+      // Initialize remote media stream if not already done
+      if (!remoteMediaStreamRef.current && MediaStream) {
+        remoteMediaStreamRef.current = new MediaStream();
+      }
+
       pc.addEventListener('track', (event: any) => {
-        if (event.track) {
+        if (event.track && remoteMediaStreamRef.current) {
           console.log('[useWebRTCRealtime] Remote track received:', event.track.kind);
           remoteMediaStreamRef.current.addTrack(event.track);
           

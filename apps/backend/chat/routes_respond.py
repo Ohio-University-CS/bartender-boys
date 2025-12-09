@@ -113,7 +113,7 @@ async def respond(
                             except Exception as e:
                                 logger.warning(f"Failed to inject available_ingredients: {str(e)}")
                         
-                        result = await handle_function_call(function_name, arguments, effective_user_id)
+                        result = await handle_function_call(function_name, arguments, effective_user_id, fastapi_request)
                         
                         # Add function result to messages
                         messages.append({
@@ -254,7 +254,7 @@ async def respond(
                         if function_name == "generate_drink":
                             yield sse_format({"status": "generating_drink", "message": "Generating Drink..."})
                         
-                        result = await handle_function_call(function_name, arguments, effective_user_id)
+                        result = await handle_function_call(function_name, arguments, effective_user_id, fastapi_request)
                         
                         # Add function result to messages
                         messages.append({
@@ -288,6 +288,7 @@ async def respond(
 
 @router.get("/respond_stream")
 async def respond_stream(
+    fastapi_request: Request,
     q: str = Query(..., description="URL-encoded JSON with { messages: Message[], user_id?: string }"),
 ):
     """
@@ -437,7 +438,7 @@ async def respond_stream(
                         if function_name == "generate_drink":
                             yield sse_format({"status": "generating_drink", "message": "Generating Drink..."})
                         
-                        result = await handle_function_call(function_name, arguments, user_id)
+                        result = await handle_function_call(function_name, arguments, user_id, fastapi_request)
                         
                         # Add function result to messages
                         final_messages.append({

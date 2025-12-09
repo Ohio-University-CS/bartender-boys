@@ -3,7 +3,7 @@ import asyncio
 from datetime import datetime
 from typing import List
 from bson import ObjectId
-from fastapi import APIRouter, HTTPException, Response
+from fastapi import APIRouter, HTTPException, Response, Query
 
 from services.db import get_db_handle
 from .models import ChatCreate, ChatMessageResponse
@@ -17,8 +17,11 @@ router = APIRouter()
 @router.get(
     "/conversations/{conversation_id}/chats", response_model=List[ChatMessageResponse]
 )
-async def get_conversation_chats(conversation_id: str):
-    """Get all chats for a conversation, ordered by creation time."""
+async def get_conversation_chats(
+    conversation_id: str,
+    user_id: str = Query(..., description="User ID (required)"),
+):
+    """Get all chats for a conversation, ordered by creation time. Only works if the conversation belongs to the specified user."""
     db = get_db_handle()
     chats_collection = db["chats"]
 
@@ -27,11 +30,15 @@ async def get_conversation_chats(conversation_id: str):
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid conversation ID format")
 
-    # Verify conversation exists
+    # Verify conversation exists and belongs to the user
     conversations_collection = db["conversations"]
     conversation = await conversations_collection.find_one({"_id": conv_object_id})
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversation not found")
+    
+    # Verify the conversation belongs to the requesting user
+    if conversation.get("user_id") != user_id:
+        raise HTTPException(status_code=403, detail="Access denied: Conversation does not belong to this user")
 
     cursor = chats_collection.find({"conversation_id": conversation_id}).sort(
         "created_at", 1
@@ -54,8 +61,12 @@ async def get_conversation_chats(conversation_id: str):
 @router.post(
     "/conversations/{conversation_id}/chats", response_model=ChatMessageResponse
 )
-async def create_chat(conversation_id: str, chat: ChatCreate):
-    """Add a chat message to a conversation."""
+async def create_chat(
+    conversation_id: str,
+    chat: ChatCreate,
+    user_id: str = Query(..., description="User ID (required)"),
+):
+    """Add a chat message to a conversation. Only works if the conversation belongs to the specified user."""
     db = get_db_handle()
     chats_collection = db["chats"]
     conversations_collection = db["conversations"]
@@ -65,10 +76,14 @@ async def create_chat(conversation_id: str, chat: ChatCreate):
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid conversation ID format")
 
-    # Verify conversation exists
+    # Verify conversation exists and belongs to the user
     conversation = await conversations_collection.find_one({"_id": conv_object_id})
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversation not found")
+    
+    # Verify the conversation belongs to the requesting user
+    if conversation.get("user_id") != user_id:
+        raise HTTPException(status_code=403, detail="Access denied: Conversation does not belong to this user")
 
     now = datetime.utcnow()
 
@@ -114,8 +129,12 @@ async def create_chat(conversation_id: str, chat: ChatCreate):
 
 
 @router.delete("/conversations/{conversation_id}/chats/{chat_id}", status_code=204)
-async def delete_chat(conversation_id: str, chat_id: str):
-    """Delete a single chat message from a conversation."""
+async def delete_chat(
+    conversation_id: str,
+    chat_id: str,
+    user_id: str = Query(..., description="User ID (required)"),
+):
+    """Delete a single chat message from a conversation. Only works if the conversation belongs to the specified user."""
     db = get_db_handle()
     chats_collection = db["chats"]
     conversations_collection = db["conversations"]
@@ -126,10 +145,14 @@ async def delete_chat(conversation_id: str, chat_id: str):
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid ID format")
 
-    # Ensure conversation exists
+    # Ensure conversation exists and belongs to the user
     conversation = await conversations_collection.find_one({"_id": conv_object_id})
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversation not found")
+    
+    # Verify the conversation belongs to the requesting user
+    if conversation.get("user_id") != user_id:
+        raise HTTPException(status_code=403, detail="Access denied: Conversation does not belong to this user")
 
     # Ensure chat exists and belongs to the conversation
     chat_doc = await chats_collection.find_one(

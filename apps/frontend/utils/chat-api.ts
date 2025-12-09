@@ -70,11 +70,12 @@ export async function createConversation(
  */
 export async function deleteConversation(
   conversation_id: string,
+  user_id: string,
   apiBaseUrl?: string
 ): Promise<void> {
   const baseUrl = apiBaseUrl || API_BASE_URL;
 
-  const response = await fetch(`${baseUrl}/chat/conversations/${conversation_id}`, {
+  const response = await fetch(`${baseUrl}/chat/conversations/${conversation_id}?user_id=${encodeURIComponent(user_id)}`, {
     method: 'DELETE',
   });
 
@@ -89,11 +90,12 @@ export async function deleteConversation(
  */
 export async function getConversationChats(
   conversation_id: string,
+  user_id: string,
   apiBaseUrl?: string
 ): Promise<ChatMessage[]> {
   const baseUrl = apiBaseUrl || API_BASE_URL;
   
-  const response = await fetch(`${baseUrl}/chat/conversations/${conversation_id}/chats`, {
+  const response = await fetch(`${baseUrl}/chat/conversations/${conversation_id}/chats?user_id=${encodeURIComponent(user_id)}`, {
     method: 'GET',
     headers: {
       'Content-Type': 'application/json',
@@ -115,11 +117,12 @@ export async function createChat(
   conversation_id: string,
   role: 'user' | 'assistant',
   content: string,
+  user_id: string,
   apiBaseUrl?: string
 ): Promise<ChatMessage> {
   const baseUrl = apiBaseUrl || API_BASE_URL;
   
-  const response = await fetch(`${baseUrl}/chat/conversations/${conversation_id}/chats`, {
+  const response = await fetch(`${baseUrl}/chat/conversations/${conversation_id}/chats?user_id=${encodeURIComponent(user_id)}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -141,12 +144,13 @@ export async function createChat(
 export async function deleteChat(
   conversation_id: string,
   chat_id: string,
+  user_id: string,
   apiBaseUrl?: string
 ): Promise<void> {
   const baseUrl = apiBaseUrl || API_BASE_URL;
 
   const response = await fetch(
-    `${baseUrl}/chat/conversations/${conversation_id}/chats/${chat_id}`,
+    `${baseUrl}/chat/conversations/${conversation_id}/chats/${chat_id}?user_id=${encodeURIComponent(user_id)}`,
     {
       method: 'DELETE',
     }

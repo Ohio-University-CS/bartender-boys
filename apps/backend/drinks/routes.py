@@ -1,12 +1,13 @@
 import logging
+import base64
 from datetime import datetime
 from bson import ObjectId
-
-from fastapi import APIRouter, HTTPException
-
+from fastapi import APIRouter, HTTPException, Response, Request
 from fastapi import Query
+import httpx
 
 from services.openai import OpenAIService
+from services.gridfs_storage import store_image_from_url, get_image, delete_image as delete_image_from_gridfs
 from data.drinks import (
     create_drink,
     get_drinks_paginated,
@@ -98,24 +99,24 @@ async def get_drinks(
     limit: int = Query(
         20, ge=1, le=100, description="Maximum number of drinks to return"
     ),
-    user_id: str | None = Query(None, description="Filter drinks by user ID"),
+    user_id: str = Query(..., description="User ID (required)"),
     category: str | None = Query(None, description="Filter drinks by category"),
     favorited: bool | None = Query(
         None, description="Filter drinks by favorited status"
     ),
 ) -> DrinksListResponse:
     """
-    Get drinks with pagination.
+    Get drinks with pagination for a specific user.
 
     Args:
         skip: Number of drinks to skip
         limit: Maximum number of drinks to return (1-100)
-        user_id: Optional user ID to filter by
+        user_id: User ID (required) - only returns drinks for this user
         category: Optional category to filter by
         favorited: Optional boolean to filter by favorited status
 
     Returns:
-        Paginated list of drinks
+        Paginated list of drinks for the specified user
     """
     try:
         drinks_docs, total = await get_drinks_paginated(
@@ -161,6 +162,7 @@ async def get_drinks(
                 dispense=doc.get("dispense"),
                 user_id=doc.get("user_id"),
                 image_url=doc.get("image_url"),
+                image_data=doc.get("image_data"),
                 favorited=doc.get("favorited", False),
                 created_at=doc.get("created_at"),
             )
@@ -181,12 +183,16 @@ async def get_drinks(
 
 
 @router.get("/{drink_id}", response_model=Drink)
-async def get_drink_by_id(drink_id: str) -> Drink:
+async def get_drink_by_id(
+    drink_id: str,
+    user_id: str = Query(..., description="User ID (required)"),
+) -> Drink:
     """
-    Get a drink by its ID.
+    Get a drink by its ID. Only returns the drink if it belongs to the specified user.
 
     Args:
         drink_id: Drink ID
+        user_id: User ID (required) - must match the drink's user_id
 
     Returns:
         Drink details
@@ -196,6 +202,10 @@ async def get_drink_by_id(drink_id: str) -> Drink:
 
         if not drink_doc:
             raise HTTPException(status_code=404, detail="Drink not found")
+        
+        # Verify the drink belongs to the requesting user
+        if drink_doc.get("user_id") != user_id:
+            raise HTTPException(status_code=403, detail="Access denied: Drink does not belong to this user")
 
         drink = Drink(
             id=drink_doc.get("_id", drink_doc.get("id", drink_id)),
@@ -211,6 +221,7 @@ async def get_drink_by_id(drink_id: str) -> Drink:
             dispense=drink_doc.get("dispense"),
             user_id=drink_doc.get("user_id"),
             image_url=drink_doc.get("image_url"),
+            image_data=drink_doc.get("image_data"),
             favorited=drink_doc.get("favorited", False),
         )
 
@@ -223,7 +234,10 @@ async def get_drink_by_id(drink_id: str) -> Drink:
 
 
 @router.post("/generate-drink", response_model=GenerateDrinkResponse)
-async def generate_drink(request: GenerateDrinkRequest) -> GenerateDrinkResponse:
+async def generate_drink(
+    request: GenerateDrinkRequest,
+    fastapi_request: Request,
+) -> GenerateDrinkResponse:
     """
     Create a drink with the given information, generate an image, and save to MongoDB.
 
@@ -249,8 +263,33 @@ async def generate_drink(request: GenerateDrinkRequest) -> GenerateDrinkResponse
         prompt += "The drink should look appetizing with good lighting, suitable for a cocktail menu. "
         prompt += "Background should be clean and elegant."
 
-        image_url = await service.generate_image(prompt)
-        logger.info("Image generated successfully: %s", image_url)
+        azure_image_url = await service.generate_image(prompt)
+        logger.info("Image generated successfully: %s", azure_image_url)
+
+        # Download image and convert to base64 data URI
+        image_url = None
+        image_data = None
+        
+        try:
+            # Download the image from Azure
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.get(azure_image_url)
+                response.raise_for_status()
+                image_bytes = response.content
+                content_type = response.headers.get("content-type", "image/png")
+            
+            logger.info(f"Downloaded {len(image_bytes)} bytes of image data")
+            
+            # Convert to base64 data URI
+            image_base64 = base64.b64encode(image_bytes).decode('utf-8')
+            image_data = f"data:{content_type};base64,{image_base64}"
+            logger.info(f"Converted image to base64 data URI ({len(image_data)} chars)")
+            
+        except Exception as e:
+            logger.error(f"Failed to download/encode image: {str(e)}")
+            # Fall back to Azure URL if download fails
+            image_url = azure_image_url
+            logger.warning("Using temporary Azure URL as fallback")
 
         # Use provided ratios (should be generated by LLM) or fallback to auto-generation
         ratios = request.ratios
@@ -274,7 +313,7 @@ async def generate_drink(request: GenerateDrinkRequest) -> GenerateDrinkResponse
                     ratios = generate_ratios(request.ingredients)
             logger.info(f"Using LLM-generated ratios: {ratios}")
 
-        # Create the final Drink object with the image URL
+        # Create the final Drink object with the image data
         drink = Drink(
             id=drink_id,
             name=request.name,
@@ -285,7 +324,8 @@ async def generate_drink(request: GenerateDrinkRequest) -> GenerateDrinkResponse
             difficulty=request.difficulty,
             prepTime=request.prepTime,
             user_id=request.user_id,
-            image_url=image_url,
+            image_url=image_url,  # Keep for backward compatibility
+            image_data=image_data,  # Base64 data URI
             favorited=False,
         )
 
@@ -306,6 +346,7 @@ async def generate_drink(request: GenerateDrinkRequest) -> GenerateDrinkResponse
             prepTime=saved_drink_doc["prepTime"],
             user_id=saved_drink_doc.get("user_id"),
             image_url=saved_drink_doc.get("image_url"),
+            image_data=saved_drink_doc.get("image_data"),
             favorited=saved_drink_doc.get("favorited", False),
         )
 
@@ -325,12 +366,16 @@ async def generate_drink(request: GenerateDrinkRequest) -> GenerateDrinkResponse
 
 
 @router.patch("/{drink_id}/favorite", response_model=Drink)
-async def toggle_favorite(drink_id: str) -> Drink:
+async def toggle_favorite(
+    drink_id: str,
+    user_id: str = Query(..., description="User ID (required)"),
+) -> Drink:
     """
-    Toggle the favorited status of a drink.
+    Toggle the favorited status of a drink. Only works if the drink belongs to the specified user.
 
     Args:
         drink_id: Drink ID to toggle favorite status for
+        user_id: User ID (required) - must match the drink's user_id
 
     Returns:
         Updated drink with new favorited status
@@ -345,6 +390,10 @@ async def toggle_favorite(drink_id: str) -> Drink:
         drink_doc = await drinks_collection.find_one({"_id": drink_id})
         if not drink_doc:
             raise HTTPException(status_code=404, detail="Drink not found")
+        
+        # Verify the drink belongs to the requesting user
+        if drink_doc.get("user_id") != user_id:
+            raise HTTPException(status_code=403, detail="Access denied: Drink does not belong to this user")
 
         # Toggle favorited status (default to True if not set)
         current_favorited = drink_doc.get("favorited", False)
@@ -373,6 +422,7 @@ async def toggle_favorite(drink_id: str) -> Drink:
             dispense=updated_drink_doc.get("dispense"),
             user_id=updated_drink_doc.get("user_id"),
             image_url=updated_drink_doc.get("image_url"),
+            image_data=updated_drink_doc.get("image_data"),
             favorited=updated_drink_doc.get("favorited", False),
         )
 
@@ -386,18 +436,74 @@ async def toggle_favorite(drink_id: str) -> Drink:
         )
 
 
-@router.delete("/{drink_id}", status_code=204)
-async def delete_drink_endpoint(drink_id: str):
+@router.get("/images/{file_id}")
+async def get_drink_image(file_id: str):
     """
-    Delete a drink by its ID.
+    Serve an image from GridFS.
+    
+    Args:
+        file_id: GridFS file ID
+        
+    Returns:
+        Image file as streaming response
+    """
+    try:
+        image_data, content_type = await get_image(file_id)
+        
+        return Response(
+            content=image_data,
+            media_type=content_type or "image/png",
+            headers={
+                "Cache-Control": "public, max-age=31536000",  # Cache for 1 year
+            },
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Failed to serve image {file_id}: {str(e)}")
+        raise HTTPException(status_code=404, detail="Image not found")
+
+
+@router.delete("/{drink_id}", status_code=204)
+async def delete_drink_endpoint(
+    drink_id: str,
+    user_id: str = Query(..., description="User ID (required)"),
+):
+    """
+    Delete a drink by its ID and its associated image from GridFS.
+    Only works if the drink belongs to the specified user.
 
     Args:
         drink_id: Drink ID to delete
+        user_id: User ID (required) - must match the drink's user_id
 
     Returns:
         204 No Content if successful
     """
     try:
+        # Get the drink first to check for image_url
+        drink_doc = await get_drink_by_id_db(drink_id)
+        if not drink_doc:
+            raise HTTPException(status_code=404, detail="Drink not found")
+        
+        # Verify the drink belongs to the requesting user
+        if drink_doc.get("user_id") != user_id:
+            raise HTTPException(status_code=403, detail="Access denied: Drink does not belong to this user")
+        
+        # Extract GridFS file ID from image_url if it's our backend URL
+        image_url = drink_doc.get("image_url")
+        if image_url and "/drinks/images/" in image_url:
+            try:
+                # Extract file_id from URL (e.g., /drinks/images/507f1f77bcf86cd799439011)
+                file_id = image_url.split("/drinks/images/")[-1].split("?")[0]
+                # Try to delete the image from GridFS (don't fail if it doesn't exist)
+                await delete_image_from_gridfs(file_id)
+                logger.info(f"Deleted image {file_id} from GridFS for drink {drink_id}")
+            except Exception as e:
+                logger.warning(f"Failed to delete image from GridFS for drink {drink_id}: {str(e)}")
+                # Continue with drink deletion even if image deletion fails
+        
+        # Delete the drink
         deleted = await delete_drink(drink_id)
         
         if not deleted:
