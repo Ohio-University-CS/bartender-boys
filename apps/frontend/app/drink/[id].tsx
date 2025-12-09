@@ -112,9 +112,9 @@ export default function DrinkDetailScreen() {
   useEffect(() => {
     if (Platform.OS === 'web') {
       if (drink) {
-        document.title = `BrewBot - ${drink.name}`;
+        document.title = `${drink.name}`;
       } else {
-        document.title = 'BrewBot - Drink';
+        document.title = 'Drink';
       }
     }
   }, [drink]);

@@ -37,7 +37,7 @@ export default function SettingsScreen() {
 
   useEffect(() => {
     if (Platform.OS === 'web') {
-      document.title = 'BrewBot - Settings';
+      document.title = 'Settings';
     }
   }, []);
 

@@ -31,7 +31,7 @@ export default function BartenderScreen() {
 
   useEffect(() => {
     if (Platform.OS === 'web') {
-      document.title = 'BrewBot - Bartender';
+      document.title = 'Bartender';
     }
   }, []);
 

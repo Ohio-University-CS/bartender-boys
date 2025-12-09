@@ -23,7 +23,7 @@ export default function ChatScreen() {
 
   useEffect(() => {
     if (Platform.OS === 'web') {
-      document.title = 'BrewBot - Chat';
+      document.title = 'Chat';
     }
   }, []);
 

@@ -6,7 +6,6 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Request, Query
 from fastapi.responses import StreamingResponse
 
-from services.db import get_db_handle
 from data.pump_config import get_pump_config
 from .models import ChatRequest, ChatResponse
 from .utils import get_openai_service, build_system_message

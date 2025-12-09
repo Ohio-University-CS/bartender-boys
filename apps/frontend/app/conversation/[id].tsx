@@ -35,7 +35,7 @@ export default function ConversationScreen() {
 
   useEffect(() => {
     if (Platform.OS === 'web') {
-      document.title = 'BrewBot - Conversation';
+      document.title = 'Conversations';
     }
   }, []);
 

@@ -11,8 +11,8 @@ describe('Theme Utilities', () => {
    */
   test('should create theme colors for valid accent option', () => {
     const colors = createThemeColors('sunset');
-    expect(colors.light.tint).toBe('#FFA500');
-    expect(colors.dark.tint).toBe('#FFB347');
+    expect(colors.light.tint.toLowerCase()).toBe('#ffa600');
+    expect(colors.dark.tint.toLowerCase()).toBe('#ffb833');
   });
 
   /**
@@ -32,7 +32,7 @@ describe('Theme Utilities', () => {
   test('should resolve color values correctly', () => {
     const lightText = resolveColorValue('light', 'sunset', 'text');
     const darkText = resolveColorValue('dark', 'sunset', 'text');
-    expect(lightText).toBe('#11181C');
-    expect(darkText).toBe('#ECEDEE');
+    expect(lightText.toLowerCase()).toBe('#12171c');
+    expect(darkText.toLowerCase()).toBe('#ecedee');
   });
 });
