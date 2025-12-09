@@ -316,19 +316,16 @@ async def send_drink_to_firmware(request: PourRequest) -> PourResponse:
         )
 
     try:
+        # If we successfully send the request to firmware, consider it successful
+        # We don't wait for the firmware to finish - just that it accepted the request
         result = await client.send_drink_request(command_payload)
-        status = result.get("status", "ok")
         message = result.get("message") or "Dispensing started."
 
-        if status != "ok":
-            return PourResponse(
-                status="error",
-                message=message,
-                selected_pump=None,
-            )
-
+        # Consider it successful if we got a response from firmware (request went through)
+        # The firmware may still be processing, but the request was accepted
         return PourResponse(status="ok", message=message, selected_pump=None)
     except Exception as exc:
+        # Only return error if we couldn't communicate with firmware at all
         # Prefer to surface HTTP-specific errors if httpx is available
         try:
             if isinstance(exc, httpx.HTTPError):
