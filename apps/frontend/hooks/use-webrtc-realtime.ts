@@ -336,9 +336,11 @@ export function useWebRTCRealtime(
           // Build dynamic instructions based on user name and available ingredients
           let instructionsText = 'You are a helpful bartender assistant. Help customers with drink orders and provide friendly service. ';
           
-          // Add user's name if available
+          // Add user's first name if available
           if (userName) {
-            instructionsText += `The customer's name is ${userName}. Use their name when addressing them to provide a personalized experience. `;
+            // Extract first name (everything before the first space)
+            const firstName = userName.split(' ')[0];
+            instructionsText += `The customer's first name is ${firstName}. Use their first name when addressing them to provide a personalized experience. `;
           }
           
           if (availableIngredients.length > 0) {

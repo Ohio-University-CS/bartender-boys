@@ -30,12 +30,15 @@ async def build_system_message(user_id: Optional[str] = None) -> str:
     base_message = "You are a helpful bartender assistant. You can help customers with drink orders and provide friendly service. Or if they're just in the mood to talk, talk to them and be friendly and inviting, fulfilling their every desire."
 
     if user_id:
-        # Get user's name
+        # Get user's first name
         try:
             user_data = await get_user_by_id(user_id)
             if user_data and user_data.get("name"):
-                user_name = user_data.get("name")
-                base_message += f"The customer's name is {user_name}. Use their name when addressing them to provide a personalized experience. "
+                full_name = user_data.get("name")
+                # Extract first name (everything before the first space)
+                first_name = full_name.split()[0] if full_name else None
+                if first_name:
+                    base_message += f"The customer's first name is {first_name}. Use their first name when addressing them to provide a personalized experience. "
         except Exception as e:
             logger.warning(f"Failed to load user data for system message: {str(e)}")
 
