@@ -1,13 +1,11 @@
 import logging
 import httpx
 from fastapi import APIRouter, HTTPException, Query
-from typing import Optional
 from .models import (
     PourRequest,
     PourResponse,
     PumpConfigRequest,
     PumpConfigResponse,
-    SelectedPump,
 )
 from .utils import (
     FirmwareClient,
@@ -132,43 +130,78 @@ async def send_drink_to_firmware(request: PourRequest) -> PourResponse:
         try:
             pump_config = await get_pump_config(request.user_id)
             
-            if pump_config:
-                # Get available ingredients from pumps
-                available_ingredients = set()
-                for pump_key in ["pump1", "pump2", "pump3"]:
-                    pump_value = pump_config.get(pump_key)
-                    if pump_value:
-                        available_ingredients.add(pump_value)
-                
-                # Normalize drink ingredients to snake_case and check availability
-                drink_ingredients = request.drink.ingredients or []
-                missing_ingredients = []
-                
-                for ingredient in drink_ingredients:
-                    normalized_ingredient = normalize_to_snake_case(ingredient)
-                    if normalized_ingredient not in available_ingredients:
-                        missing_ingredients.append(ingredient)
-                
-                if missing_ingredients:
-                    missing_list = ", ".join(missing_ingredients)
-                    available_list = ", ".join(sorted(available_ingredients)) if available_ingredients else "none"
-                    error_message = (
-                        f"Cannot pour {request.drink.name}: missing ingredients ({missing_list}). "
-                        f"Available ingredients: {available_list}. "
-                        f"Please configure your pumps in settings or choose a different drink."
-                    )
-                    logger.warning(
-                        f"Pour request rejected for user {request.user_id}: {error_message}"
-                    )
-                    return PourResponse(
-                        status="error",
-                        message=error_message,
-                        selected_pump=None,
-                    )
+            # Check if pump config exists and has any configured pumps
+            if not pump_config:
+                error_message = (
+                    f"Cannot pour {request.drink.name}: No pump configuration found. "
+                    f"Please go to Settings and configure your pumps with the required ingredients."
+                )
+                logger.warning(
+                    f"Pour request rejected for user {request.user_id}: No pump configuration"
+                )
+                return PourResponse(
+                    status="error",
+                    message=error_message,
+                    selected_pump=None,
+                )
+            
+            # Get available ingredients from pumps
+            available_ingredients = set()
+            for pump_key in ["pump1", "pump2", "pump3"]:
+                pump_value = pump_config.get(pump_key)
+                if pump_value:
+                    available_ingredients.add(pump_value)
+            
+            # Check if any pumps are configured
+            if not available_ingredients:
+                error_message = (
+                    f"Cannot pour {request.drink.name}: No pumps are configured. "
+                    f"Please go to Settings and configure your pumps with the required ingredients."
+                )
+                logger.warning(
+                    f"Pour request rejected for user {request.user_id}: No pumps configured"
+                )
+                return PourResponse(
+                    status="error",
+                    message=error_message,
+                    selected_pump=None,
+                )
+            
+            # Normalize drink ingredients to snake_case and check availability
+            drink_ingredients = request.drink.ingredients or []
+            missing_ingredients = []
+            
+            for ingredient in drink_ingredients:
+                normalized_ingredient = normalize_to_snake_case(ingredient)
+                if normalized_ingredient not in available_ingredients:
+                    missing_ingredients.append(ingredient)
+            
+            if missing_ingredients:
+                missing_list = ", ".join(missing_ingredients)
+                error_message = (
+                    f"Cannot pour {request.drink.name}: Missing ingredients ({missing_list}). "
+                    f"Please go to Settings and configure your pumps with these ingredients: {missing_list}"
+                )
+                logger.warning(
+                    f"Pour request rejected for user {request.user_id}: {error_message}"
+                )
+                return PourResponse(
+                    status="error",
+                    message=error_message,
+                    selected_pump=None,
+                )
         except Exception as e:
             logger.error(f"Error validating pump config: {str(e)}")
-            # Continue with pour if validation fails (don't block on config errors)
-            logger.warning("Continuing with pour despite pump config validation error")
+            # Return error instead of continuing when validation fails
+            error_message = (
+                f"Cannot pour {request.drink.name}: Error validating pump configuration. "
+                f"Please go to Settings and ensure your pumps are configured correctly."
+            )
+            return PourResponse(
+                status="error",
+                message=error_message,
+                selected_pump=None,
+            )
     
     # Generate hardware_steps from ratios if available (before building payload)
     drink = request.drink
@@ -241,9 +274,13 @@ async def send_drink_to_firmware(request: PourRequest) -> PourResponse:
         )
     
     if not drink_payload.get("pump_mapping"):
+        error_message = (
+            f"Cannot pour {request.drink.name}: No pump mapping available. "
+            f"Please go to Settings and configure your pumps with the required ingredients: {', '.join(request.drink.ingredients or [])}"
+        )
         return PourResponse(
             status="error",
-            message="No pump mapping available. Please configure your pumps in settings.",
+            message=error_message,
             selected_pump=None,
         )
     
@@ -293,11 +330,8 @@ async def send_drink_to_firmware(request: PourRequest) -> PourResponse:
                 )
                 return PourResponse(
                     status="error",
-                    message=(
-                        f"Failed to communicate with firmware: {str(exc)}. "
-                        f"Requested pump: {selected_pump.label}."
-                    ),
-                    selected_pump=selected_pump,
+                    message=f"Failed to communicate with firmware: {str(exc)}",
+                    selected_pump=None,
                 )
         except Exception:
             pass
@@ -307,9 +341,6 @@ async def send_drink_to_firmware(request: PourRequest) -> PourResponse:
         )
         return PourResponse(
             status="error",
-            message=(
-                f"Failed to communicate with firmware: {str(exc)}. "
-                f"Requested pump: {selected_pump.label}."
-            ),
-            selected_pump=selected_pump,
+            message=f"Failed to communicate with firmware: {str(exc)}",
+            selected_pump=None,
         )

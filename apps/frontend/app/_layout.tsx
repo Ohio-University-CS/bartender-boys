@@ -14,11 +14,23 @@ function ThemedContainer({ children }: { children: React.ReactNode }) {
   const { theme } = useSettings();
   const scheme = (theme === 'system' ? colorScheme : theme) ?? 'light';
   const statusBarStyle = scheme === 'dark' ? 'light' : 'dark';
-  const [fontsLoaded] = useFonts({
+  const [fontsLoaded, fontError] = useFonts({
     'Montserrat-Regular': require('@/assets/fonts/Montserrat-Regular.ttf'),
     'Montserrat-Bold': require('@/assets/fonts/Montserrat-Bold.ttf'),
   });
-  if (!fontsLoaded) return null;
+  
+  // Show loading state while fonts load, but don't block rendering
+  // If fonts fail to load, continue anyway (system fonts will be used)
+  if (!fontsLoaded && !fontError) {
+    return (
+      <>
+        {children}
+        <NotificationContainer />
+        <StatusBar style={statusBarStyle} />
+      </>
+    );
+  }
+  
   return (
     <>
       {/* Removed background image due to missing file */}

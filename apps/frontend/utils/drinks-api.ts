@@ -12,7 +12,7 @@ export interface DrinksListResponse {
 export interface GetDrinksParams {
   skip?: number;
   limit?: number;
-  user_id?: string;
+  user_id: string;  // Required
   category?: string;
   favorited?: boolean;
 }
@@ -21,7 +21,7 @@ export interface GetDrinksParams {
  * Fetch drinks from the backend API with pagination
  */
 export async function getDrinks(
-  params: GetDrinksParams = {},
+  params: GetDrinksParams,
   apiBaseUrl?: string
 ): Promise<DrinksListResponse> {
   const baseUrl = apiBaseUrl || API_BASE_URL;
@@ -30,11 +30,8 @@ export async function getDrinks(
   const queryParams = new URLSearchParams({
     skip: skip.toString(),
     limit: limit.toString(),
+    user_id: user_id,  // Always required
   });
-  
-  if (user_id) {
-    queryParams.append('user_id', user_id);
-  }
   if (category) {
     queryParams.append('category', category);
   }
@@ -62,11 +59,12 @@ export async function getDrinks(
  */
 export async function getDrinkById(
   drinkId: string,
+  userId: string,
   apiBaseUrl?: string
 ): Promise<Drink> {
   const baseUrl = apiBaseUrl || API_BASE_URL;
   
-  const response = await fetch(`${baseUrl}/drinks/${drinkId}`, {
+  const response = await fetch(`${baseUrl}/drinks/${drinkId}?user_id=${encodeURIComponent(userId)}`, {
     method: 'GET',
     headers: {
       'Content-Type': 'application/json',
@@ -89,11 +87,12 @@ export async function getDrinkById(
  */
 export async function toggleFavorite(
   drinkId: string,
+  userId: string,
   apiBaseUrl?: string
 ): Promise<Drink> {
   const baseUrl = apiBaseUrl || API_BASE_URL;
   
-  const response = await fetch(`${baseUrl}/drinks/${drinkId}/favorite`, {
+  const response = await fetch(`${baseUrl}/drinks/${drinkId}/favorite?user_id=${encodeURIComponent(userId)}`, {
     method: 'PATCH',
     headers: {
       'Content-Type': 'application/json',
@@ -113,11 +112,12 @@ export async function toggleFavorite(
  */
 export async function deleteDrink(
   drinkId: string,
+  userId: string,
   apiBaseUrl?: string
 ): Promise<void> {
   const baseUrl = apiBaseUrl || API_BASE_URL;
   
-  const response = await fetch(`${baseUrl}/drinks/${drinkId}`, {
+  const response = await fetch(`${baseUrl}/drinks/${drinkId}?user_id=${encodeURIComponent(userId)}`, {
     method: 'DELETE',
     headers: {
       'Content-Type': 'application/json',

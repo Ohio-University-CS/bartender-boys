@@ -1,8 +1,6 @@
 import logging
-import asyncio
 from typing import Optional
 from bson import ObjectId
-from datetime import datetime
 
 from services.openai import OpenAIService
 from services.db import get_db_handle

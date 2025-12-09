@@ -1,5 +1,6 @@
 import logging
 from typing import List, Optional, Dict, Any
+from fastapi import Request
 
 from data.pump_config import get_pump_config
 from drinks.routes import generate_drink
@@ -68,10 +69,18 @@ def get_tools_schema() -> List[Dict[str, Any]]:
     ]
 
 
-async def handle_function_call(function_name: str, arguments: Dict[str, Any], user_id: Optional[str] = None) -> Dict[str, Any]:
+async def handle_function_call(
+    function_name: str, 
+    arguments: Dict[str, Any], 
+    user_id: Optional[str] = None,
+    fastapi_request: Optional[Request] = None
+) -> Dict[str, Any]:
     """Handle function calls from the chat API."""
     if function_name == "generate_drink":
         try:
+            if fastapi_request is None:
+                raise ValueError("fastapi_request is required for generate_drink")
+            
             # Use provided user_id or default to guest
             drink_user_id = arguments.get("user_id") or user_id or "guest"
             
@@ -105,7 +114,7 @@ async def handle_function_call(function_name: str, arguments: Dict[str, Any], us
             }
             
             drink_request = GenerateDrinkRequest(**request_body)
-            result = await generate_drink(drink_request)
+            result = await generate_drink(drink_request, fastapi_request)
             
             return {
                 "success": True,

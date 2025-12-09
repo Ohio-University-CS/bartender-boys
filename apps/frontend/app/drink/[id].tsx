@@ -1,19 +1,19 @@
 import React, { useCallback, useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Alert, ActivityIndicator, Animated, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Alert, ActivityIndicator, Animated, Platform, Modal } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { type Drink } from '@/constants/drinks';
 import { useFavorites } from '@/contexts/favorites';
 import { CATEGORY_COLORS, DIFFICULTY_COLORS } from '@/constants/ui-palette';
 import { API_BASE_URL } from '@/environment';
-import { getDrinkById, deleteDrink } from '@/utils/drinks-api';
+import { getDrinkById, deleteDrink, toggleFavorite as toggleFavoriteApi } from '@/utils/drinks-api';
 import { useSettings } from '@/contexts/settings';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function DrinkDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { isFavorite, toggleFavorite } = useFavorites();
+  const { toggleFavorite: toggleFavoriteContext } = useFavorites();
   const { apiBaseUrl } = useSettings();
 
   // Handle back navigation - if no history, go to menu
@@ -34,6 +34,8 @@ export default function DrinkDetailScreen() {
   const [pourSuccess, setPourSuccess] = useState(false);
   const [pourFail, setPourFail] = useState(false);
   const [canPour, setCanPour] = useState(true);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const wineIconOpacity = useRef(new Animated.Value(1)).current;
   const checkmarkIconOpacity = useRef(new Animated.Value(0)).current;
   const xIconOpacity = useRef(new Animated.Value(0)).current;
@@ -112,9 +114,9 @@ export default function DrinkDetailScreen() {
   useEffect(() => {
     if (Platform.OS === 'web') {
       if (drink) {
-        document.title = `BrewBot - ${drink.name}`;
+        document.title = `${drink.name}`;
       } else {
-        document.title = 'BrewBot - Drink';
+        document.title = 'Drink';
       }
     }
   }, [drink]);
@@ -137,7 +139,15 @@ export default function DrinkDetailScreen() {
         checkmarkIconScale.setValue(0.8);
         xIconScale.setValue(0.8);
         buttonOpacity.setValue(1);
-        const drinkData = await getDrinkById(id, apiBaseUrl);
+        // Get user_id from AsyncStorage
+        const userId = await AsyncStorage.getItem('user_id');
+        if (!userId) {
+          setError('User not authenticated');
+          setLoading(false);
+          return;
+        }
+        
+        const drinkData = await getDrinkById(id, userId, apiBaseUrl);
         setDrink(drinkData);
         // Check ingredient availability after drink is loaded
         await checkIngredientAvailability(drinkData);
@@ -389,44 +399,73 @@ export default function DrinkDetailScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [drink, apiBaseUrl]);
 
-  const handleDelete = useCallback(async () => {
+  const handleToggleFavorite = useCallback(async (drinkId: string) => {
     if (!drink) return;
+    
+    try {
+      // Get user_id from AsyncStorage
+      const userId = await AsyncStorage.getItem('user_id');
+      if (!userId) {
+        console.error('[DrinkDetailScreen] No user_id found, cannot toggle favorite');
+        return;
+      }
+      
+      // Optimistically update the UI immediately
+      const currentFavorited = drink.favorited;
+      const newFavoritedState = !currentFavorited;
+      setDrink(prev => prev ? { ...prev, favorited: newFavoritedState } : null);
+      toggleFavoriteContext(drinkId); // Also update the favorites context
+      
+      // Call the API in the background
+      try {
+        const updatedDrink = await toggleFavoriteApi(drinkId, userId, apiBaseUrl);
+        // Update with the actual response (in case server has different state)
+        setDrink(updatedDrink);
+      } catch (apiError) {
+        // Revert the optimistic update on error
+        console.error('[DrinkDetailScreen] Error toggling favorite:', apiError);
+        setDrink(prev => prev ? { ...prev, favorited: currentFavorited } : null);
+        toggleFavoriteContext(drinkId); // Revert the context too
+        // Optionally show an error message to the user
+      }
+    } catch (err) {
+      console.error('[DrinkDetailScreen] Error in handleToggleFavorite:', err);
+    }
+  }, [drink, apiBaseUrl, toggleFavoriteContext]);
 
-    Alert.alert(
-      'Delete Drink',
-      `Are you sure you want to delete "${drink.name}"? This action cannot be undone.`,
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await deleteDrink(drink.id, apiBaseUrl);
-              Alert.alert('Success', 'Drink deleted successfully', [
-                {
-                  text: 'OK',
-                  onPress: () => {
-                    // Navigate back to menu
-                    if (typeof router.canGoBack === 'function' && router.canGoBack()) {
-                      router.back();
-                    } else {
-                      router.replace('/(tabs)/menu' as never);
-                    }
-                  },
-                },
-              ]);
-            } catch (error: any) {
-              const errorMessage = error?.message ?? 'Failed to delete drink';
-              Alert.alert('Error', errorMessage);
-            }
-          },
-        },
-      ]
-    );
+  const handleDelete = useCallback(() => {
+    if (!drink) return;
+    setShowDeleteModal(true);
+  }, [drink]);
+
+  const confirmDelete = useCallback(async () => {
+    if (!drink) return;
+    
+    try {
+      setDeleting(true);
+      // Get user_id from AsyncStorage
+      const userId = await AsyncStorage.getItem('user_id');
+      if (!userId) {
+        Alert.alert('Error', 'User not authenticated');
+        setDeleting(false);
+        setShowDeleteModal(false);
+        return;
+      }
+      
+      await deleteDrink(drink.id, userId, apiBaseUrl);
+      setShowDeleteModal(false);
+      
+      // Navigate back to menu
+      if (typeof router.canGoBack === 'function' && router.canGoBack()) {
+        router.back();
+      } else {
+        router.replace('/(tabs)/menu' as never);
+      }
+    } catch (error: any) {
+      const errorMessage = error?.message ?? 'Failed to delete drink';
+      Alert.alert('Error', errorMessage);
+      setDeleting(false);
+    }
   }, [drink, apiBaseUrl, router]);
 
   if (loading) {
@@ -460,8 +499,37 @@ export default function DrinkDetailScreen() {
     );
   }
 
-  // Use image_url from drink if available, otherwise use placeholder
-  const drinkImageUrl = drink.image_url || `https://via.placeholder.com/400x300/1a1a1a/FFA500?text=${encodeURIComponent(drink.name)}`;
+  // Use image_data (base64) if available, otherwise use image_url
+  // On mobile, prefer image_data to avoid network issues
+  let drinkImageUrl: string;
+  if (drink.image_data) {
+    // Use base64 data URI directly - works everywhere, no network needed
+    drinkImageUrl = drink.image_data;
+  } else if (drink.image_url) {
+    // On mobile, avoid URLs with 127.0.0.1 (won't work)
+    if (Platform.OS !== 'web' && drink.image_url.includes('127.0.0.1')) {
+      // On mobile with 127.0.0.1 URL, use placeholder instead
+      drinkImageUrl = `https://via.placeholder.com/400x300/1a1a1a/FFA500?text=${encodeURIComponent(drink.name)}`;
+    } else {
+      // Handle relative URLs and fix absolute URLs with 127.0.0.1
+      drinkImageUrl = drink.image_url;
+      if (apiBaseUrl) {
+        // If it's a relative URL (starts with /), prepend API base URL
+        if (drinkImageUrl.startsWith('/')) {
+          const correctBaseUrl = apiBaseUrl.replace(/\/$/, ''); // Remove trailing slash
+          drinkImageUrl = `${correctBaseUrl}${drinkImageUrl}`;
+        }
+        // If it contains 127.0.0.1, replace with correct API base URL
+        else if (drinkImageUrl.includes('127.0.0.1')) {
+          const correctBaseUrl = apiBaseUrl.replace(/\/$/, ''); // Remove trailing slash
+          drinkImageUrl = drinkImageUrl.replace(/http:\/\/127\.0\.0\.1:\d+/, correctBaseUrl);
+        }
+      }
+    }
+  } else {
+    // Fallback to placeholder
+    drinkImageUrl = `https://via.placeholder.com/400x300/1a1a1a/FFA500?text=${encodeURIComponent(drink.name)}`;
+  }
 
   return (
     <View style={styles.container}>
@@ -471,11 +539,11 @@ export default function DrinkDetailScreen() {
           <Ionicons name="arrow-back" size={24} color="#000" />
         </TouchableOpacity>
         <View style={styles.headerActions}>
-          <TouchableOpacity onPress={() => toggleFavorite(drink.id)} style={styles.favoriteBtn}>
+          <TouchableOpacity onPress={() => handleToggleFavorite(drink.id)} style={styles.favoriteBtn}>
             <Ionicons
-              name={isFavorite(drink.id) ? 'heart' : 'heart-outline'}
+              name={drink.favorited ? 'heart' : 'heart-outline'}
               size={28}
-              color={isFavorite(drink.id) ? '#FF4D4D' : '#FFA500'}
+              color={drink.favorited ? '#FF4D4D' : '#FFA500'}
             />
           </TouchableOpacity>
           <TouchableOpacity onPress={handleDelete} style={styles.deleteBtn}>
@@ -649,6 +717,56 @@ export default function DrinkDetailScreen() {
           </View>
         </View>
       </ScrollView>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        visible={showDeleteModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowDeleteModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => !deleting && setShowDeleteModal(false)}
+        >
+          <View
+            style={styles.deleteModalContent}
+            onStartShouldSetResponder={() => true}
+          >
+            <View style={styles.deleteModalHeader}>
+              <Text style={styles.deleteModalTitle}>Delete Drink</Text>
+            </View>
+            
+            <View style={styles.deleteModalBody}>
+              <Text style={styles.deleteModalText}>
+                Are you sure you want to delete &ldquo;{drink?.name}&rdquo;? This action cannot be undone.
+              </Text>
+            </View>
+
+            <View style={styles.deleteModalActions}>
+              <TouchableOpacity
+                style={[styles.deleteModalButton, styles.deleteModalButtonCancel]}
+                onPress={() => setShowDeleteModal(false)}
+                disabled={deleting}
+              >
+                <Text style={styles.deleteModalButtonCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.deleteModalButton, styles.deleteModalButtonDelete]}
+                onPress={confirmDelete}
+                disabled={deleting}
+              >
+                {deleting ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.deleteModalButtonDeleteText}>Delete</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
@@ -969,5 +1087,81 @@ const styles = StyleSheet.create({
   errorText: {
     color: '#888',
     fontSize: 18,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  deleteModalContent: {
+    backgroundColor: '#1a1a1a',
+    borderRadius: 16,
+    width: '100%',
+    maxWidth: 400,
+    borderWidth: 1,
+    borderColor: '#2a2a2a',
+    overflow: 'hidden',
+    ...Platform.select({
+      web: {
+        boxShadow: '0 8px 24px rgba(0, 0, 0, 0.3)',
+      },
+      default: {
+        elevation: 8,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 12,
+      },
+    }),
+  },
+  deleteModalHeader: {
+    padding: 20,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#2a2a2a',
+  },
+  deleteModalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  deleteModalBody: {
+    padding: 20,
+  },
+  deleteModalText: {
+    fontSize: 16,
+    color: '#CCCCCC',
+    lineHeight: 22,
+  },
+  deleteModalActions: {
+    flexDirection: 'row',
+    padding: 20,
+    gap: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#2a2a2a',
+  },
+  deleteModalButton: {
+    flex: 1,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteModalButtonCancel: {
+    backgroundColor: '#2a2a2a',
+  },
+  deleteModalButtonDelete: {
+    backgroundColor: '#FF4D4D',
+  },
+  deleteModalButtonCancelText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  deleteModalButtonDeleteText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
 });

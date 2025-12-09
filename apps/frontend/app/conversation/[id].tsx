@@ -35,7 +35,7 @@ export default function ConversationScreen() {
 
   useEffect(() => {
     if (Platform.OS === 'web') {
-      document.title = 'BrewBot - Conversation';
+      document.title = 'Conversations';
     }
   }, []);
 
@@ -76,9 +76,17 @@ export default function ConversationScreen() {
     if (!conversationId) return;
     
     try {
+      // Get user_id from AsyncStorage
+      const userId = await AsyncStorage.getItem('user_id');
+      if (!userId) {
+        setError('User not authenticated');
+        setLoading(false);
+        return;
+      }
+      
       setLoading(true);
       setError(null);
-      const data = await getConversationChats(conversationId, apiBaseUrl);
+      const data = await getConversationChats(conversationId, userId, apiBaseUrl);
       setMessages(data);
       
       // Scroll to bottom after loading
@@ -132,10 +140,23 @@ export default function ConversationScreen() {
     const text = input.trim();
     if (!text || busy || !conversationId) return;
     
+    // Get user_id from AsyncStorage
+    let userId: string | null = null;
+    try {
+      userId = await AsyncStorage.getItem('user_id');
+      if (!userId) {
+        console.error('[ConversationScreen] No user_id found');
+        return;
+      }
+    } catch (error) {
+      console.error('[ConversationScreen] Failed to get user_id:', error);
+      return;
+    }
+    
     // Save user message to database
     let userMessage: ChatMessage;
     try {
-      userMessage = await createChat(conversationId, 'user', text, apiBaseUrl);
+      userMessage = await createChat(conversationId, 'user', text, userId, apiBaseUrl);
       setMessages((m) => [...m, userMessage]);
     } catch (err) {
       console.error('[ConversationScreen] Error saving user message:', err);
@@ -190,8 +211,15 @@ export default function ConversationScreen() {
           
           // Save assistant message to database
           if (aiText.trim()) {
-            createChat(conversationId, 'assistant', aiText, apiBaseUrl).catch(err => {
-              console.error('[ConversationScreen] Error saving assistant message:', err);
+            // Get user_id for assistant message
+            AsyncStorage.getItem('user_id').then(userId => {
+              if (userId) {
+                createChat(conversationId, 'assistant', aiText, userId, apiBaseUrl).catch(err => {
+                  console.error('[ConversationScreen] Error saving assistant message:', err);
+                });
+              }
+            }).catch(err => {
+              console.error('[ConversationScreen] Failed to get user_id for assistant message:', err);
             });
           }
         };
@@ -283,7 +311,7 @@ export default function ConversationScreen() {
           throw err;
         }
       } else {
-        // Native: use fetch with ReadableStream (same as web, avoids huge query params)
+        // Native: use XMLHttpRequest for streaming (fetch doesn't support getReader() in React Native)
         const aiId = `${Date.now()}-ai`;
         const tempAiMessage: ChatMessage = {
           id: aiId,
@@ -303,98 +331,154 @@ export default function ConversationScreen() {
           
           // Save assistant message to database
           if (aiText.trim()) {
-            createChat(conversationId, 'assistant', aiText, apiBaseUrl).catch(err => {
-              console.error('[ConversationScreen] Error saving assistant message:', err);
+            // Get user_id for assistant message
+            AsyncStorage.getItem('user_id').then(userId => {
+              if (userId) {
+                createChat(conversationId, 'assistant', aiText, userId, apiBaseUrl).catch(err => {
+                  console.error('[ConversationScreen] Error saving assistant message:', err);
+                });
+              }
+            }).catch(err => {
+              console.error('[ConversationScreen] Failed to get user_id for assistant message:', err);
             });
           }
         };
 
-        try {
-          const response = await fetch(`${baseUrl}/chat/respond?stream=true`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Accept': 'text/event-stream',
-            },
-            body: JSON.stringify({
-              messages: openAIMessages,
-              user_id: userId || undefined,
-            }),
-          });
-
-          if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-          }
-
-          const reader = response.body?.getReader();
-          const decoder = new TextDecoder();
+        return new Promise<void>((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
           let buffer = '';
+          let lastProcessedIndex = 0;
 
-          if (!reader) {
-            throw new Error('No response body reader available');
-          }
+          xhr.open('POST', `${baseUrl}/chat/respond?stream=true`, true);
+          xhr.setRequestHeader('Content-Type', 'application/json');
+          xhr.setRequestHeader('Accept', 'text/event-stream');
+          
+          // Enable streaming mode
+          xhr.responseType = 'text';
 
-          console.log('[conversation] Stream started (native)');
+          const processChunk = () => {
+            try {
+              // Process new data since last check
+              const currentLength = xhr.responseText.length;
+              if (currentLength > lastProcessedIndex) {
+                const newData = xhr.responseText.slice(lastProcessedIndex);
+                lastProcessedIndex = currentLength;
+                
+                if (newData) {
+                  buffer += newData;
+                  const lines = buffer.split('\n');
+                  buffer = lines.pop() || '';
 
-          while (true) {
-            const { done, value } = await reader.read();
-            
-            if (done) {
-              console.log('[conversation] Stream done (native)');
-              markComplete();
-              break;
-            }
-
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split('\n');
-            buffer = lines.pop() || '';
-
-            for (const line of lines) {
-              if (line.startsWith('data: ')) {
-                try {
-                  const data = JSON.parse(line.slice(6));
-                  if (data.status === "generating_drink") {
-                    setGeneratingDrink(true);
-                    // Scroll to show the status indicator
-                    setTimeout(() => {
-                      flatListRef.current?.scrollToEnd({ animated: true });
-                    }, 100);
-                    continue; // Don't process this as content
+                  for (const line of lines) {
+                    if (line.trim() && line.startsWith('data: ')) {
+                      try {
+                        const jsonStr = line.slice(6).trim();
+                        if (jsonStr === '[DONE]' || jsonStr === '') {
+                          continue;
+                        }
+                        const data = JSON.parse(jsonStr);
+                        if (data.status === "generating_drink") {
+                          setGeneratingDrink(true);
+                          // Scroll to show the status indicator
+                          setTimeout(() => {
+                            flatListRef.current?.scrollToEnd({ animated: true });
+                          }, 100);
+                          continue; // Don't process this as content
+                        }
+                        if (data.delta) {
+                          aiText += String(data.delta);
+                          setMessages((m) =>
+                            m.map((msg) => (msg.id === aiId ? { ...msg, content: aiText } : msg))
+                          );
+                          // Clear generating status when content starts arriving
+                          setGeneratingDrink(false);
+                          // Force scroll to bottom on each delta for real-time streaming
+                          requestAnimationFrame(() => {
+                            flatListRef.current?.scrollToEnd({ animated: false });
+                          });
+                        }
+                        if (data.done) {
+                          console.log('[conversation] Stream complete (native)');
+                          setGeneratingDrink(false);
+                          markComplete();
+                          return true; // Signal completion
+                        }
+                        if (data.error) {
+                          console.error('[conversation] Stream error (native):', data.error);
+                          setGeneratingDrink(false);
+                          throw new Error(String(data.error));
+                        }
+                      } catch (err: any) {
+                        // Only log if it's not a JSON parse error for empty lines
+                        if (err.message && !err.message.includes('JSON')) {
+                          console.error('[conversation] Parse error (native)', err?.message || String(err), 'Line:', line);
+                        }
+                      }
+                    }
                   }
-                  if (data.delta) {
-                    aiText += String(data.delta);
-                    setMessages((m) =>
-                      m.map((msg) => (msg.id === aiId ? { ...msg, content: aiText } : msg))
-                    );
-                    // Clear generating status when content starts arriving
-                    setGeneratingDrink(false);
-                    // Force scroll to bottom on each delta for real-time streaming
-                    requestAnimationFrame(() => {
-                      flatListRef.current?.scrollToEnd({ animated: false });
-                    });
-                  }
-                  if (data.done) {
-                    console.log('[conversation] Stream complete (native)');
-                    setGeneratingDrink(false);
-                    markComplete();
-                    return;
-                  }
-                  if (data.error) {
-                    console.error('[conversation] Stream error (native):', data.error);
-                    setGeneratingDrink(false);
-                    throw new Error(String(data.error));
-                  }
-                } catch (err: any) {
-                  console.error('[conversation] Parse error (native)', err?.message || String(err), 'Line:', line);
                 }
               }
+            } catch (err: any) {
+              console.error('[conversation] Process chunk error (native)', err);
             }
-          }
-        } catch (err: any) {
-          console.error('[conversation] Stream error (native)', err);
-          stopTalkingImmediately();
-          throw err;
-        }
+            return false;
+          };
+
+          // Use interval to poll for new data (React Native XMLHttpRequest doesn't fire events during streaming)
+          const pollInterval = setInterval(() => {
+            if (xhr.readyState === XMLHttpRequest.LOADING || xhr.readyState === XMLHttpRequest.DONE) {
+              const isComplete = processChunk();
+              if (isComplete || xhr.readyState === XMLHttpRequest.DONE) {
+                clearInterval(pollInterval);
+              }
+            }
+          }, 50); // Poll every 50ms for smooth streaming
+
+          xhr.onreadystatechange = () => {
+            if (xhr.readyState === XMLHttpRequest.DONE) {
+              clearInterval(pollInterval);
+              
+              // Process any remaining data
+              processChunk();
+              
+              if (xhr.status >= 200 && xhr.status < 300) {
+                console.log('[conversation] Stream done (native)');
+                markComplete();
+                resolve();
+              } else {
+                const error = new Error(`HTTP error! status: ${xhr.status}`);
+                console.error('[conversation] Stream error (native)', error);
+                setGeneratingDrink(false);
+                stopTalkingImmediately();
+                reject(error);
+              }
+            }
+          };
+
+          xhr.onerror = () => {
+            clearInterval(pollInterval);
+            const error = new Error('Network error');
+            console.error('[conversation] Stream error (native)', error);
+            setGeneratingDrink(false);
+            stopTalkingImmediately();
+            reject(error);
+          };
+
+          xhr.ontimeout = () => {
+            clearInterval(pollInterval);
+            const error = new Error('Request timeout');
+            console.error('[conversation] Stream error (native)', error);
+            setGeneratingDrink(false);
+            stopTalkingImmediately();
+            reject(error);
+          };
+
+          console.log('[conversation] Stream started (native)');
+          xhr.send(JSON.stringify({
+            messages: openAIMessages,
+            user_id: userId || undefined,
+          }));
+        });
       }
     } catch (e: any) {
       const msg = e?.response?.data?.detail || e?.message || 'Network error.';
