@@ -7,7 +7,7 @@ from fastapi import Query
 import httpx
 
 from services.openai import OpenAIService
-from services.gridfs_storage import store_image_from_url, get_image, delete_image as delete_image_from_gridfs
+from services.gridfs_storage import get_image, delete_image as delete_image_from_gridfs
 from data.drinks import (
     create_drink,
     get_drinks_paginated,
