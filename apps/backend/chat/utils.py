@@ -5,6 +5,7 @@ from bson import ObjectId
 from services.openai import OpenAIService
 from services.db import get_db_handle
 from data.pump_config import get_pump_config
+from data.users import get_user_by_id
 
 logger = logging.getLogger(__name__)
 
@@ -25,10 +26,20 @@ def get_openai_service() -> OpenAIService | None:
 
 
 async def build_system_message(user_id: Optional[str] = None) -> str:
-    """Build system message with pump configuration if available."""
-    base_message = "You are a helpful bartender assistant. Help customers with drink orders and provide friendly service. "
+    """Build system message with pump configuration and user name if available."""
+    base_message = "You are a helpful bartender assistant. You can help customers with drink orders and provide friendly service. Or if they're just in the mood to talk, talk to them and be friendly and inviting, fulfilling their every desire."
 
     if user_id:
+        # Get user's name
+        try:
+            user_data = await get_user_by_id(user_id)
+            if user_data and user_data.get("name"):
+                user_name = user_data.get("name")
+                base_message += f"The customer's name is {user_name}. Use their name when addressing them to provide a personalized experience. "
+        except Exception as e:
+            logger.warning(f"Failed to load user data for system message: {str(e)}")
+
+        # Get pump configuration
         try:
             pump_config = await get_pump_config(user_id)
             if pump_config:

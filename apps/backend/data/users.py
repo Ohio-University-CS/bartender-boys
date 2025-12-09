@@ -57,3 +57,27 @@ async def get_or_insert_user_from_id_scan(
     await db["users"].insert_one(user_doc)
     logger.info("Inserted new user record in MongoDB for DL %s", dl_number)
     return user_doc
+
+
+async def get_user_by_id(
+    user_id: str,
+    db: Optional[AsyncIOMotorDatabase] = None,
+) -> Optional[Dict[str, Any]]:
+    """Get user data by user ID (drivers_license_number).
+    
+    Args:
+        user_id: User ID (drivers_license_number)
+        db: Optional database handle (will get default if not provided)
+        
+    Returns:
+        User document or None if not found
+    """
+    if db is None:
+        db = get_db_handle()
+    
+    user = await db["users"].find_one({"_id": user_id})
+    if user:
+        logger.info("Retrieved user data for user_id: %s", user_id)
+    else:
+        logger.info("User not found for user_id: %s", user_id)
+    return user

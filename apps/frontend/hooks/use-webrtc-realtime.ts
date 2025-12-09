@@ -304,13 +304,18 @@ export function useWebRTCRealtime(
         }
         
         // Configure session with instructions and tools
-        // Use async IIFE to fetch pump config
+        // Use async IIFE to fetch pump config and user name
         (async () => {
-          // Fetch pump configuration to include in instructions
+          // Fetch user name and pump configuration to include in instructions
+          let userName: string | null = null;
           let availableIngredients: string[] = [];
           try {
             const userId = await AsyncStorage.getItem('user_id');
             if (userId) {
+              // Get user name from AsyncStorage
+              userName = await AsyncStorage.getItem('user_name');
+              
+              // Fetch pump configuration
               const { API_BASE_URL } = await import('@/environment');
               const apiUrl = apiBaseUrl || API_BASE_URL;
               const response = await fetch(`${apiUrl}/iot/pump-config?user_id=${encodeURIComponent(userId)}`);
@@ -324,12 +329,17 @@ export function useWebRTCRealtime(
               }
             }
           } catch (error) {
-            console.warn('[useWebRTCRealtime] Failed to load pump config:', error);
-            // Continue without pump config - instructions will be generic
+            console.warn('[useWebRTCRealtime] Failed to load user data or pump config:', error);
+            // Continue without user data - instructions will be generic
           }
 
-          // Build dynamic instructions based on available ingredients
+          // Build dynamic instructions based on user name and available ingredients
           let instructionsText = 'You are a helpful bartender assistant. Help customers with drink orders and provide friendly service. ';
+          
+          // Add user's name if available
+          if (userName) {
+            instructionsText += `The customer's name is ${userName}. Use their name when addressing them to provide a personalized experience. `;
+          }
           
           if (availableIngredients.length > 0) {
             const ingredientsList = availableIngredients.join(', ');
