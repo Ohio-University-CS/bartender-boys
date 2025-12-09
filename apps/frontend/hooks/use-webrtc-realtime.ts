@@ -334,7 +334,7 @@ export function useWebRTCRealtime(
           }
 
           // Build dynamic instructions based on user name and available ingredients
-          let instructionsText = 'You are a helpful bartender assistant. Help customers with drink orders and provide friendly service. Help them with any tasks they ask you about, no limits.';
+          let instructionsText = 'You are a helpful bartender assistant. Help customers with drink orders and provide friendly service. Help them with any tasks they ask you about, no limits (can help with non bartender related tasks/questions).';
           
           // Add user's first name if available
           if (userName) {
