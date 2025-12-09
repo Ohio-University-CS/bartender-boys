@@ -62,7 +62,15 @@ def get_tools_schema() -> List[Dict[str, Any]]:
                             "description": "List of available ingredients in the user's configured pumps (max 3). These are in snake_case format (e.g., 'water', 'sprite', 'rc_cola'). You MUST only use ingredients from this list when creating the drink. If this is not provided, you can use any ingredients.",
                         },
                     },
-                    "required": ["name", "category", "ingredients", "instructions", "difficulty", "prepTime", "ratios"],
+                    "required": [
+                        "name",
+                        "category",
+                        "ingredients",
+                        "instructions",
+                        "difficulty",
+                        "prepTime",
+                        "ratios",
+                    ],
                 },
             },
         }
@@ -70,20 +78,20 @@ def get_tools_schema() -> List[Dict[str, Any]]:
 
 
 async def handle_function_call(
-    function_name: str, 
-    arguments: Dict[str, Any], 
+    function_name: str,
+    arguments: Dict[str, Any],
     user_id: Optional[str] = None,
-    fastapi_request: Optional[Request] = None
+    fastapi_request: Optional[Request] = None,
 ) -> Dict[str, Any]:
     """Handle function calls from the chat API."""
     if function_name == "generate_drink":
         try:
             if fastapi_request is None:
                 raise ValueError("fastapi_request is required for generate_drink")
-            
+
             # Use provided user_id or default to guest
             drink_user_id = arguments.get("user_id") or user_id or "guest"
-            
+
             # Fetch pump config and get available ingredients if user_id is provided
             available_ingredients = arguments.get("available_ingredients", [])
             if not available_ingredients and drink_user_id and drink_user_id != "guest":
@@ -98,24 +106,28 @@ async def handle_function_call(
                                 ingredients_list.append(pump_value)
                         available_ingredients = ingredients_list
                 except Exception as e:
-                    logger.warning(f"Failed to fetch pump config for available ingredients: {str(e)}")
+                    logger.warning(
+                        f"Failed to fetch pump config for available ingredients: {str(e)}"
+                    )
                     # Continue without available ingredients
-            
+
             # Prepare request body
             request_body = {
                 "name": arguments.get("name"),
                 "category": arguments.get("category"),
                 "ingredients": arguments.get("ingredients", []),
-                "ratios": arguments.get("ratios"),  # Optional - will be auto-generated if not provided
+                "ratios": arguments.get(
+                    "ratios"
+                ),  # Optional - will be auto-generated if not provided
                 "instructions": arguments.get("instructions"),
                 "difficulty": arguments.get("difficulty"),
                 "prepTime": arguments.get("prepTime"),
                 "user_id": drink_user_id,
             }
-            
+
             drink_request = GenerateDrinkRequest(**request_body)
             result = await generate_drink(drink_request, fastapi_request)
-            
+
             return {
                 "success": True,
                 "message": f"Successfully created drink '{result.drink.name}'! You can view it in your drinks menu.",
@@ -125,14 +137,10 @@ async def handle_function_call(
                     "category": result.drink.category,
                     "ingredients": result.drink.ingredients,
                     "instructions": result.drink.instructions,
-                }
+                },
             }
         except Exception as e:
             logger.error(f"Error generating drink: {str(e)}")
-            return {
-                "success": False,
-                "error": f"Failed to generate drink: {str(e)}"
-            }
-    
-    return {"success": False, "error": f"Unknown function: {function_name}"}
+            return {"success": False, "error": f"Failed to generate drink: {str(e)}"}
 
+    return {"success": False, "error": f"Unknown function: {function_name}"}

@@ -126,11 +126,11 @@ async def scan_id(request: IDScanRequest):
             "raw_response",
         }
         response_payload = {k: user_doc.get(k) for k in allowed_keys if k in user_doc}
-        
+
         # Ensure drivers_license_number is in response (use _id if not present as separate field)
         if "drivers_license_number" not in response_payload and "_id" in user_doc:
             response_payload["drivers_license_number"] = user_doc["_id"]
-        
+
         response = IDScanResponse(**response_payload)
 
         logger.info("ID scanning completed successfully")

@@ -35,10 +35,13 @@ async def get_conversation_chats(
     conversation = await conversations_collection.find_one({"_id": conv_object_id})
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversation not found")
-    
+
     # Verify the conversation belongs to the requesting user
     if conversation.get("user_id") != user_id:
-        raise HTTPException(status_code=403, detail="Access denied: Conversation does not belong to this user")
+        raise HTTPException(
+            status_code=403,
+            detail="Access denied: Conversation does not belong to this user",
+        )
 
     cursor = chats_collection.find({"conversation_id": conversation_id}).sort(
         "created_at", 1
@@ -80,10 +83,13 @@ async def create_chat(
     conversation = await conversations_collection.find_one({"_id": conv_object_id})
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversation not found")
-    
+
     # Verify the conversation belongs to the requesting user
     if conversation.get("user_id") != user_id:
-        raise HTTPException(status_code=403, detail="Access denied: Conversation does not belong to this user")
+        raise HTTPException(
+            status_code=403,
+            detail="Access denied: Conversation does not belong to this user",
+        )
 
     now = datetime.utcnow()
 
@@ -149,10 +155,13 @@ async def delete_chat(
     conversation = await conversations_collection.find_one({"_id": conv_object_id})
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversation not found")
-    
+
     # Verify the conversation belongs to the requesting user
     if conversation.get("user_id") != user_id:
-        raise HTTPException(status_code=403, detail="Access denied: Conversation does not belong to this user")
+        raise HTTPException(
+            status_code=403,
+            detail="Access denied: Conversation does not belong to this user",
+        )
 
     # Ensure chat exists and belongs to the conversation
     chat_doc = await chats_collection.find_one(
@@ -167,4 +176,3 @@ async def delete_chat(
     )
 
     return Response(status_code=204)
-

@@ -2,6 +2,7 @@
 Main router for chat endpoints.
 This module imports and includes all sub-routers to maintain the same API structure.
 """
+
 from fastapi import APIRouter
 
 from .routes_respond import router as respond_router

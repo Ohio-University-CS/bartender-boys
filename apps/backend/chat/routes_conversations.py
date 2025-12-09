@@ -37,7 +37,7 @@ async def list_conversations(user_id: str = Query(..., description="User ID")):
 @router.post("/conversations", response_model=ConversationResponse)
 async def create_conversation(conversation: ConversationCreate):
     """Create a new conversation for a user."""
-    
+
     db = get_db_handle()
     conversations_collection = db["conversations"]
 
@@ -66,7 +66,7 @@ async def delete_conversation(
     user_id: str = Query(..., description="User ID (required)"),
 ):
     """Delete an entire conversation and its chat messages. Only works if the conversation belongs to the specified user."""
-    
+
     db = get_db_handle()
     conversations_collection = db["conversations"]
     chats_collection = db["chats"]
@@ -79,14 +79,16 @@ async def delete_conversation(
     conversation = await conversations_collection.find_one({"_id": conv_object_id})
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversation not found")
-    
+
     # Verify the conversation belongs to the requesting user
     if conversation.get("user_id") != user_id:
-        raise HTTPException(status_code=403, detail="Access denied: Conversation does not belong to this user")
+        raise HTTPException(
+            status_code=403,
+            detail="Access denied: Conversation does not belong to this user",
+        )
 
     # Delete chats first, then the conversation record
     await chats_collection.delete_many({"conversation_id": conversation_id})
     await conversations_collection.delete_one({"_id": conv_object_id})
 
     return Response(status_code=204)
-

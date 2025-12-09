@@ -19,7 +19,8 @@ class DispenseStep(BaseModel):
         description="Target volume; converted to seconds using flow rates",
     )
     prime: bool = Field(
-        default=False, description="Use prime time from defaults regardless of ml/seconds"
+        default=False,
+        description="Use prime time from defaults regardless of ml/seconds",
     )
     description: Optional[str] = Field(
         default=None, description="Optional label describing the step purpose"
@@ -71,7 +72,10 @@ class Drink(BaseModel):
         None, description="User ID (foreign key) who created/saved this drink"
     )
     image_url: Optional[str] = Field(None, description="URL of the drink image")
-    image_data: Optional[str] = Field(None, description="Base64-encoded image data as data URI (data:image/png;base64,...)")
+    image_data: Optional[str] = Field(
+        None,
+        description="Base64-encoded image data as data URI (data:image/png;base64,...)",
+    )
     favorited: Optional[bool] = Field(
         None, description="Whether the drink is favorited (optional, defaults to false)"
     )
