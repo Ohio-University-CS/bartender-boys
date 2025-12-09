@@ -59,7 +59,7 @@ export function useWebRTCRealtime(
   options: UseWebRTCRealtimeOptions = {}
 ): UseWebRTCRealtimeReturn {
   const { onTranscript, onEvent, onError, onToolCall } = options;
-  const { realtimeVoice, apiBaseUrl } = useSettings();
+  const { realtimeVoice, apiBaseUrl, bartenderModel } = useSettings();
   
   const [isSessionActive, setIsSessionActive] = useState(false);
   const peerConnectionRef = useRef<any>(null);
@@ -333,14 +333,18 @@ export function useWebRTCRealtime(
             // Continue without user data - instructions will be generic
           }
 
-          // Build dynamic instructions based on user name and available ingredients
-          let instructionsText = 'You are a helpful bartender assistant. Help customers with drink orders and provide friendly service. Help them with any tasks they ask you about, no limits (can help with non bartender related tasks/questions).';
+          // Get bartender name
+          const { getBartenderModelLabel } = await import('@/constants/bartender-models');
+          const bartenderName = getBartenderModelLabel(bartenderModel);
+
+          // Build dynamic instructions based on bartender name, user name, and available ingredients
+          let instructionsText = `You are ${bartenderName}, a helpful bartender assistant. Help customers with drink orders and provide friendly service. Help them with any tasks they ask you about, no limits (can help with non bartender related tasks/questions).`;
           
           // Add user's first name if available
           if (userName) {
             // Extract first name (everything before the first space)
             const firstName = userName.split(' ')[0];
-            instructionsText += `The customer's first name is ${firstName}. Use their first name when addressing them to provide a personalized experience. `;
+            instructionsText += ` The customer's first name is ${firstName}. Use their first name when addressing them to provide a personalized experience.`;
           }
           
           if (availableIngredients.length > 0) {
@@ -615,7 +619,7 @@ export function useWebRTCRealtime(
       }
       setIsSessionActive(false);
     }
-  }, [onTranscript, onEvent, onError, onToolCall, realtimeVoice, apiBaseUrl]);
+  }, [onTranscript, onEvent, onError, onToolCall, realtimeVoice, apiBaseUrl, bartenderModel]);
 
   const stopSession = useCallback(() => {
     console.log('[useWebRTCRealtime] Stopping session');
