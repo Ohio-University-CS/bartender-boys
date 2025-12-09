@@ -73,7 +73,9 @@ async def get_pump_config_endpoint(
         )
     except Exception as e:
         logger.error(f"Failed to get pump config: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to get pump config: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get pump config: {str(e)}"
+        )
 
 
 @router.post("/pump-config", response_model=PumpConfigResponse)
@@ -113,7 +115,7 @@ async def create_or_update_pump_config_endpoint(
 async def send_drink_to_firmware(request: PourRequest) -> PourResponse:
     """
     Send a drink request to the firmware API.
-    
+
     Validates that all required ingredients are available in the user's pump configuration
     before sending to firmware.
 
@@ -124,12 +126,12 @@ async def send_drink_to_firmware(request: PourRequest) -> PourResponse:
         Response from firmware API, or error if ingredients are missing
     """
     global _hardware_profile  # noqa: PLW0603 - used for caching hardware profile
-    
+
     # Validate ingredients if user_id is provided
     if request.user_id:
         try:
             pump_config = await get_pump_config(request.user_id)
-            
+
             # Check if pump config exists and has any configured pumps
             if not pump_config:
                 error_message = (
@@ -144,14 +146,14 @@ async def send_drink_to_firmware(request: PourRequest) -> PourResponse:
                     message=error_message,
                     selected_pump=None,
                 )
-            
+
             # Get available ingredients from pumps
             available_ingredients = set()
             for pump_key in ["pump1", "pump2", "pump3"]:
                 pump_value = pump_config.get(pump_key)
                 if pump_value:
                     available_ingredients.add(pump_value)
-            
+
             # Check if any pumps are configured
             if not available_ingredients:
                 error_message = (
@@ -166,16 +168,16 @@ async def send_drink_to_firmware(request: PourRequest) -> PourResponse:
                     message=error_message,
                     selected_pump=None,
                 )
-            
+
             # Normalize drink ingredients to snake_case and check availability
             drink_ingredients = request.drink.ingredients or []
             missing_ingredients = []
-            
+
             for ingredient in drink_ingredients:
                 normalized_ingredient = normalize_to_snake_case(ingredient)
                 if normalized_ingredient not in available_ingredients:
                     missing_ingredients.append(ingredient)
-            
+
             if missing_ingredients:
                 missing_list = ", ".join(missing_ingredients)
                 error_message = (
@@ -202,7 +204,7 @@ async def send_drink_to_firmware(request: PourRequest) -> PourResponse:
                 message=error_message,
                 selected_pump=None,
             )
-    
+
     # Generate hardware_steps from ratios if available (before building payload)
     drink = request.drink
     if drink.ratios and request.user_id:
@@ -215,28 +217,31 @@ async def send_drink_to_firmware(request: PourRequest) -> PourResponse:
                     pump_value = pump_config.get(pump_key)
                     if pump_value:
                         ingredient_to_pump[pump_value] = pump_key
-                
+
                 # Generate hardware steps from ratios
                 # 100% = 5 seconds, so ratio% = (ratio / 100) * 5 seconds
                 # All pumps run simultaneously for their respective durations
                 from drinks.models import DispenseStep
+
                 hardware_steps = []
-                
+
                 for i, ingredient in enumerate(drink.ingredients):
                     normalized_ingredient = normalize_to_snake_case(ingredient)
                     pump = ingredient_to_pump.get(normalized_ingredient)
-                    
+
                     if pump and i < len(drink.ratios):
                         ratio = drink.ratios[i]
                         # Calculate seconds: 100% = 5 seconds
                         seconds = (ratio / 100.0) * 5.0
-                        
-                        hardware_steps.append(DispenseStep(
-                            pump=pump,
-                            seconds=seconds,
-                            description=f"{ingredient} ({ratio}%)"
-                        ))
-                
+
+                        hardware_steps.append(
+                            DispenseStep(
+                                pump=pump,
+                                seconds=seconds,
+                                description=f"{ingredient} ({ratio}%)",
+                            )
+                        )
+
                 # If we generated steps, add them to the drink
                 if hardware_steps:
                     drink.hardware_steps = hardware_steps
@@ -250,11 +255,13 @@ async def send_drink_to_firmware(request: PourRequest) -> PourResponse:
                             pump_mapping[normalized_ingredient] = pump
                     # Store mapping on drink object (will be included in dict)
                     drink._pump_mapping = pump_mapping
-                    logger.info(f"Generated {len(hardware_steps)} hardware steps from ratios for {drink.name}, pump mapping: {pump_mapping}")
+                    logger.info(
+                        f"Generated {len(hardware_steps)} hardware steps from ratios for {drink.name}, pump mapping: {pump_mapping}"
+                    )
         except Exception as e:
             logger.warning(f"Failed to generate hardware steps from ratios: {str(e)}")
             # Continue without hardware steps
-    
+
     # Build drink payload (after potential hardware_steps generation)
     drink_payload = (
         drink.model_dump()
@@ -262,9 +269,9 @@ async def send_drink_to_firmware(request: PourRequest) -> PourResponse:
         else drink.dict(by_alias=True, exclude_none=True)
     )
     # Add pump mapping if it was generated
-    if hasattr(drink, '_pump_mapping'):
-        drink_payload['pump_mapping'] = drink._pump_mapping
-    
+    if hasattr(drink, "_pump_mapping"):
+        drink_payload["pump_mapping"] = drink._pump_mapping
+
     # Validate that we have ratios and pump mapping
     if not drink_payload.get("ratios"):
         return PourResponse(
@@ -272,7 +279,7 @@ async def send_drink_to_firmware(request: PourRequest) -> PourResponse:
             message="Drink must have ratios to pour",
             selected_pump=None,
         )
-    
+
     if not drink_payload.get("pump_mapping"):
         error_message = (
             f"Cannot pour {request.drink.name}: No pump mapping available. "
@@ -283,7 +290,7 @@ async def send_drink_to_firmware(request: PourRequest) -> PourResponse:
             message=error_message,
             selected_pump=None,
         )
-    
+
     # Build simplified firmware command payload
     try:
         command_payload = build_firmware_command(drink_payload)
@@ -293,13 +300,13 @@ async def send_drink_to_firmware(request: PourRequest) -> PourResponse:
             message=str(e),
             selected_pump=None,
         )
-    
+
     client = get_firmware_client()
     if client is None:
-        logger.warning(
-            "Firmware API URL not configured. Simulating pour."
+        logger.warning("Firmware API URL not configured. Simulating pour.")
+        step_summary = ", ".join(
+            [f"pump {s['pump_id']} ({s['ratio']}%)" for s in command_payload["steps"]]
         )
-        step_summary = ", ".join([f"pump {s['pump_id']} ({s['ratio']}%)" for s in command_payload["steps"]])
         return PourResponse(
             status="ok",
             message=(
@@ -326,7 +333,8 @@ async def send_drink_to_firmware(request: PourRequest) -> PourResponse:
         try:
             if isinstance(exc, httpx.HTTPError):
                 logger.error(
-                    "Firmware communication HTTP error (%s). Returning error status.", exc
+                    "Firmware communication HTTP error (%s). Returning error status.",
+                    exc,
                 )
                 return PourResponse(
                     status="error",
@@ -336,9 +344,7 @@ async def send_drink_to_firmware(request: PourRequest) -> PourResponse:
         except Exception:
             pass
 
-        logger.error(
-            "Firmware communication error (%s). Returning error status.", exc
-        )
+        logger.error("Firmware communication error (%s). Returning error status.", exc)
         return PourResponse(
             status="error",
             message=f"Failed to communicate with firmware: {str(exc)}",

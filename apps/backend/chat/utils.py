@@ -27,7 +27,7 @@ def get_openai_service() -> OpenAIService | None:
 async def build_system_message(user_id: Optional[str] = None) -> str:
     """Build system message with pump configuration if available."""
     base_message = "You are a helpful bartender assistant. Help customers with drink orders and provide friendly service. "
-    
+
     if user_id:
         try:
             pump_config = await get_pump_config(user_id)
@@ -37,7 +37,7 @@ async def build_system_message(user_id: Optional[str] = None) -> str:
                     pump_value = pump_config.get(pump_key)
                     if pump_value:
                         available_ingredients.append(pump_value)
-                
+
                 if available_ingredients:
                     ingredients_list = ", ".join(available_ingredients)
                     base_message += f"The user has the following ingredients available in their pumps: {ingredients_list}. "
@@ -47,11 +47,11 @@ async def build_system_message(user_id: Optional[str] = None) -> str:
                     base_message += "When using the generate_drink function, you MUST include the available_ingredients parameter with these ingredients. "
         except Exception as e:
             logger.warning(f"Failed to load pump config for system message: {str(e)}")
-    
+
     base_message += "If a user wants to create a custom drink, use the generate_drink function to create it with an AI-generated image. "
     base_message += "After successfully generating a drink using the generate_drink function, you MUST display the drink details to the user. Include: the drink name, list of ingredients, and step-by-step instructions. Format it clearly and concisely. "
     base_message += "Keep your responses concise and helpful."
-    
+
     return base_message
 
 
@@ -114,4 +114,3 @@ async def generate_and_update_title_background(
             logger.error(f"Failed to update conversation title: {str(e)}")
     except Exception as e:
         logger.error(f"Background title generation failed: {str(e)}")
-

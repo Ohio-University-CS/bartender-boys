@@ -117,16 +117,15 @@ class HardwareProfile:
             ):
                 raw["flow_rate_ml_per_second"] = legacy_flow_rates[pump_id]
 
-            if (
-                isinstance(legacy_calibration, dict)
-                and pump_id in legacy_calibration
-            ):
+            if isinstance(legacy_calibration, dict) and pump_id in legacy_calibration:
                 calibration = legacy_calibration[pump_id]
                 if isinstance(calibration, dict):
                     raw.setdefault(
                         "correction_factor", calibration.get("correction_factor", 1.0)
                     )
-                    raw.setdefault("last_calibrated", calibration.get("last_calibrated"))
+                    raw.setdefault(
+                        "last_calibrated", calibration.get("last_calibrated")
+                    )
 
             gpio_pin = int(raw.get("gpio_pin"))
             label = raw.get("label") or pump_id.replace("_", " ").title()
@@ -160,8 +159,12 @@ class HardwareProfile:
         pump = random.choice(self.pumps)
         volume = float(target_volume_ml or self.defaults.target_volume_ml)
 
-        flow_rate = pump.adjusted_flow_rate or self.defaults.fallback_flow_rate_ml_per_second
-        run_time = volume / flow_rate if flow_rate > 0 else self.defaults.max_run_seconds
+        flow_rate = (
+            pump.adjusted_flow_rate or self.defaults.fallback_flow_rate_ml_per_second
+        )
+        run_time = (
+            volume / flow_rate if flow_rate > 0 else self.defaults.max_run_seconds
+        )
         run_time = min(run_time, self.defaults.max_run_seconds)
 
         logger.info(
@@ -208,61 +211,66 @@ def get_hardware_profile() -> HardwareProfile:
 
 def build_firmware_command(drink: dict) -> Dict[str, Any]:
     """Build simplified firmware command from drink with ratios and pump mapping.
-    
+
     Args:
         drink: Drink dict with ratios and pump_mapping
-        
+
     Returns:
         Simplified payload with steps: [{"pump_id": 1, "ratio": 50}, ...]
     """
     import re
-    
+
     def normalize_to_snake_case(text: str) -> str:
         """Normalize a string to snake_case (matching pump_config.py)."""
         if not text:
             return ""
         text = text.lower().strip()
-        text = re.sub(r'[^\w\s-]', '', text)
-        text = re.sub(r'[\s-]+', '_', text)
-        text = text.strip('_')
+        text = re.sub(r"[^\w\s-]", "", text)
+        text = re.sub(r"[\s-]+", "_", text)
+        text = text.strip("_")
         return text
-    
+
     steps = []
-    
+
     # Extract ratios and pump_mapping from drink
     ratios = drink.get("ratios", [])
     pump_mapping = drink.get("pump_mapping", {})
     ingredients = drink.get("ingredients", [])
-    
+
     # Map pump names (pump1, pump2, pump3) to pump IDs (1, 2, 3)
     pump_name_to_id = {"pump1": 1, "pump2": 2, "pump3": 3}
-    
+
     # Build steps from ingredients and ratios
     for i, ingredient in enumerate(ingredients):
         if i >= len(ratios):
             break
-            
+
         ratio = ratios[i]
         if ratio <= 0:
             continue
-            
+
         # Find which pump this ingredient is mapped to (using same normalization as routes.py)
         normalized_ingredient = normalize_to_snake_case(ingredient)
         pump_name = pump_mapping.get(normalized_ingredient)
-        
+
         if pump_name and pump_name in pump_name_to_id:
             pump_id = pump_name_to_id[pump_name]
-            steps.append({
-                "pump_id": pump_id,
-                "ratio": ratio,
-            })
-    
+            steps.append(
+                {
+                    "pump_id": pump_id,
+                    "ratio": ratio,
+                }
+            )
+
     if not steps:
-        raise ValueError("No valid pump steps could be generated from drink ratios and pump mapping")
-    
+        raise ValueError(
+            "No valid pump steps could be generated from drink ratios and pump mapping"
+        )
+
     return {
         "steps": steps,
     }
+
 
 class FirmwareClient:
     """Client for communicating with the firmware API."""
@@ -272,6 +280,7 @@ class FirmwareClient:
         self.token = token or settings.FIRMWARE_API_TOKEN
         if not self.base_url:
             raise ValueError("FIRMWARE_API_URL must be set in environment variables")
+
     def _auth_headers(self) -> dict[str, str]:
         """Build headers for firmware auth (supports token or Bearer)."""
         if not self.token:
