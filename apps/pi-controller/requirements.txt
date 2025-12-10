@@ -1,4 +1,0 @@
-fastapi==0.115.0
-uvicorn[standard]==0.30.0
-pydantic==2.10.3
-RPi.GPIO==0.7.1; platform_machine == "armv7l" or platform_machine == "aarch64"
