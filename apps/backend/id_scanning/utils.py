@@ -135,7 +135,7 @@ def clean_extracted_data(data: Dict[str, Any]) -> Dict[str, Any]:
     if "eye_color" in data and data["eye_color"]:
         cleaned["eye_color"] = str(data["eye_color"]).strip()
 
-    # Clean driver's license number (must start with VH)
+    # Clean driver's license number (must start with V followed by any character)
     # Accepts keys 'drivers_license_number' or common alternatives for resilience
     dl_keys = [
         "drivers_license_number",
@@ -150,9 +150,18 @@ def clean_extracted_data(data: Dict[str, Any]) -> Dict[str, Any]:
             break
     if dl_value:
         candidate = re.sub(r"\s+", "", dl_value).upper()
-        match = re.match(r"^VH[A-Z0-9]+", candidate)
+        # Match V followed by any alphanumeric characters
+        match = re.match(r"^V[A-Z0-9]+", candidate)
         if match:
             cleaned["drivers_license_number"] = match.group(0)
+        else:
+            # If pattern doesn't match but we have a value, still use it (for user creation)
+            # This ensures users can be created even with non-standard formats
+            logger.warning(
+                f"Driver's license number '{candidate}' doesn't match expected pattern (V[A-Z0-9]+), "
+                "but will be used for user creation"
+            )
+            cleaned["drivers_license_number"] = candidate
 
     # Clean is_valid
     if "is_valid" in data:
