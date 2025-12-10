@@ -28,7 +28,6 @@ Users can interact with an intelligent bartender through a mobile app, scan thei
 - **3D Bartender Avatar**: Interactive 3D character that animates during conversations (web only)
 - **Chat Interface**: Real-time conversation with the AI bartender for drink ordering and recommendations
 - **User Management**: MongoDB database for storing user information and preferences
-- **WebSocket Support**: Real-time communication between frontend and backend
 
 ## Installation
 
@@ -63,7 +62,7 @@ cd bartender-boys
 3. Edit the `.env` file with your configuration:
    - Add your OpenAI API key: `OPENAI_API_KEY=sk-your-actual-api-key-here`
    - Configure MongoDB connection string if needed
-   - Set firmware API URL and token if using hardware
+   - Set firmware API URL (you can use ngrok for easy tunneling) and token if using hardware
    - See `apps/backend/README.md` for detailed environment variable documentation
 
 4. Install dependencies:
@@ -189,10 +188,6 @@ Bartender: "Based on your preferences, I'd recommend a Moscow Mule or a Whiskey 
 5. The system uses GPT-4o vision to extract and verify your information
 6. Upon successful verification, you can access the app
 
-### Screenshots
-
-*[Add screenshots of the app interface, chat conversations, and hardware setup here]*
-
 ## Known Issues
 
 - **Age Verification Limit**: The ID scanning feature currently does not enforce a 21+ age requirement. The system extracts date of birth information but does not validate that users meet the legal drinking age. This should be implemented to ensure compliance with age restrictions.
@@ -210,10 +205,6 @@ Bartender: "Based on your preferences, I'd recommend a Moscow Mule or a Whiskey 
 - **Age Verification Enhancement**: Implement proper age validation logic that checks if users are 21 or older based on the extracted date of birth from ID scans.
 
 - **Mobile Voice Support**: Extend AI voice features to work on mobile platforms (iOS and Android) by implementing platform-specific audio handling.
-
-- **Enhanced Recipe System**: Expand the recipe database with more cocktails and allow users to save custom drink preferences.
-
-- **Real-time Status Updates**: Add WebSocket-based real-time updates for pump status and drink preparation progress.
 
 - **Multi-user Support**: Implement user profiles and preferences for multiple users of the same system.
 
