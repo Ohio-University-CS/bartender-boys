@@ -12,10 +12,6 @@ BrewBot is an innovative IoT application that brings the bar experience to your 
 
 Users can interact with an intelligent bartender through a mobile app, scan their ID for age verification, and watch as their drinks are automatically mixed and poured in real life using electric pumps controlled by GPIO pins. The AI bartender provides personalized drink recommendations, engages in conversation, and ensures precise ingredient measurements for perfect cocktails.
 
-## Demo Videos
-
-*[Add demo video links here]*
-
 ## Features
 
 - **AI Bartender**: Intelligent conversation and drink recommendations powered by OpenAI GPT-4o
