@@ -209,10 +209,10 @@ Bartender: "Based on your preferences, I'd recommend a Moscow Mule or a Whiskey 
 ## Contributors
 
 - **Ethan Knotts** - AI Engineer and Firmware Developer
-- **Jonathan Skeen** - [Role to be specified]
-- **Sam Emmons** - [Role to be specified]
-- **Vihn Nguyen** - [Role to be specified]
-- **Brenden Nickerson** - [Role to be specified]
+- **Jonathan Skeen** - Frontend developer
+- **Sam Emmons** - 3D asset developer
+- **Vihn Nguyen** - Database designer
+- **Brenden Nickerson**
 
 ## Architecture
 
