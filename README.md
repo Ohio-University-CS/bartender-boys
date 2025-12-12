@@ -212,7 +212,7 @@ Bartender: "Based on your preferences, I'd recommend a Moscow Mule or a Whiskey 
 - **Jonathan Skeen** - Frontend developer
 - **Sam Emmons** - 3D asset developer
 - **Vihn Nguyen** - Database designer
-- **Brenden Nickerson**
+- **Brenden Nickerson** - Digital designer
 
 ## Architecture
 
